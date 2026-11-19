@@ -2,13 +2,17 @@
 
 Version: 0.1.111 · [简体中文](PRD.md)
 
-People should be able to ask an agent for work and open the resulting document, schedule or other app record. Each app defines the meaning, storage and presentation of its records. The workbench handles discovery and navigation. External clients choose their own agent harness.
+Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
+
+**Zero mandatory UI clicks for routine execution** is the design goal once the user’s intent, source material and authorization are in place. People can grant consent, resolve important ambiguities and make consequential decisions. They can also open the result, play media, inspect evidence or correct a record by choice. Source-linked readers and authorized attention cards provide a starting point for delivery. Automatically bringing the result to the right surface across apps and agent clients remains a goal.
+
+The requirements below describe the current platform contract.
 
 | User need | Observable behavior |
 | --- | --- |
-| Find an app and return home | The workbench renders available apps and projects. A managed app provides an accessible Home link on desktop and at phone widths. |
-| Understand the result | The app opens its native reader or view. People can browse the underlying evidence and see empty, loading and error states. |
 | Delegate a bounded operation | A native account authorizes a client for specific actions and resources. Tool discovery and the server both check grants. Revocation takes effect on subsequent access. |
+| Understand the result | The app opens its native reader or view. People can browse the underlying evidence and see empty, loading and error states. |
+| Find an app and return home | The workbench renders available apps and projects. A managed app provides an accessible Home link on desktop and at phone widths. |
 | Keep personal materials private | Readers validate the owner's session before returning document names or contents. Original files and generated data belong in private storage. |
 | Add a local app | An operator can supply a bilingual manifest for a loopback service, then launch that app on their own machine. |
 | Work in either language | Open **Settings → General → Language** on the workbench to choose English (default) or Simplified Chinese. The choice applies immediately and persists in this browser for the workbench and its PRD reader. Standalone users and signed-in members can change it without administrator privileges. User-authored material keeps its original language. |
@@ -31,27 +35,23 @@ The existing bottom navigation bar contains a single icon button that toggles **
 
 ## Built-in apps
 
-A standard Praxis distribution includes the maintained workbench apps as independently versioned components. The catalog covers Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Finance, Intelligence, Polaris, Calendar, Matrix Reader, Projects, Letters and Profiles. App access follows the installation and the user’s grants; private data, accounts and working files remain outside the public repository. Individuals, families and organizations can also register their own apps.
+A standard Praxis distribution includes the maintained apps as independently versioned components. The catalog covers Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Finance, Intelligence, Polaris, Calendar, Matrix Reader, Projects, Letters and Profiles. The built-in apps are products in their own right. Their reading, viewing and listening experiences demonstrate the product direction, and their app-owned data, operations and interfaces provide reference implementations for new apps. Each app documents its supported operations and setup. Access follows the installation and the user’s grants. Private data, accounts and working files remain outside the public repository.
 
-## Platform specification and release ledger
+Individuals, families and organizations should be able to quickly build and deploy apps that fit the way they work. AI-assisted development and reusable deployment steps are intended to make this practical even for narrowly scoped needs. An app can be built directly around its own business objects and workflows, with external sources and services used where useful. Today, the manifest registers a running app on the local workbench. Managed entry and scoped agent operations require explicit integration and deployment. [App standard](APP-STANDARD.md)
 
-The record below describes v0.1.0 through v0.1.107 at the time of each decision. Test counts and rollout results refer to those releases. For today’s entry points, service setup and read-only Polaris viewer, use the [running guide](RUNNING.md), [built-in app guide](BUILTINS.md) and [viewer guide](POLARIS-VIEWER.md).
+## Platform responsibilities
 
-This edition states the current platform contract. The feature register below connects the current product contract to its original requirement IDs. The Chinese ledger retains the detailed sequence of decisions and dated acceptance results.
-
-## Product
-
-Praxis is a self-hosted workbench where people open independent applications and authorize external agents to act on particular data. It connects three entities: people and agents, app-owned data, and user interfaces. The common platform provides identity, OAuth delegation, resource/action authorization, connectors, MCP and the workbench. App owners control their code, persistence and validation. External agents provide reasoning and orchestration.
+App owners control their code, persistence, validation and result interfaces. The shared platform provides identity, OAuth delegation, resource and action authorization, connectors, MCP and workbench navigation. Users choose an external agent client for reasoning and orchestration.
 
 The intended users include individuals with private records, families and teams sharing selected resources, external collaborators assigned specific tasks and operators maintaining the installation. Development and business use have distinct sessions, credentials, environments and audit trails even if both use the same model. Platform administration and business access are separately granted.
 
 ## User flows
 
-- **Open and return.** An authenticated account receives a personalized workbench. Offer visible apps and project entries according to current permissions, including an honest empty state. Open the selected object in the same tab. A managed app exposes the fixed lower-left Home control and supports keyboard, desktop and narrow-screen use. After sign-in restore a validated destination. Handle loading, stale data, revocation, conflicts and uncertain writes with explicit recovery.
-- **Review work.** Projects is the authoritative source for project entries. Present related work to the current user within the effective scope. Any task or activity view must derive its contents from authorized records and link back to their owning app. Never infer a public company-wide feed from a user's membership.
-- **Delegate an action.** An external client discovers the issuer/resource and supported tools, binds a real user through OAuth and asks for specific resources/actions/expiry. Each invocation intersects the current user permissions, client delegation and deployment/app capabilities. A user can review and revoke grants. The website uses native browser identity.
+- **Delegate work.** The user gives a task to their chosen agent. The external client discovers the issuer, resource and supported tools, binds a real user through OAuth and asks for specific resources, actions and expiry. Each invocation intersects the current user permissions, client delegation and deployment and app capabilities. A user can review and revoke grants. The website uses native browser identity.
 - **Save and verify.** Use typed, allowlisted operations, resource IDs, expected revisions and idempotency. Results remain in the owning app. After an uncertain response, read or retry with the same key. Emit events after commit, recheck authorization for subsequent deliveries and make conflicts visible. Backup completion is distinct from a successful save.
-- **Read with evidence.** Knowledge distinguishes notes, books, papers and source packages, preserves source identity and supports human browsing. Its controlled import, parsing and indexing tools produce retrievable passages and source references for external agents. Never fabricate coverage or a successful parse.
+- **Use and check the result.** The app presents the saved work in its native view, such as a source passage, a rendered deck or a review segment. People can inspect evidence in context. Knowledge distinguishes notes, books, papers and source packages. Its controlled import, parsing and indexing tools provide retrievable passages and references, with unresolved coverage or parsing failures visible.
+- **Review work.** Projects is the authoritative source for project entries. Present related work to the current user within the effective scope. Any task or activity view must derive its contents from authorized records and link back to their owning app. Never infer a public company-wide feed from a user's membership.
+- **Open and return.** An authenticated account receives a personalized workbench. Offer visible apps and project entries according to current permissions, including an honest empty state. Open the selected object in the same tab. A managed app exposes the fixed lower-left Home control and supports keyboard, desktop and narrow-screen use. After sign-in restore a validated destination. Handle loading, stale data, revocation, conflicts and uncertain writes with explicit recovery.
 - **Develop an app.** Maintain a documented interface/ownership boundary, locale support, first-run behavior, entry and return navigation, permissions, storage and checks. Local development should not publish an app or grant it production access. [App standard](APP-STANDARD.md)
 
 ## Operating requirements
@@ -67,6 +67,8 @@ Public product information may be crawled in English and Chinese. Publish only r
 For each requirement, record the user task, observable outcome, owning app or platform component, positive and negative permission cases and the smallest checks that cover the actual change. Use synthetic fixtures for maintenance validation. Live business-agent and physical-phone acceptance have distinct operators and evidence. Record unsupported or untested behavior explicitly. [Roadmap](ROADMAP.en.md) · [Platform manual](PLATFORM.en.md) · [Acceptance plan](VERIFICATION.en.md) · [Full requirement archive](PRD.md)
 
 ## Feature register
+
+The register and release history describe v0.1.0 through v0.1.107 at the time of each decision. Test counts and rollout results refer to those releases. For today’s entry points, service setup and read-only Polaris viewer, use the [running guide](RUNNING.md), [built-in app guide](BUILTINS.md) and [viewer guide](POLARIS-VIEWER.md). The Chinese ledger retains the detailed sequence of decisions and dated acceptance results.
 
 Read these requirements in release order when migrating an older installation. Later requirements may change an earlier UI or move ownership while preserving the underlying data and permissions. The historical ledger records acceptance criteria and release checks.
 

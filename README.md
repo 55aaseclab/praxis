@@ -2,7 +2,11 @@
 
 [简体中文](README.zh-CN.md) · [Quickstart](#quickstart) · [Connect to Praxis](#connect-to-praxis) · [Contribute](#contribute)
 
-**Praxis is a self-hosted platform where the AI agent you choose is your interface to your apps.** With any MCP-compatible agent harness, you can ask your agent to find a passage in your notes or update a task. You decide which records it can access and what it can do. Whether you run Praxis for yourself, your family, a team, or an organization, you can use its 14 built-in apps for knowledge, projects, travel, finance, and more. You can also build your own apps and host them yourself. To try Praxis before setting up your own instance, visit our [hosted workbench](https://polaris.jianxiaoyitech.com/).
+**Praxis is a self-hosted platform where the AI agent you choose is your interface to your apps.** You ask for an outcome and decide which records and actions to authorize. Your agent does the routine work. In Lattice, for example, ask your agent to turn approved project updates into a meeting deck. With access to the source material and the deck, the agent can update the slides and check the render. You open a presentation ready to review and show. Once intent, materials and authorization are in place, the goal is zero mandatory clicks to execute the work.
+
+Praxis builds and polishes its built-in apps so people can read, watch or listen to results and make informed decisions. These apps also show how to build new ones around your own records, operations and workflows. Making it quick for individuals, families and organizations to build and deploy their own apps is part of the product direction. You can start with a new app and its own data, with integrations where they help. Today you can run your app independently and register it in a local workbench. [App standard](docs/APP-STANDARD.md)
+
+You can try the [hosted workbench](https://polaris.jianxiaoyitech.com/) before setting up your own instance.
 
 ![Real Codex session in Paseo beside the Praxis workbench with synthetic demo records](docs/images/workbench-en.png)
 
