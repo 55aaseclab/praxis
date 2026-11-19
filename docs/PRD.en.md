@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.108 · [简体中文](PRD.md)
+Version: 0.1.109 · [简体中文](PRD.md)
 
 People should be able to ask an agent for work and open the resulting document, schedule or other app record. Each app defines the meaning, storage and presentation of its records. The workbench handles discovery and navigation. External clients choose their own agent harness.
 
@@ -14,6 +14,10 @@ People should be able to ask an agent for work and open the resulting document, 
 | Work in either language | Open **Settings → General → Language** on the workbench to choose English (default) or Simplified Chinese. The choice applies immediately and persists in this browser for the workbench and its PRD reader. Standalone users and signed-in members can change it without administrator privileges. User-authored material keeps its original language. |
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
+
+## Workbench views · v0.1.109
+
+The existing bottom navigation bar contains a single icon button that toggles **Apps / For you**. It has no visible text labels; its icon, tooltip and accessible name describe the destination view. It works with keyboard and touch, and stays available as the main area scrolls. Both views start at the top of the main area with consistent padding, including sparse and empty states. Apps shows app and project launchers. Due dates, reminder previews, task counts and attention cards appear only in For you. Changing views keeps the selector focused and preserves the selected attention card. When the account loses the required access, clear its attention content and return to Apps. Check both languages on desktop and at phone width.
 
 ## Built-in apps
 

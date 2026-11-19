@@ -39,6 +39,10 @@
     </aside>
     <div class="launcher-toolbar system-dock" role="group" aria-label="Praxis navigation" data-zh-label="Praxis 系统导航">
       <a class="brand" href="/" aria-label="Praxis home" data-zh-label="Praxis 首页"><img src="/praxis.svg" width="24" height="24" alt="">Praxis</a>
+      <button id="workbench-view-switch" class="workbench-view-switch" type="button" aria-label="Show For you" title="Show For you" aria-controls="apps-section projects-section attention-program" hidden>
+        <svg data-view-icon="apps" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" hidden><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <svg data-view-icon="attention" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 2 2 5-5M8 15h8M8 18h5"/></svg>
+      </button>
       <div class="launcher-actions">
         <span id="paseo-workbench" hidden></span>
         <nav aria-label="Workbench links" data-zh-label="工作台入口"><a class="header-link" href="/about/" data-zh="关于 Praxis">About Praxis</a><a class="header-link" href="/admin/" data-private-nav data-admin-nav hidden data-zh="设置">Settings</a><a class="header-link" href="/prds/" data-private-nav data-prd-nav hidden data-zh="PRD集合">Product documents</a></nav>

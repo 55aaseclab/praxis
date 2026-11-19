@@ -5,13 +5,11 @@
   max-width: 100%;
   width: 100%;
 }
-.program-switch,
 .card-controls {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.program-switch button,
 .card-controls button,
 .attention-deck > button {
   font: inherit;
@@ -23,14 +21,10 @@
   padding: 7px 16px;
   cursor: pointer;
 }
-.program-switch button[aria-pressed='true'] {
-  background: #264c44;
-  color: white;
-}
 .attention-deck {
   box-sizing: border-box;
   touch-action: pan-y;
-  margin: 20px auto 0;
+  margin: 0 auto;
   padding: clamp(18px, 4vw, 44px);
   max-width: 680px;
   background: #fff;
@@ -57,4 +51,30 @@
   justify-content: space-between;
 }
 
-.attention-preview { display: block; max-width: 100%; min-height: 44px; margin-top: 8px; padding: 6px 10px; text-align: start; font: inherit; overflow-wrap: anywhere; color: #264c44; background: transparent; border: 0; text-decoration: underline; cursor: pointer; }
+.workbench-view-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 12px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.workbench-view-switch:hover {
+  color: var(--ink);
+  background: var(--soft);
+}
+.workbench-view-switch:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.workbench-view-switch svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}

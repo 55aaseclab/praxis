@@ -6,7 +6,7 @@ For platform, app or app-data tasks, read the [Praxis operator skill](skills/pra
 
 Choose the smallest check that exercises the changed behavior. For a PRD edit, open the affected document through the workbench PRD reader in both languages. For navigation changes, run `node --test tests/system-navigation.test.mjs tests/app-launcher.test.mjs` and check the affected workbench → app → Home flow on desktop and at phone width. Run `npm test` for integration changes. Expand coverage when a check fails, a cross-layer risk emerges or the release calls for it.
 
-For a small UI fix, check the relevant interaction. Keep optional reviews and unrelated polish off the critical path. Finish source and browser checks before building the affected Docker target. Commit the verified change promptly and deploy within the scope of the task. Adding verification prose alone does not require rebuilding application images.
+For a small UI fix, check the relevant interaction. Keep optional reviews and unrelated polish off the critical path. Finish source and browser checks, commit the verified change promptly, then build the affected Docker target. For a local self-hosted installation, completing a runtime or behavior change includes deploying the verified result and checking the running entry point. For a SaaS service, deploy according to release needs and the target environment’s release policy. Rebuild only affected services. Documentation or source changes that leave running behavior intact can be delivered without a service rebuild.
 
 ## Separate development from product use
 
@@ -24,7 +24,7 @@ Praxis exposes app capabilities to external agents. For an acceptance case that 
 
 先选能覆盖此次行为的最小检查。编辑 PRD 后，从工作台的需求阅读器分别打开中英文版本。修改导航时，运行 `node --test tests/system-navigation.test.mjs tests/app-launcher.test.mjs`，并在桌面和手机宽度下走通工作台 → 应用 → 首页。集成变更运行 `npm test`。检查失败、发现跨层风险或发布要求扩大覆盖时，再增加验证。
 
-小型界面修复只检查相关交互。可选评审与无关润色不应阻塞交付。源码和浏览器检查通过后再构建受影响的 Docker 目标，及时提交已验证的改动，在任务授权范围内部署。仅补充验收记录时无需重建应用镜像。
+小型界面修复只检查相关交互。可选评审与无关润色不应阻塞交付。源码和浏览器检查通过后，及时提交已验证的改动，再构建受影响的 Docker 目标。本地自托管环境中，运行行为相关的改动须部署验证后的版本，并检查实际入口后再算完成。SaaS 服务按发布需要及目标环境的发布规则部署。只重建受影响的服务。未影响运行行为的文档或源码改动可直接交付。
 
 ### 分开开发与产品使用
 

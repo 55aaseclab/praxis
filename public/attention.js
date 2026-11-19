@@ -2,6 +2,7 @@ import { getIdentity, identityReady } from './identity.js';
 import { t } from './i18n.js';
 
 const root = document.getElementById('attention-program');
+const viewSwitch = document.getElementById('workbench-view-switch');
 let program = 'apps',
   items = [],
   cursor = 0,
@@ -44,36 +45,22 @@ function turn(step) {
 function render(focus) {
   if (!root) return;
   const identity = getIdentity();
-  root.hidden = !identity?.workbench || !identity.apps.some(id => id === 'reminder' || id === 'projects');
-  if (root.hidden) program = 'apps';
-  root.parentElement.classList.toggle('show-attention', !root.hidden && program === 'attention');
+  const available = Boolean(identity?.workbench && identity.apps.some(id => id === 'reminder' || id === 'projects'));
+  if (!available) program = 'apps';
+  root.hidden = !available || program !== 'attention';
+  root.parentElement.classList.toggle('show-attention', !root.hidden);
+  if (viewSwitch) {
+    viewSwitch.hidden = !available;
+    viewSwitch.dataset.view = program;
+    const label = program === 'apps' ? t('Show For you', '切换到待关注') : t('Show apps', '切换到应用');
+    viewSwitch.setAttribute('aria-label', label);
+    viewSwitch.title = label;
+    for (const icon of viewSwitch.querySelectorAll('[data-view-icon]')) {
+      icon.toggleAttribute('hidden', icon.dataset.viewIcon === program);
+    }
+  }
   root.replaceChildren();
   if (root.hidden) return;
-  const tabs = element('div');
-  tabs.className = 'program-switch';
-  tabs.setAttribute('role', 'group');
-  tabs.ariaLabel = t('Workbench view', '工作台视图');
-  for (const [id, label] of [
-    ['apps', t('Apps', '应用')],
-    ['attention', t('For you', '待关注') + (items.length ? ' · ' + items.length : '')]
-  ]) {
-    const tab = button(label, () => {
-      program = id;
-      render(id);
-    });
-    tab.dataset.program = id;
-    tab.setAttribute('aria-pressed', String(program === id));
-    tabs.append(tab);
-  }
-  root.append(tabs);
-  if (program === 'apps' && items.length) {
-    const first = items[0];
-    const preview = button(priority(first, localDate(new Date()))[1] + ' · ' + first.title, () => {
-      cursor = 0; program = 'attention'; render('card');
-    });
-    preview.className = 'attention-preview';
-    root.append(preview);
-  }
   if (program === 'attention') {
     const section = element('section');
     section.className = 'attention-deck';
@@ -135,8 +122,6 @@ function render(focus) {
     root.append(section);
     if (focus === 'card') section.focus();
   }
-  if (focus === 'apps' || focus === 'attention')
-    root.querySelector('[data-program="' + focus + '"]')?.focus();
 }
 async function refresh() {
   const identity = getIdentity();
@@ -199,11 +184,14 @@ async function refresh() {
   const active = document.activeElement;
   if (!root.contains(active)) render();
   else {
-    const focus = active.dataset.program || 'card';
-    render(focus);
+    render('card');
   }
 }
 if (root) {
+  viewSwitch?.addEventListener('click', () => {
+    program = program === 'apps' ? 'attention' : 'apps';
+    render();
+  });
   document.addEventListener('praxis-identity-change', refresh);
   window.addEventListener('praxis-locale-change', () => render());
   document.addEventListener('visibilitychange', () => {
