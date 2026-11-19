@@ -3,13 +3,21 @@ import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID, randomBytes, createHmac } from 'node:crypto';
 
-const TRACE_STAGES = new Set(['authorization', 'dispatch', 'commit', 'readback', 'result']);
-const TRACE_STATUSES = new Set(['started', 'allowed', 'denied', 'succeeded', 'failed', 'unknown']);
-const TRACE_FINAL_STATUSES = new Set(['succeeded', 'denied', 'failed', 'unknown']);
+const TRACE_STAGES = new Set(['authorization', 'validation', 'dispatch', 'commit', 'readback', 'transport', 'result']);
+const TRACE_STATUSES = new Set(['started', 'allowed', 'denied', 'succeeded', 'failed', 'unknown', 'cancelled']);
+const TRACE_FINAL_STATUSES = new Set(['succeeded', 'denied', 'failed', 'unknown', 'cancelled']);
 const traceObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const traceIdValue = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(value);
 const traceFields = (value, fields) => traceObject(value) && Object.keys(value).every(key => fields.includes(key));
 function traceAssert(value) { if (!value) throw new Error('Invalid business trace metadata.'); }
+function traceMcp(value) {
+  traceAssert(traceFields(value, ['endpoint', 'transport', 'method', 'category', 'toolName', 'toolRef', 'bridgeLinked']));
+  traceAssert(value.endpoint === '/mcp' && value.transport === 'streamable-http' && ['tools/call', 'not_available'].includes(value.method) && ['business', 'control', 'unknown', 'ingress'].includes(value.category));
+  if (value.toolName !== undefined) traceAssert(['business', 'control'].includes(value.category) && typeof value.toolName === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,159}$/.test(value.toolName));
+  if (value.toolRef !== undefined) traceAssert(typeof value.toolRef === 'string' && /^[a-f0-9]{24}$/.test(value.toolRef));
+  if (value.bridgeLinked !== undefined) traceAssert(typeof value.bridgeLinked === 'boolean');
+  return { endpoint: value.endpoint, transport: value.transport, method: value.method, category: value.category, ...(value.toolName !== undefined && { toolName: value.toolName }), ...(value.toolRef !== undefined && { toolRef: value.toolRef }), bridgeLinked: value.bridgeLinked === true };
+}
 function traceReference(value) {
   traceAssert(traceFields(value, ['appId', 'spaceId', 'resourceId', 'revision']));
   for (const key of ['appId', 'spaceId', 'resourceId']) traceAssert(traceIdValue(value[key]));
@@ -35,19 +43,22 @@ function traceMetadata(value) {
   return result;
 }
 function traceStep(value) {
-  traceAssert(traceFields(value, ['stage', 'status', 'code', 'revision', 'generation', 'committed', 'resourceId', 'sources', 'workflow', 'humanDecision']));
+  traceAssert(traceFields(value, ['stage', 'status', 'code', 'revision', 'generation', 'committed', 'resourceId', 'sources', 'workflow', 'humanDecision', 'durationMs']));
   traceAssert(TRACE_STAGES.has(value.stage) && TRACE_STATUSES.has(value.status));
   if (value.stage === 'result') traceAssert(TRACE_FINAL_STATUSES.has(value.status));
   const result = { stage: value.stage, status: value.status, ...traceMetadata(value) };
   if (value.code !== undefined) { traceAssert(typeof value.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value.code)); result.code = value.code; }
   for (const key of ['revision', 'resourceId']) if (value[key] !== undefined) { traceAssert(traceIdValue(String(value[key]))); result[key] = String(value[key]); }
   if (value.generation !== undefined) { traceAssert(Number.isSafeInteger(value.generation) && value.generation >= 0); result.generation = value.generation; }
+  if (value.durationMs !== undefined) { traceAssert(Number.isSafeInteger(value.durationMs) && value.durationMs >= 0 && value.durationMs <= 7 * 86400000); result.durationMs = value.durationMs; }
   if (value.committed !== undefined) { traceAssert(typeof value.committed === 'boolean'); result.committed = value.committed; }
   if (value.stage === 'commit' && value.status === 'succeeded') traceAssert(value.committed === true);
   return result;
 }
 const traceSafeToken = value => traceIdValue(value) ? value : null;
 const traceTime = value => Number.isFinite(value) ? new Date(value).toISOString() : null;
+const mcpCaptured = "json_extract(context,'$.source')='mcp' AND json_extract(context,'$.mcp.transport')='streamable-http' AND json_extract(context,'$.mcp.method')='tools/call' AND json_extract(context,'$.mcp.category') IN ('business','control','unknown')";
+const legacyPrivateReadExcluded = "NOT(COALESCE(json_extract(context,'$.action'),'')='read' AND COALESCE(json_extract(context,'$.actor.clientRef'),'')=? AND json_extract(context,'$.mcp.transport') IS NULL)";
 
 export class BusinessEvents {
   constructor(file, { clock = () => Date.now(), coalesceMs = 2000 } = {}) {
@@ -61,10 +72,12 @@ export class BusinessEvents {
       CREATE TABLE IF NOT EXISTS business_traces(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,request_id TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,state TEXT NOT NULL,context TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS business_trace_steps(seq INTEGER PRIMARY KEY AUTOINCREMENT,trace_id TEXT NOT NULL REFERENCES business_traces(id),at INTEGER NOT NULL,stage TEXT NOT NULL,status TEXT NOT NULL,metadata TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS business_trace_steps_lookup ON business_trace_steps(trace_id,seq);
+      CREATE INDEX IF NOT EXISTS business_traces_by_time ON business_traces(created_at,seq);
       CREATE TABLE IF NOT EXISTS business_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS replica_queue(id INTEGER PRIMARY KEY CHECK(id=1), generation INTEGER NOT NULL, completed INTEGER NOT NULL DEFAULT 0, due_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, lease_id TEXT,lease_until INTEGER NOT NULL DEFAULT 0,last_error TEXT);`);
     this.db.prepare("INSERT OR IGNORE INTO business_meta VALUES('audit_key',?)").run(randomBytes(32).toString('hex'));
     this.auditKey = this.db.prepare("SELECT value FROM business_meta WHERE key='audit_key'").get().value;
+    this.db.prepare("INSERT OR IGNORE INTO business_meta VALUES('mcp_capture_started_at',?)").run(String(this.clock()));
   }
   sourceCursor(app, space, resource) {
     return (resource === undefined ? this.db.prepare('SELECT cursor FROM source_cursors WHERE app=? AND space=?').get(app, space) : this.db.prepare('SELECT cursor FROM resource_source_cursors WHERE app=? AND space=? AND resource=?').get(app, space, resource))?.cursor || 0;
@@ -99,12 +112,14 @@ export class BusinessEvents {
     return value ? createHmac('sha256', this.auditKey).update(String(value)).digest('hex').slice(0, 24) : null;
   }
   beginTrace(context) {
-    traceAssert(traceFields(context, ['requestId', 'appId', 'spaceId', 'resourceId', 'operation', 'action', 'userId', 'clientId', 'grantId', 'source', 'sources', 'workflow', 'humanDecision']));
-    for (const key of ['requestId', 'appId', 'spaceId', 'operation', 'action']) traceAssert(traceIdValue(context[key]));
+    traceAssert(traceFields(context, ['requestId', 'appId', 'spaceId', 'resourceId', 'operation', 'action', 'userId', 'clientId', 'grantId', 'source', 'sources', 'workflow', 'humanDecision', 'mcp']));
+    for (const key of ['requestId', 'operation', 'action']) traceAssert(traceIdValue(context[key]));
+    for (const key of ['appId', 'spaceId']) if (context[key] !== undefined) traceAssert(traceIdValue(context[key]));
     if (context.resourceId !== undefined) traceAssert(traceIdValue(context.resourceId));
     if (context.source !== undefined) traceAssert(['mcp', 'web', 'http', 'sync'].includes(context.source));
     const metadata = traceMetadata(context), id = randomUUID(), now = this.clock();
-    const safe = { requestId: context.requestId, appId: context.appId, spaceId: context.spaceId, operation: context.operation, action: context.action, source: context.source || 'http', ...metadata,
+    if (context.mcp !== undefined) { traceAssert(context.source === 'mcp'); metadata.mcp = traceMcp(context.mcp); }
+    const safe = { requestId: context.requestId, ...(context.appId !== undefined && { appId: context.appId }), ...(context.spaceId !== undefined && { spaceId: context.spaceId }), operation: context.operation, action: context.action, source: context.source || 'http', ...metadata,
       ...(context.resourceId !== undefined && { resourceId: context.resourceId }),
       actor: { userRef: this.tracePseudonym(context.userId), clientRef: this.tracePseudonym(context.clientId), grantRef: this.tracePseudonym(context.grantId) } };
     this.db.exec('BEGIN IMMEDIATE');
@@ -113,6 +128,16 @@ export class BusinessEvents {
       this.db.prepare('INSERT INTO business_trace_steps(trace_id,at,stage,status,metadata) VALUES(?,?,?,?,?)').run(id, now, 'authorization', 'started', '{}');
       this.db.exec('COMMIT'); return id;
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+  linkTrace(id, additions = {}) {
+    traceAssert(traceIdValue(id) && traceFields(additions, ['requestId', 'appId', 'spaceId', 'resourceId', 'operation', 'action', 'bridgeLinked']));
+    for (const [key, value] of Object.entries(additions)) if (key !== 'bridgeLinked') traceAssert(traceIdValue(value));
+    if (additions.bridgeLinked !== undefined) traceAssert(additions.bridgeLinked === true);
+    const row = this.db.prepare('SELECT context,state FROM business_traces WHERE id=?').get(id); traceAssert(row && row.state === 'started');
+    const context = JSON.parse(row.context), { bridgeLinked, ...fields } = additions;
+    if (bridgeLinked) { traceAssert(context.mcp); context.mcp.bridgeLinked = true; }
+    this.db.prepare('UPDATE business_traces SET context=?,request_id=?,updated_at=? WHERE id=?').run(JSON.stringify({ ...context, ...fields }), additions.requestId ?? context.requestId, this.clock(), id);
+    return id;
   }
   recordTrace(id, value) {
     traceAssert(traceIdValue(id));
@@ -148,11 +173,33 @@ export class BusinessEvents {
       const value = this.db.prepare(`SELECT COUNT(*) AS count,MIN(${time}) AS firstAt,MAX(${time}) AS lastAt FROM ${table}${filter}`).get(...values);
       return { count: value.count, firstRecordedAt: traceTime(value.firstAt), lastRecordedAt: traceTime(value.lastAt), kind };
     };
-    return { lifecycle: count('business_traces', 'created_at', 'structured-lifecycle'), audit: count('business_audit', 'at', 'decision-only', " WHERE NOT(COALESCE(action,'')='read' AND COALESCE(client_id,'')=?)", [this.tracePseudonym('praxis-browser')]), outbox: count('business_events', 'committed_at', 'application-outbox') };
+    return { lifecycle: count('business_traces', 'created_at', 'structured-lifecycle', ` WHERE ${legacyPrivateReadExcluded}`, [this.tracePseudonym('praxis-browser')]), audit: count('business_audit', 'at', 'decision-only', " WHERE NOT(COALESCE(action,'')='read' AND COALESCE(client_id,'')=?)", [this.tracePseudonym('praxis-browser')]), outbox: count('business_events', 'committed_at', 'application-outbox'),
+      mcp: { ...count('business_traces', 'created_at', 'captured-mcp-tool-calls', ` WHERE ${mcpCaptured}`), recordingStartedAt: traceTime(Number(this.db.prepare("SELECT value FROM business_meta WHERE key='mcp_capture_started_at'").get().value)), recordingStartBasis: 'recorder-initialization', ingressFailures: this.db.prepare("SELECT COUNT(*) AS count FROM business_traces WHERE json_extract(context,'$.mcp.category')='ingress'").get().count } };
   }
-  tracePage({ source = 'lifecycle', before = Number.MAX_SAFE_INTEGER, limit = 25, traceId } = {}) {
-    traceAssert(['lifecycle', 'audit', 'outbox'].includes(source) && Number.isSafeInteger(before) && before > 0 && Number.isSafeInteger(limit) && limit >= 1 && limit <= 50);
+  mcpTracePage({ before, limit, window }) {
+    traceAssert(['day', 'week'].includes(window));
+    const now = this.clock(), since = now - (window === 'week' ? 7 : 1) * 86400000, values = [since, now];
+    const filter = `${mcpCaptured} AND created_at>=? AND created_at<=?`;
+    const captured = `SELECT seq,id,created_at,state,json_extract(context,'$.mcp.toolName') AS toolName,json_extract(context,'$.mcp.category') AS category,context,(SELECT metadata FROM business_trace_steps WHERE trace_id=business_traces.id AND stage='result' ORDER BY seq DESC LIMIT 1) AS result FROM business_traces WHERE ${filter}`;
+    const counters = "COUNT(*) AS total,COALESCE(SUM(state='succeeded'),0) AS success,COALESCE(SUM(state='failed'),0) AS errors,COALESCE(SUM(state='denied'),0) AS denied,COALESCE(SUM(state='unknown'),0) AS unknown,COALESCE(SUM(state='cancelled'),0) AS cancelled,COALESCE(SUM(state='started'),0) AS inProgress";
+    const summary = { ...this.db.prepare(`WITH captured AS (${captured}) SELECT ${counters} FROM captured`).get(...values) };
+    const duration = "json_extract(result,'$.durationMs')";
+    const overall = this.db.prepare(`WITH captured AS (${captured}), timed AS (SELECT ${duration} AS duration,ROW_NUMBER() OVER(ORDER BY ${duration}) AS rank,COUNT(*) OVER() AS samples FROM captured WHERE json_type(result,'$.durationMs')='integer') SELECT MAX(CASE WHEN rank=(samples+1)/2 THEN duration END) AS p50Ms,MAX(CASE WHEN rank=(samples*95+99)/100 THEN duration END) AS p95Ms FROM timed`).get(...values);
+    Object.assign(summary, overall, { ingressFailures: this.db.prepare("SELECT COUNT(*) AS count FROM business_traces WHERE json_extract(context,'$.mcp.category')='ingress' AND created_at>=? AND created_at<=?").get(...values).count });
+    const byTool = this.db.prepare(`WITH captured AS (${captured}) SELECT toolName,category,${counters} FROM captured GROUP BY toolName,category ORDER BY total DESC,toolName LIMIT 256`).all(...values).map(value => ({ ...value, p50Ms: null, p95Ms: null }));
+    const timedTools = this.db.prepare(`WITH captured AS (${captured}), timed AS (SELECT toolName,category,${duration} AS duration,ROW_NUMBER() OVER(PARTITION BY toolName,category ORDER BY ${duration}) AS rank,COUNT(*) OVER(PARTITION BY toolName,category) AS samples FROM captured WHERE json_type(result,'$.durationMs')='integer') SELECT toolName,category,MAX(CASE WHEN rank=(samples+1)/2 THEN duration END) AS p50Ms,MAX(CASE WHEN rank=(samples*95+99)/100 THEN duration END) AS p95Ms FROM timed GROUP BY toolName,category`).all(...values);
+    for (const row of byTool) { const timed = timedTools.find(value => value.toolName === row.toolName && value.category === row.category); if (timed) { row.p50Ms = timed.p50Ms; row.p95Ms = timed.p95Ms; } }
+    const rows = this.db.prepare(`WITH captured AS (${captured}) SELECT * FROM captured WHERE seq<? ORDER BY seq DESC LIMIT ?`).all(...values, before, limit + 1);
+    const items = rows.slice(0, limit).map(row => {
+      const context = JSON.parse(row.context), result = row.result ? JSON.parse(row.result) : {};
+      return { kind: 'mcp', id: row.id, cursor: row.seq, at: traceTime(row.created_at), endpoint: '/mcp', transport: 'streamable-http', category: row.category, toolName: row.toolName, ...(context.appId && { appId: context.appId }), outcome: row.state, status: row.state, code: result.code || null, durationMs: result.durationMs ?? null, actor: context.actor, lifecycleTraceId: context.mcp.bridgeLinked ? row.id : null };
+    });
+    return { schemaVersion: 1, source: 'mcp', state: items.length ? 'ready' : 'empty', window, generatedAt: traceTime(now), coverage: this.traceCoverage(), summary, byTool, items, nextCursor: rows.length > items.length ? items.at(-1)?.cursor ?? null : null };
+  }
+  tracePage({ source = 'lifecycle', before = Number.MAX_SAFE_INTEGER, limit = 25, traceId, window = 'day' } = {}) {
+    traceAssert(['mcp', 'lifecycle', 'audit', 'outbox'].includes(source) && Number.isSafeInteger(before) && before > 0 && Number.isSafeInteger(limit) && limit >= 1 && limit <= 50);
     if (traceId !== undefined) traceAssert(source === 'lifecycle' && traceIdValue(traceId));
+    if (source === 'mcp') return this.mcpTracePage({ before, limit, window });
     const toStep = row => ({ cursor: row.seq, at: traceTime(row.at), stage: row.stage, status: row.status, ...JSON.parse(row.metadata) });
     const lifecycle = row => {
       const context = JSON.parse(row.context), count = this.db.prepare('SELECT COUNT(*) AS count FROM business_trace_steps WHERE trace_id=?').get(row.id).count;
@@ -163,7 +210,7 @@ export class BusinessEvents {
     };
     let items, rows;
     if (source === 'lifecycle') {
-      rows = traceId ? this.db.prepare('SELECT * FROM business_traces WHERE id=?').all(traceId) : this.db.prepare('SELECT * FROM business_traces WHERE seq<? ORDER BY seq DESC LIMIT ?').all(before, limit + 1);
+      rows = traceId ? this.db.prepare(`SELECT * FROM business_traces WHERE id=? AND ${legacyPrivateReadExcluded}`).all(traceId, this.tracePseudonym('praxis-browser')) : this.db.prepare(`SELECT * FROM business_traces WHERE seq<? AND ${legacyPrivateReadExcluded} ORDER BY seq DESC LIMIT ?`).all(before, this.tracePseudonym('praxis-browser'), limit + 1);
       items = rows.slice(0, limit).map(lifecycle);
     } else if (source === 'audit') {
       rows = this.db.prepare("SELECT rowid AS seq,* FROM business_audit WHERE rowid<? AND NOT(COALESCE(action,'')='read' AND COALESCE(client_id,'')=?) ORDER BY rowid DESC LIMIT ?").all(before, this.tracePseudonym('praxis-browser'), limit + 1);

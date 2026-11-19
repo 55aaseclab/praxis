@@ -46,7 +46,7 @@
         <article id="platform-storage" class="overview-group" aria-label="Business storage" data-zh-label="业务数据存储"></article>
       </div>
       <section id="platform-trace" class="overview-trace" aria-labelledby="platform-trace-heading" hidden>
-        <div class="trace-heading"><h3 id="platform-trace-heading" data-zh="业务留痕">Trace</h3><label><span data-zh="记录来源">Record source</span> <select id="platform-trace-source"><option value="lifecycle" data-zh="操作生命周期">Operation lifecycle</option><option value="audit" data-zh="历史授权决定">Historical access decisions</option><option value="outbox" data-zh="应用变更记录">Application changes</option></select></label></div>
+        <div class="trace-heading"><h3 id="platform-trace-heading" data-zh="业务留痕">Trace</h3><label><span data-zh="记录来源">Record source</span> <select id="platform-trace-source"><option value="mcp" data-zh="MCP 调用">MCP calls</option><option value="lifecycle" data-zh="操作生命周期">Operation lifecycle</option><option value="audit" data-zh="历史授权决定">Historical access decisions</option><option value="outbox" data-zh="应用变更记录">Application changes</option></select></label><label id="platform-trace-window-label"><span data-zh="查看范围">Window</span> <select id="platform-trace-window"><option value="day" data-zh="近一天">Last day</option><option value="week" data-zh="近七天">Last seven days</option></select></label></div>
         <div id="platform-traces" aria-live="polite"></div>
         <nav class="trace-pagination" aria-label="Trace pages" data-zh-label="留痕分页"><button id="platform-trace-newer" type="button" disabled data-zh="较新记录">Newer records</button><button id="platform-trace-older" type="button" disabled data-zh="较早记录">Older records</button></nav>
       </section>

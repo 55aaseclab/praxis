@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import { classifyCapability, classifyOutcome, classifyTool, recordObservation } from '../observability.mjs';
 import { assertMcpSkillCoverage, skillForTool, skillsForTools, registerMcpSkills } from './mcp-skills.mjs';
 import { travelPlaceIdSchema, travelPlaceDetailsSchema, travelRevisionSchema, travelPoiIdSchema, travelCoordinateSchema, travelServicesFields, travelServicesInputSchema } from './travel-schema.mjs';
@@ -183,53 +184,137 @@ function refreshedContract(bridge, token, version) {
   };
 }
 
-export async function handleMcp(request, response, { bridge, token, version, body, observations }) {
-  const { serverInfo, instructions, availableTools } = currentCapabilities(bridge, token, version);
+// MCP captures reuse BusinessEvents lifecycle rows. No arguments, outputs, caller
+// labels, raw RPC ids or cancellation reasons are persisted here.
+const pendingMcpCalls = new Map();
+const recordedMcpErrors = new WeakSet();
+const safeMcpCode = (error, fallback = 'REQUEST_FAILED') => /^[A-Z][A-Z0-9_]{0,63}$/.test(error?.code || '') ? error.code : fallback;
+const mcpOutcome = error => ({ status: [401, 403].includes(error?.status) ? 'denied' : error?.code === 'OUTCOME_UNKNOWN' ? 'unknown' : 'failed', code: safeMcpCode(error) });
+function rememberMcpError(error) { if (error && typeof error === 'object') recordedMcpErrors.add(error); }
+function mcpCallKey(events, actor, rpcId) {
+  if (!events?.tracePseudonym || !actor || !(typeof rpcId === 'string' || typeof rpcId === 'number' && Number.isFinite(rpcId))) return null;
+  return events.tracePseudonym(JSON.stringify([actor.userId, actor.clientId, actor.grantId, typeof rpcId, rpcId]));
+}
+export function recordMcpIngressFailure(error, { events, started = performance.now(), actor } = {}) {
+  if (!events?.beginTrace || error && typeof error === 'object' && recordedMcpErrors.has(error)) return;
+  const id = events.beginTrace({ requestId: randomUUID(), operation: 'mcp_ingress', action: 'read', source: 'mcp', userId: actor?.userId, clientId: actor?.clientId, grantId: actor?.grantId,
+    mcp: { endpoint: '/mcp', transport: 'streamable-http', method: 'not_available', category: 'ingress' } });
+  events.endTrace(id, { ...mcpOutcome(error), durationMs: Math.max(0, Math.round(performance.now() - started)) });
+  rememberMcpError(error);
+}
+function captureMcpCall(request, response, bridge, actor, body, requested) {
+  if (body?.method !== 'tools/call' || !bridge.events?.beginTrace) return null;
+  const events = bridge.events, started = performance.now(), name = body?.params?.name;
+  const category = requested?.appId ? 'business' : requested ? 'control' : 'unknown';
+  const id = events.beginTrace({ requestId: randomUUID(), ...(requested?.appId && { appId: requested.appId }), operation: requested?.operation || 'call_tool', action: requested?.action || 'invoke', source: 'mcp', userId: actor?.userId, clientId: actor?.clientId, grantId: actor?.grantId,
+    mcp: { endpoint: '/mcp', transport: 'streamable-http', method: 'tools/call', category, ...(requested ? { toolName: requested.name } : typeof name === 'string' ? { toolRef: events.tracePseudonym(name) } : {}) } });
+  let callbackStarted = false, settled = false, ended = false, cancelled = false, cancelCode, ready;
+  const key = mcpCallKey(events, actor, body?.id);
+  const remove = () => { const values = key && pendingMcpCalls.get(key); values?.delete(capture); if (values?.size === 0) pendingMcpCalls.delete(key); };
+  const finish = () => {
+    if (ended || !settled) return;
+    ended = true;
+    try { events.endTrace(id, { ...(cancelled ? { status: 'cancelled', code: cancelCode } : ready), durationMs: Math.max(0, Math.round(performance.now() - started)) }); }
+    finally { remove(); }
+  };
+  const capture = {
+    id,
+    get started() { return callbackStarted; },
+    get ended() { return ended; },
+    get cancelled() { return cancelled; },
+    step(value) { if (!ended) events.recordTrace(id, value); },
+    beginCallback() { if (cancelled) return false; callbackStarted = true; return true; },
+    complete(value) { if (ended) return; ready ||= value; settled = true; if (response.writableEnded || response.destroyed) finish(); },
+    cancel(code = 'CLIENT_CANCELLED') {
+      if (ended || cancelled) return;
+      cancelled = true; cancelCode = code;
+      capture.step({ stage: 'transport', status: 'cancelled', code });
+      // A delivered request can still commit after the client leaves. Its bridge
+      // steps must finish before the shared lifecycle row becomes terminal.
+      if (!callbackStarted) { ready = { status: 'cancelled', code }; settled = true; }
+      if (settled) finish();
+    },
+    responseFinished(fallback) { if (!settled && !callbackStarted) { capture.step({ stage: fallback.status === 'denied' ? 'authorization' : 'validation', ...fallback }); capture.complete(fallback); } finish(); },
+  };
+  if (key) { const values = pendingMcpCalls.get(key) || new Set(); values.add(capture); pendingMcpCalls.set(key, values); }
+  request.once('aborted', () => capture.cancel('CLIENT_DISCONNECTED'));
+  response.once('close', () => { if (!response.writableEnded) capture.cancel('CLIENT_DISCONNECTED'); });
+  return capture;
+}
+
+export async function handleMcp(request, response, { bridge, token, actor: authenticatedActor, version, body, observations }) {
   const started = performance.now(), name = body?.params?.name;
-  const requested = BUSINESS_TOOLS.find(tool => tool.name === name);
+  const requested = [...BUSINESS_TOOLS, ...MCP_CONTROL_TOOLS].find(tool => tool.name === name);
+  let actor = authenticatedActor;
+  try { actor ||= bridge.auth.authenticate(token); } catch { /* Negotiation below returns the actual authorization failure. */ }
+  if (body?.method === 'notifications/cancelled') {
+    const key = mcpCallKey(bridge.events, actor, body?.params?.requestId), pending = key && pendingMcpCalls.get(key);
+    // Stateless HTTP clients can reuse ids. Do not guess when a caller has more
+    // than one matching in-flight call, and never persist the untrusted reason.
+    if (pending?.size === 1) [...pending][0].cancel('CLIENT_CANCELLED');
+  }
+  const capture = captureMcpCall(request, response, bridge, actor, body, requested);
   const isControl = MCP_CONTROL_TOOLS.some(tool => tool.name === name);
   const registered = new Set(); let emitted = false;
   const record = outcome => {
     if (isControl || emitted || body?.method !== 'tools/call') return;
     emitted = true;
-    recordObservation(observations, { event_name: 'business_action', route_id: 'mcp', method: 'POST', source: 'mcp', ...(requested ? classifyCapability(requested.appId, requested.operation) : classifyTool(name)), ...outcome, duration_ms: Math.max(0, Math.round(performance.now() - started)) });
+    recordObservation(observations, { event_name: 'business_action', route_id: 'mcp', method: 'POST', source: 'mcp', ...(requested?.appId ? classifyCapability(requested.appId, requested.operation) : classifyTool(name)), ...outcome, duration_ms: Math.max(0, Math.round(performance.now() - started)) });
   };
   response.once('finish', () => {
-    if (body?.jsonrpc !== '2.0' || typeof name !== 'string') return record({ result: 'invalid', reason_code: 'INVALID_INPUT' });
-    if (requested && !registered.has(name)) return record({ result: 'forbidden', reason_code: 'FORBIDDEN' });
-    if (!requested) return record({ result: 'unsupported', reason_code: 'UNKNOWN_TOOL' });
-    record({ result: 'invalid', reason_code: 'SDK_VALIDATION' });
+    let fallback;
+    if (body?.jsonrpc !== '2.0' || typeof name !== 'string') { record({ result: 'invalid', reason_code: 'INVALID_INPUT' }); fallback = { status: 'failed', code: 'INVALID_MCP_REQUEST' }; }
+    else if (response.statusCode >= 400) { record({ result: 'invalid', reason_code: 'SDK_VALIDATION' }); fallback = { status: 'failed', code: 'MCP_TRANSPORT_ERROR' }; }
+    else if (requested && !registered.has(name)) { record({ result: 'forbidden', reason_code: 'FORBIDDEN' }); fallback = { status: 'denied', code: 'FORBIDDEN' }; }
+    else if (!requested) { record({ result: 'unsupported', reason_code: 'UNKNOWN_TOOL' }); fallback = { status: 'failed', code: 'UNKNOWN_TOOL' }; }
+    else { record({ result: 'invalid', reason_code: 'SDK_VALIDATION' }); fallback = { status: 'failed', code: 'INVALID_INPUT' }; }
+    capture?.responseFinished(fallback);
   });
-  const server = new McpServer(serverInfo, { instructions });
-  registerMcpSkills(server, availableTools, () => currentCapabilities(bridge, token, version).availableTools);
-  for (const tool of availableTools) {
-    registered.add(tool.name);
-    server.registerTool(tool.name, { description: tool.description, inputSchema: tool.schema, annotations: toolAnnotations(tool), _meta: { 'praxis/skill': skillForTool(tool) } }, async args => {
-      try {
-        const result = tool.appId ? await bridge.invoke(token, {
-          appId: tool.appId, operation: tool.operation, spaceId: args.spaceId,
-          ...Object.fromEntries(['resourceId', 'sourceResourceId', 'expectedRevision', 'idempotencyKey'].filter(k => args[k] !== undefined).map(k => [k, args[k]])),
-          ...(tool.input ? { input: tool.input(args) } : {}),
-        }) : refreshedContract(bridge, token, version);
-        if (tool.appId === 'slides' && tool.operation === 'get_artifact' && args.mode === 'inline' && /^image\/(png|jpeg|webp)$/.test(result.artifact?.mimeType || '')) {
-          const { base64, ...artifact } = result.artifact;
-          if (typeof base64 !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length > 6 * 1024 * 1024) throw businessError(502, 'INVALID_APP_RESPONSE');
-          const metadata = { ...result, artifact };
-          record(classifyOutcome(200));
-          return { content: [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', data: base64, mimeType: artifact.mimeType }], structuredContent: metadata };
-        }
-        record(classifyOutcome(200));
-        return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
-      } catch (error) {
-        record(classifyOutcome(error.status || 500, error.code));
-        const details = tool.appId === 'slides' ? slidesErrorDetails(error.status, error.code, error) : {};
-        const value = { code: error.code || 'REQUEST_FAILED', status: error.status || 500, ...(error.committed ? { committed: true, requestId: error.requestId } : {}), ...details };
-        return { isError: true, content: [{ type: 'text', text: JSON.stringify(value) }], ...(Object.keys(details).length ? { structuredContent: value } : {}) };
-      }
-    });
+  let server, transport;
+  try {
+    const contract = currentCapabilities(bridge, token, version);
+    server = new McpServer(contract.serverInfo, { instructions: contract.instructions });
+    registerMcpSkills(server, contract.availableTools, () => currentCapabilities(bridge, token, version).availableTools);
+    for (const tool of contract.availableTools) {
+      registered.add(tool.name);
+      server.registerTool(tool.name, { description: tool.description, inputSchema: tool.schema, annotations: toolAnnotations(tool), _meta: { 'praxis/skill': skillForTool(tool) } }, async (args, extra) => {
+        if (capture && !capture.beginCallback()) return { isError: true, content: [{ type: 'text', text: '{"code":"CLIENT_CANCELLED","status":499}' }] };
+        const cancelled = () => capture?.cancel('CLIENT_CANCELLED'); extra?.signal?.addEventListener('abort', cancelled, { once: true });
+        let invoked = false;
+        try {
+          const invocation = tool.appId ? {
+            appId: tool.appId, operation: tool.operation, spaceId: args.spaceId,
+            ...Object.fromEntries(['resourceId', 'sourceResourceId', 'expectedRevision', 'idempotencyKey'].filter(k => args[k] !== undefined).map(k => [k, args[k]])),
+            ...(tool.input ? { input: tool.input(args) } : {}),
+          } : null;
+          capture?.step({ stage: 'validation', status: 'succeeded' });
+          invoked = true;
+          const result = tool.appId ? await bridge.invoke(token, invocation, { source: 'mcp', ...(capture && { mcpTraceId: capture.id }) }) : refreshedContract(bridge, token, version);
+          let output;
+          if (tool.appId === 'slides' && tool.operation === 'get_artifact' && args.mode === 'inline' && /^image\/(png|jpeg|webp)$/.test(result.artifact?.mimeType || '')) {
+            const { base64, ...artifact } = result.artifact;
+            if (typeof base64 !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length > 6 * 1024 * 1024) throw businessError(502, 'INVALID_APP_RESPONSE');
+            const metadata = { ...result, artifact };
+            output = { content: [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', data: base64, mimeType: artifact.mimeType }], structuredContent: metadata };
+          } else output = { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+          record(classifyOutcome(200)); capture?.complete({ status: 'succeeded' }); return output;
+        } catch (error) {
+          record(classifyOutcome(error.status || 500, error.code));
+          if (!invoked || error.code === 'INVALID_APP_RESPONSE') capture?.step({ stage: 'validation', status: 'failed', code: safeMcpCode(error, 'INVALID_INPUT') });
+          capture?.complete(mcpOutcome(error));
+          const details = tool.appId === 'slides' ? slidesErrorDetails(error.status, error.code, error) : {};
+          const value = { code: safeMcpCode(error), status: error.status || 500, ...(error.committed ? { committed: true, requestId: error.requestId } : {}), ...details };
+          return { isError: true, content: [{ type: 'text', text: JSON.stringify(value) }], ...(Object.keys(details).length ? { structuredContent: value } : {}) };
+        } finally { extra?.signal?.removeEventListener('abort', cancelled); }
+      });
+    }
+    transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    response.on('close', () => { transport.close().catch(() => {}); server.close().catch(() => {}); });
+    await server.connect(transport);
+    await transport.handleRequest(request, response, body);
+  } catch (error) {
+    capture?.complete(mcpOutcome(error));
+    if (capture) rememberMcpError(error);
+    throw error;
   }
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-  response.on('close', () => { transport.close().catch(() => {}); server.close().catch(() => {}); });
-  await server.connect(transport);
-  await transport.handleRequest(request, response, body);
 }

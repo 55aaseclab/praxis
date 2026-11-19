@@ -8,7 +8,7 @@ Local Chart.js renders counts, coverage and aggregated durations alongside acces
 
 ## Access and configuration
 
-Settings (`/admin/`) opens the General section. Administrators can select Overview to see status and expand usage observations. Users, app access and agent delegations have separate sections. Ordinary members can choose their language and review their own access and delegations. The current `canViewPlatform` reflects a platform administrator role and each read-only API rechecks it. Disabled or expired sessions, external clients and business Bearer credentials are refused. Clear details on logout or loss of authority. Do not persist the overview in browser storage.
+Settings (`/admin/`) opens the General section. Administrators can select Overview to see status, MCP call traces and always-expanded usage observations. Users, app access and agent delegations have separate sections. Ordinary members can choose their language and review their own access and delegations. The current `canViewPlatform` reflects a platform administrator role and each read-only API rechecks it. Disabled or expired sessions, external clients and business Bearer credentials are refused. Clear details on logout or loss of authority. Do not persist the overview in browser storage.
 
 Use the canonical HTTPS workbench. Plain HTTP on another origin cannot use its secure browser cookie. A synthetic browser test does not establish real phone connectivity when the external chain is unavailable.
 
@@ -26,6 +26,12 @@ Optional private core configuration:
 Use a separate 700 directory outside Git and 600 JSON files. The stack validates the configuration. The core backend mounts redacted output read-only. The web process has no storage configuration, raw data, keys or Docker socket mount. The status publisher reads existing configuration, repository outcomes and worker heartbeats and writes a fixed projection without network access. Updating the Settings page does not require restarting a running backup.
 
 A fixed local proxy maps `/api/platform/status` to `/api/business/console/status`, and `/api/platform/observations?window=day|week` to the corresponding aggregate. It forwards the approved native session cookie only, rejects caller Authorization and cross-origin requests, accepts no target URL, follows no redirects and bounds time and response size. Responses are uncached.
+
+## MCP calls in Trace
+
+Trace opens on **MCP calls**. Its day/week summary and tool breakdown are computed from recorded calls across that window, independently of the current page of rows. Each call shows a registered tool or safe unknown/control category, outcome, duration and safe caller references. Follow the linked business lifecycle for actual authorization, dispatch, commit and readback. A returned job is accepted work, not proof that the job completed. HTTP success and tool success remain distinct.
+
+Use `GET /api/platform/traces?source=mcp&window=day|week` through the native administrator session. Runtime observations, lifecycle history, authorization decisions and app changes remain separate selectable sources. Polaris contributes workflow context; it does not supply the MCP call count. Historical records are not backfilled into tool calls, and the capture boundary is shown explicitly. The source selector and pagination do not grant business-record access.
 
 ## Interpreting values
 

@@ -156,19 +156,20 @@ export function createConsoleHandler({ auth, config, events, observations, fetch
       const session = requireAdmin(request);
       if (request.method !== 'GET') { reply(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET' }); return true; }
       if (url.pathname.endsWith('/traces')) {
-        const allowed = ['source', 'before', 'limit', 'traceId'];
-        const source = url.searchParams.get('source') || 'lifecycle', before = url.searchParams.get('before'), limit = url.searchParams.get('limit'), traceId = url.searchParams.get('traceId');
-        if ([...url.searchParams.keys()].some(key => !allowed.includes(key) || url.searchParams.getAll(key).length !== 1) || !['lifecycle', 'audit', 'outbox', 'runtime'].includes(source)
+        const allowed = ['source', 'before', 'limit', 'traceId', 'window'];
+        const source = url.searchParams.get('source') || (url.searchParams.has('traceId') ? 'lifecycle' : 'mcp'), before = url.searchParams.get('before'), limit = url.searchParams.get('limit'), traceId = url.searchParams.get('traceId'), window = url.searchParams.get('window');
+        if ([...url.searchParams.keys()].some(key => !allowed.includes(key) || url.searchParams.getAll(key).length !== 1) || !['mcp', 'lifecycle', 'audit', 'outbox', 'runtime'].includes(source)
           || before !== null && (!/^[1-9][0-9]{0,15}$/.test(before) || !Number.isSafeInteger(Number(before)))
           || limit !== null && (!/^[1-9][0-9]?$/.test(limit) || Number(limit) > 50)
-          || traceId !== null && (source !== 'lifecycle' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(traceId))) {
+          || traceId !== null && (source !== 'lifecycle' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(traceId))
+          || window !== null && (source !== 'mcp' || !['day', 'week'].includes(window))) {
           reply(response, 400, { code: 'INVALID_TRACE_QUERY' }); return true;
         }
         if (source === 'runtime') {
           const report = typeof getRuntimeTraces === 'function' ? await getRuntimeTraces({ token: sessionCredential(request), ...(before !== null && { before: Number(before) }), ...(limit !== null && { limit: Number(limit) }) }) : runtimeTraceReport('unavailable', clock());
           requireAdmin(request); reply(response, 200, { ...report, coverage: { ...(events?.traceCoverage?.() || {}), ...report.coverage } }); return true;
         }
-        const report = events.tracePage({ source, ...(before !== null && { before: Number(before) }), ...(limit !== null && { limit: Number(limit) }), ...(traceId !== null && { traceId }) });
+        const report = events.tracePage({ source, ...(before !== null && { before: Number(before) }), ...(limit !== null && { limit: Number(limit) }), ...(traceId !== null && { traceId }), ...(window !== null && { window }) });
         const visible = traceReferences(report, request);
         requireAdmin(request); reply(response, 200, visible); return true;
       }

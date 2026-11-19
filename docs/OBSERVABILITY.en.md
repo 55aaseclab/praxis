@@ -20,6 +20,12 @@ Report HTTP transport, MCP protocol, business calls and adapter calls as separat
 
 Health checks, catalog discovery, internal collection and SSE system events do not appear as user failures, capability candidates or slow business calls. For SSE record connection setup time. Count a disconnected ordinary request as a single cancellation. The slow-page threshold is three seconds and the slow business/adapter threshold is one second. Report sample size, outcomes and p50/p95. Denial, concurrency conflict and unavailability carry different meanings.
 
+## MCP call trace
+
+The default Overview Trace reads actual MCP tool-call records in the durable platform event database. Registered tool identity, a safe unknown/control category, precise transport, outcome, duration and opaque caller references are distinct from the short-lived observation aggregates. Window totals and latency use the full recorded day/week window. Business calls link to their actual lifecycle where available; schema rejection or denied calls can exist without an application lifecycle. Historical bridge rows whose transport was inferred from a grant are not reconstructed into tool calls. Polaris observations remain supplementary.
+
+Raw arguments, results, credentials and arbitrary unknown names are excluded. Counts describe the recorded capture interval; missing older coverage remains missing. Current native-administrator and business-reference checks apply at read time.
+
 ## Business traces for workflow review (design goal)
 
 The diagnostic observation store described above is short-lived and reports aggregate service behavior. Workflow review needs a business record governed by the owning project's access and retention rules. Record a minimal event for every MCP request received by the server. For business calls, capture the tool, safe outcome, duration and retry relationship, and correlate the call with the project and Polaris run wherever the server can establish that relationship. Protocol requests and denied attempts can be represented by safe categories without revealing any protected object. An absent link or an action outside the captured systems is a coverage gap.

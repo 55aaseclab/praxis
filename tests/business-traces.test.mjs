@@ -133,26 +133,47 @@ test('Trace API is native-admin gated, rejects invalid cursors, and returns an h
   assert.equal((await f.request('', f.member.sessionToken)).status, 403);
   assert.equal((await f.request('', f.admin.sessionToken, { Authorization: 'Bearer synthetic-not-a-browser' })).status, 401);
   assert.equal((await f.request('', f.admin.sessionToken, { Origin: 'https://untrusted.example' })).status, 403);
-  for (const query of ['?limit=51', '?limit=0', '?before=-1', '?before=9007199254740992', '?source=private-browser-history', '?limit=1&limit=2', '?traceId=one&source=audit']) assert.equal((await f.request(query)).status, 400, query);
+  for (const query of ['?limit=51', '?limit=0', '?before=-1', '?before=9007199254740992', '?source=private-browser-history', '?limit=1&limit=2', '?traceId=one&source=audit', '?window=all', '?source=runtime&window=day', '?window=day&window=week']) assert.equal((await f.request(query)).status, 400, query);
   const response = await f.request(); assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
-  const page = await response.json(); assert.equal(page.state, 'empty'); assert.deepEqual(page.items, []); assert.equal(page.coverage.lifecycle.count, 0);
+  const page = await response.json(); assert.equal(page.source, 'mcp'); assert.equal(page.state, 'empty'); assert.deepEqual(page.items, []); assert.equal(page.coverage.mcp.count, 0);
 });
 
 test('Trace source refs and revisions require current business-read permission even for platform admins', async t => {
   const f = await consoleFixture(t);
   committed(f.events, { workflow: { id: 'workflow-private', version: '2' }, humanDecision: { id: 'decision-private', decision: 'approved' } });
-  let page = await (await f.request()).json();
+  let page = await (await f.request('?source=lifecycle')).json();
   assert.equal(page.items[0].reference, null); assert.equal(page.items[0].workflow, null); assert.equal(page.items[0].humanDecision, null);
   assert.doesNotMatch(JSON.stringify(page), /"team-a"|"record-a"|revision-2|workflow-private|decision-private/);
   assert.equal(page.items[0].committed, true);
   const grant = f.auth.grantResource({ userId: 'administrator', appId: 'reminder', spaceId: 'team-a', resources: ['record-a'], actions: ['read'] });
-  page = await (await f.request()).json();
+  page = await (await f.request('?source=lifecycle')).json();
   assert.equal(page.items[0].reference.resourceId, 'record-a'); assert.equal(page.items[0].reference.href, '/apps/reminder/');
   assert.equal(page.items[0].steps.find(step => step.stage === 'commit').reference.revision, 'revision-2');
   assert.equal(page.items[0].workflow.id, 'workflow-private');
   f.auth.revokeResource(grant.id);
-  page = await (await f.request()).json();
+  page = await (await f.request('?source=lifecycle')).json();
   assert.equal(page.items[0].reference, null); assert.doesNotMatch(JSON.stringify(page), /revision-2|workflow-private/);
+});
+
+test('default MCP overview totals use the full window and exclude legacy inferred transport and HTTP calls', async t => {
+  const f = await consoleFixture(t);
+  committed(f.events, { requestId: 'legacy-inferred-mcp' });
+  committed(f.events, { requestId: 'explicit-http', source: 'http' });
+  for (const [index, status, durationMs] of [[1, 'succeeded', 20], [2, 'denied', 5], [3, 'failed', 40]]) {
+    const id = f.events.beginTrace(context({ requestId: `real-call-${index}`, operation: 'list', action: 'read', mcp: { endpoint: '/mcp', transport: 'streamable-http', method: 'tools/call', category: 'business', toolName: 'reminder_list' } }));
+    f.events.endTrace(id, { status, durationMs });
+  }
+  const page = await (await f.request('?limit=1&window=day')).json();
+  assert.equal(page.source, 'mcp'); assert.equal(page.items.length, 1);
+  assert.deepEqual([page.summary.total, page.summary.success, page.summary.denied, page.summary.errors], [3, 1, 1, 1]);
+  assert.equal(page.summary.p50Ms, 20); assert.equal(page.summary.p95Ms, 40);
+  assert.equal(page.byTool.length, 1); assert.equal(page.byTool[0].total, 3);
+  assert.equal(page.items[0].endpoint, '/mcp'); assert.equal(page.items[0].toolName, 'reminder_list');
+  assert.match(page.items[0].actor.clientRef, /^[a-f0-9]{24}$/);
+  assert.ok(Number.isFinite(Date.parse(page.coverage.mcp.recordingStartedAt)));
+  assert.doesNotMatch(JSON.stringify(page), /legacy-inferred-mcp|explicit-http|synthetic-client|"team-a"|"record-a"/);
+  const older = await (await f.request(`?source=mcp&limit=1&before=${page.nextCursor}`)).json();
+  assert.equal(older.summary.total, 3); assert.notEqual(older.items[0].id, page.items[0].id);
 });
 
 test('Trace proxy forwards only validated bounded queries and native session cookies', async t => {
@@ -165,7 +186,8 @@ test('Trace proxy forwards only validated bounded queries and native session coo
   const headers = { Cookie: `${SESSION_COOKIE}=${f.admin.sessionToken}` };
   assert.equal((await fetch(base)).status, 401);
   assert.equal((await fetch(base + '?source=audit&limit=5', { headers })).status, 200);
-  for (const query of ['?body=private', '?limit=51', '?before=0', '?source=unknown', '?limit=1&limit=2']) assert.equal((await fetch(base + query, { headers })).status, 400, query);
+  const mcp = await fetch(base + '?source=mcp&window=week&limit=5', { headers }); assert.equal(mcp.status, 200); assert.equal((await mcp.json()).source, 'mcp');
+  for (const query of ['?body=private', '?limit=51', '?before=0', '?source=unknown', '?limit=1&limit=2', '?window=all', '?source=runtime&window=day']) assert.equal((await fetch(base + query, { headers })).status, 400, query);
   assert.equal((await fetch(base, { headers: { ...headers, Authorization: 'Bearer synthetic' } })).status, 403);
 });
 

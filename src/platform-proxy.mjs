@@ -33,11 +33,12 @@ export function createPlatformProxy({ upstream, host, origin, timeoutMs = 3000 }
     if (request.headers.authorization || (request.headers.origin && request.headers.origin !== expectedOrigin) || (request.headers['sec-fetch-site'] && request.headers['sec-fetch-site'] !== 'same-origin' && request.headers['sec-fetch-site'] !== 'none')) return reply(response, 403, { error: 'FORBIDDEN' });
     const keys = [...url.searchParams.keys()];
     if (url.pathname.endsWith('/traces')) {
-      if (keys.some(key => !['source', 'before', 'limit', 'traceId'].includes(key) || url.searchParams.getAll(key).length !== 1)
-        || url.searchParams.has('source') && !['lifecycle', 'audit', 'outbox', 'runtime'].includes(url.searchParams.get('source'))
+      if (keys.some(key => !['source', 'before', 'limit', 'traceId', 'window'].includes(key) || url.searchParams.getAll(key).length !== 1)
+        || url.searchParams.has('source') && !['mcp', 'lifecycle', 'audit', 'outbox', 'runtime'].includes(url.searchParams.get('source'))
         || url.searchParams.has('before') && (!/^[1-9][0-9]{0,15}$/.test(url.searchParams.get('before')) || !Number.isSafeInteger(Number(url.searchParams.get('before'))))
         || url.searchParams.has('limit') && (!/^[1-9][0-9]?$/.test(url.searchParams.get('limit')) || Number(url.searchParams.get('limit')) > 50)
-        || url.searchParams.has('traceId') && (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(url.searchParams.get('traceId')) || url.searchParams.has('source') && url.searchParams.get('source') !== 'lifecycle')) return reply(response, 400, { error: 'INVALID_QUERY' });
+        || url.searchParams.has('traceId') && (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(url.searchParams.get('traceId')) || url.searchParams.has('source') && url.searchParams.get('source') !== 'lifecycle')
+        || url.searchParams.has('window') && (!['day','week'].includes(url.searchParams.get('window')) || url.searchParams.has('traceId') || url.searchParams.has('source') && url.searchParams.get('source') !== 'mcp')) return reply(response, 400, { error: 'INVALID_QUERY' });
     } else if (url.pathname.endsWith('/status') ? keys.length : keys.length > 1 || keys.some(key => key !== 'window') || (url.searchParams.has('window') && !['day', 'week'].includes(url.searchParams.get('window')))) return reply(response, 400, { error: 'INVALID_QUERY' });
     if (!target) return reply(response, 503, { error: 'UNAVAILABLE' });
     const headers = { Accept: 'application/json', Host: host };

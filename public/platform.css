@@ -60,3 +60,23 @@
 .observation-section h4{font-size:15px;font-weight:650;margin:0 0 16px}
 .platform-overview a{font-weight:500}
 @media(max-width:760px){.overview-chart-table{grid-template-columns:minmax(0,1fr);gap:0}.overview-chart-table>.overview-table-scroll{margin-top:4px}.overview-controls>span{max-width:110px;font-size:11px;text-align:right}.overview-controls button,.experience-heading select,.trace-heading select,.trace-pagination button,.trace-steps-more{min-height:44px}.overview-panels{gap:24px}.overview-group-heading{margin-bottom:12px}.overview-table th,.overview-table td{padding:8px 10px}.overview-table[data-scope$="-scope"] td:first-child,.overview-table[data-scope="methodology"] td:first-child{width:auto;min-width:88px}.overview-figure{margin-top:16px}.overview-chart-scroll{max-height:360px}.experience-heading,.trace-pagination{justify-content:flex-start}.observation-section{margin-top:20px}}
+
+/* Actual MCP calls are the primary Trace view; lifecycle details open on demand. */
+.trace-heading label { min-width: 0; max-width: 100%; }
+.trace-heading select { min-width: 0; max-width: 100%; }
+.mcp-call-summary { margin: 16px 0 24px; }
+.mcp-call-summary .overview-table-scroll { margin: 10px 0 0; }
+.mcp-call-list-heading { margin: 22px 0 0; font-size: 14px; font-weight: 600; }
+.mcp-call .trace-entry-heading code { font: 600 13px / 1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.mcp-call-metadata { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 10px 0; font-size: 12px; line-height: 1.65; }
+.mcp-call-metadata > div { display: flex; gap: 7px; min-width: 0; }
+.mcp-call-metadata dt { color: var(--muted); }
+.mcp-call-metadata dd { margin: 0; overflow-wrap: anywhere; }
+.mcp-call .trace-lifecycle { margin-top: 12px; }
+.trace-lifecycle > summary { display: flex; align-items: center; min-height: 44px; width: fit-content; cursor: pointer; color: var(--blue); font-size: 13px; }
+.trace-lifecycle > summary::before { content: '›'; display: inline-block; margin-right: 8px; font-size: 16px; }
+.trace-lifecycle[open] > summary::before { transform: rotate(90deg); }
+.trace-lifecycle > summary::-webkit-details-marker { display: none; }
+.trace-lifecycle > summary { list-style: none; }
+.trace-lifecycle > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
+@media(max-width:760px) { .trace-heading label { flex-wrap: wrap; } .mcp-call-metadata { gap: 6px 18px; } .mcp-call-summary .overview-table { min-width: 580px; } }

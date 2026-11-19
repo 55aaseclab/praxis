@@ -1,8 +1,12 @@
 # Praxis roadmap
 
-Version: 0.1.115
+Version: 0.1.116
 
 [简体中文](ROADMAP.md)
+
+## MCP-first Trace acceptance
+
+Make real MCP calls the default Overview trace. Verify registered-tool success, denial, schema/unknown-tool errors, controls, cancellation and application commit/readback through the actual MCP endpoint with isolated synthetic data. Verify tool names, precise transport, safe caller correlation, call counts and latency against emitted requests; delegated HTTP must not increase MCP counts. Keep Polaris history available as supplementary context. Check both languages, narrow layouts, restart persistence and access boundaries, then deploy the affected workbench/Core pair.
 
 ## App integration delivery
 
@@ -208,6 +212,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.113 | 2026-11-19 | Rename the platform backend service and commands to core with installation compatibility |
 | v0.1.114 | 2026-11-19 | Deliver app-owned cards, live data inventory, private card preferences and Overview business traces with expanded experience clues |
 | v0.1.115 | 2026-11-19 | Honor private reader ownership in card discovery and preferences |
+| v0.1.116 | 2026-11-19 | Prioritize actual MCP calls, outcomes and latency in Overview Trace |
 
 ### Public applications with private collections
 

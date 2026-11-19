@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.115 · [简体中文](PRD.md)
+Version: 0.1.116 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -40,6 +40,12 @@ Implement the approved [card design](design/workbench-cards.en.md) and its proto
 All thirteen non-runtime built-ins supply app-owned, authorized, versioned card projections and current data-inventory metadata. Polaris is the runtime and supplies no workbench cards. Its data inventory remains included. The platform discovers providers from the installed app catalog, merges their responses and updates Settings when apps or their data locations change. App content, source versions, record references and native entry paths come from each app; do not fabricate cards or silently omit an app integration. Browser-local and derived sources report their actual execution and ownership boundaries. Letters and Profiles use the same configured document-owner boundary for card discovery, native reads and personal card preferences; their absence from the general app-entry policy must not hide these sources from that owner. Empty, unavailable, partial and unauthorized responses remain distinguishable.
 
 Add a Trace section to Settings → Overview for the business operation lifecycle: authorized invocation, app outcome/commit, source/output versions, recorded workflow or human-decision links when available, and readback or failure. Use bounded structured metadata and authorized references; credentials, raw request bodies and private browsing/deferral histories are excluded. Describe missing historical coverage honestly. Usage and experience clues are always expanded in Overview, with no details/summary collapse control.
+
+### MCP calls are the primary trace
+
+Overview → Trace defaults to actual MCP tool calls. Show the registered tool, time, safe caller/client references, outcome and duration, with aggregate call counts, failures and latency for the stated observation window. Follow a business call into its authorization, app dispatch, commit and readback where recorded. Rejections, schema failures, unknown tools, control calls and interrupted calls need truthful outcomes even when no app runs. Distinguish MCP transport from delegated HTTP and native web operations. A successful HTTP response alone does not mean a tool succeeded or that business data was committed.
+
+Polaris contributes already-recorded workflow context as a supplementary trace source. Runtime history, historical authorization rows and app change events must not stand in for evidence of current MCP calls. Keep usage/experience clues expanded. Record allowlisted metadata without raw arguments, outputs, credentials, arbitrary tool names or private browsing history, and preserve current administrative and business-reference authorization.
 
 ## Application publication
 
@@ -145,6 +151,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.113 | 2026-11-19 | Rename the platform backend service and commands to core with installation compatibility |
 | v0.1.114 | 2026-11-19 | Deliver app-owned cards, live data inventory, private card preferences and Overview business traces with expanded experience clues |
 | v0.1.115 | 2026-11-19 | Honor private reader ownership in card discovery and preferences |
+| v0.1.116 | 2026-11-19 | Prioritize actual MCP calls, outcomes and latency in Overview Trace |
 
 ### Letters and Profiles
 

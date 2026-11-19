@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 import { AuthStore, createAuthHandler, credentialFromRequest } from './auth.mjs';
 import { BusinessBridge, businessError, OPERATIONS } from './bridge.mjs';
 import { BusinessEvents } from './events.mjs';
-import { handleMcp } from './mcp.mjs';
+import { handleMcp, recordMcpIngressFailure } from './mcp.mjs';
 import { loadBusinessConfig } from './config.mjs';
 import { PolicyGate } from './policy-gate.mjs';
 import packageMetadata from '../../package.json' with { type: 'json' };
@@ -89,6 +89,21 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
       const url = new URL(request.url, config.issuer);
       const origin = request.headers.origin;
       if (request.headers.host !== new URL(config.issuer).host && !(config.allowedHosts || []).includes(request.headers.host)) throw businessError(403, 'HOST_REJECTED');
+      if (url.pathname === '/mcp') {
+        const mcpStarted = performance.now(); let actor;
+        try {
+          if (origin && origin !== config.issuer && !(config.allowedOrigins || []).includes(origin)) throw businessError(403, 'ORIGIN_REJECTED');
+          if (request.method !== 'POST') throw Object.assign(businessError(405, 'METHOD_NOT_ALLOWED'), { mcpAllow: 'POST' });
+          if (typeof request.headers.authorization !== 'string' || !/^Bearer [A-Za-z0-9_-]+$/i.test(request.headers.authorization)) throw businessError(401, 'BEARER_REQUIRED');
+          const token = credentialFromRequest(request);
+          actor = auth.authenticate(token);
+          return await handleMcp(request, response, { bridge, token, actor, version, body: await readJson(request, 3 * 1024 * 1024), observations });
+        } catch (error) {
+          recordMcpIngressFailure(error, { events, started: mcpStarted, actor });
+          if (error.mcpAllow) return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: error.mcpAllow });
+          throw error;
+        }
+      }
       if (await gate.run(() => handleAuth(request, response))) return;
       if (origin && origin !== config.issuer && !(config.allowedOrigins || []).includes(origin)) throw businessError(403, 'ORIGIN_REJECTED');
       if (await handleSlidesJobAuthorization(request, response)) return;
@@ -127,13 +142,6 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
       }
       const asset = Object.hasOwn(APP_ASSETS, url.pathname) && APP_ASSETS[url.pathname];
       if (asset && ['GET', 'HEAD'].includes(request.method)) { const content = await readFile(new URL(`../../public/${asset[0]}`, import.meta.url)); response.writeHead(200, { 'Content-Type': `${asset[1]}; charset=utf-8`, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' }); return response.end(request.method === 'HEAD' ? undefined : content); }
-      if (url.pathname === '/mcp') {
-        if (request.method !== 'POST') return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'POST' });
-        const token = credentialFromRequest(request);
-        auth.authenticate(token);
-        if (!request.headers.authorization) throw businessError(401, 'BEARER_REQUIRED');
-        return await handleMcp(request, response, { bridge, token, version, body: await readJson(request, 3 * 1024 * 1024), observations });
-      }
       if (url.pathname === '/api/business/workbench/preferences') {
         const session = requireAccountSession(request, { auth });
         const token = credentialFromRequest(request);
@@ -178,7 +186,7 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
           try { auth.authenticate(token); actorKnown = true; } catch {}
           invocation = await readJson(request, (url.pathname === '/api/business/memo-records' ? 10 : 3) * 1024 * 1024);
           if (url.pathname === '/api/business/memo-records' && (invocation?.appId !== 'memo' || invocation?.resourceId !== 'records' || !MEMO_RECORD_OPERATIONS.includes(invocation?.operation))) throw businessError(400, 'INVALID_REQUEST');
-          const result = await bridge.invoke(token, invocation);
+          const result = await bridge.invoke(token, invocation, { source: request.headers.authorization ? 'http' : 'web' });
           record(classifyOutcome(200)); return json(response, 200, result);
         } catch (error) {
           const unknown = typeof invocation?.appId === 'string' && typeof invocation?.operation === 'string' && (!Object.hasOwn(OPERATIONS, invocation.appId) || !Object.hasOwn(OPERATIONS[invocation.appId], invocation.operation));

@@ -166,8 +166,8 @@ function renderObservations(node, report) {
 }
 
 
-const traceSources = { lifecycle: t("Operation lifecycle", "操作生命周期"), audit: t("Historical access decisions", "历史授权决定"), outbox: t("Application changes", "应用变更记录"), runtime: t("Runtime observations", "运行观察") };
-const traceStages = { authorization: t("Authorization", "授权"), dispatch: t("App invocation", "调用应用"), commit: t("Commit", "提交"), readback: t("Readback", "回读"), result: t("Result", "结果"), runtime: t("Runtime step", "运行步骤") };
+const traceSources = { mcp: t("MCP calls", "MCP 调用"), lifecycle: t("Operation lifecycle", "操作生命周期"), audit: t("Historical access decisions", "历史授权决定"), outbox: t("Application changes", "应用变更记录"), runtime: t("Runtime observations", "运行观察") };
+const traceStages = { validation: t("Validation", "校验"), transport: t("Transport", "传输"), authorization: t("Authorization", "授权"), dispatch: t("App invocation", "调用应用"), commit: t("Commit", "提交"), readback: t("Readback", "回读"), result: t("Result", "结果"), runtime: t("Runtime step", "运行步骤") };
 const traceStates = { started: t("Outcome not yet recorded", "尚未记录最终结果"), allowed: t("Allowed", "已允许"), denied: t("Denied", "已拒绝"), succeeded: t("Succeeded", "已成功"), failed: t("Failed", "失败"), unknown: t("Outcome unknown", "结果未知"), committed: t("Committed by app", "应用已提交"), not_recorded: t("Not recorded", "未记录"), queued: t("Queued", "排队中"), running: t("Running", "运行中"), waiting: t("Waiting", "等待中"), cancelled: t("Cancelled", "已取消") };
 function appendTraceReference(parent, reference) {
   if (!reference || typeof reference.href !== 'string') return;
@@ -202,15 +202,73 @@ function traceStepNode(step) {
   appendTraceMetadata(row, step);
   return row;
 }
-function renderTraces(node, report, loadSteps) {
+const mcpCategories = { business: t('Business tool', '应用工具'), control: t('Connection control', '连接控制'), unknown: t('Unregistered tool', '未注册工具') };
+const mcpOutcomes = { started: t('In progress', '处理中'), succeeded: t('Call succeeded', '调用成功'), failed: t('Call failed', '调用失败'), denied: t('Denied', '已拒绝'), unknown: t('Outcome unknown', '结果未知'), cancelled: t('Call cancelled', '调用已取消') };
+const mcpTool = item => ['business', 'control'].includes(item.category) && typeof item.toolName === 'string' ? item.toolName : t('Unregistered tool', '未注册工具');
+function renderMcpCalls(node, report, loadSteps, { openMcpCalls = new Set() } = {}) {
+  if (!['ready', 'empty'].includes(report?.state) || report.schemaVersion !== 1 || !Array.isArray(report.items) || report.items.some(item => item.kind !== 'mcp')) {
+    node.append(element('p', 'overview-status', t('Could not load MCP calls. Refresh to retry.', '暂时无法读取 MCP 调用，请刷新后重试。'))); return;
+  }
+  const summary = report.summary || {}, coverage = report.coverage?.mcp || {};
+  const scope = element('div', 'mcp-call-summary');
+  scope.append(element('p', 'trace-scope', report.window === 'week' ? t('MCP tool-call attempts in the last seven days.', '近七天的 MCP 工具调用尝试。') : t('MCP tool-call attempts in the last day.', '近一天的 MCP 工具调用尝试。')));
+  if (coverage.recordingStartedAt) scope.append(element('p', 'trace-scope', t('Detailed call recording began {0}.', '详细调用记录始于 {0}。', time(coverage.recordingStartedAt))));
+  table(scope, 'mcp-summary', t('MCP call statistics', 'MCP 调用统计'), [t('Calls', '调用数'), t('Succeeded', '成功'), t('Failed', '失败'), t('Denied', '拒绝'), t('Cancelled', '已取消'), t('Unknown', '结果未知'), t('In progress', '处理中'), t('p50 duration', 'p50 耗时'), t('p95 duration', 'p95 耗时')], [[quantity(summary.total), quantity(summary.success), quantity(summary.errors), quantity(summary.denied), quantity(summary.cancelled), quantity(summary.unknown), quantity(summary.inProgress), duration(summary.p50Ms), duration(summary.p95Ms)]]);
+  scope.append(element('p', 'trace-scope', t('MCP ingress failures: {0}.', 'MCP 入口失败：{0}。', quantity(summary.ingressFailures))));
+  if (Array.isArray(report.byTool) && report.byTool.length) table(scope, 'mcp-tools', t('Calls by tool in this window', '当前时间范围内的工具调用'), [t('Tool', '工具'), t('Type', '类型'), t('Calls', '调用数'), t('Succeeded', '成功'), t('Failed', '失败'), t('Denied', '拒绝'), t('p50 duration', 'p50 耗时'), t('p95 duration', 'p95 耗时')], report.byTool.map(item => [mcpTool(item), mcpCategories[item.category] || t('Unconfirmed', '待确认'), quantity(item.total), quantity(item.success), quantity(item.errors), quantity(item.denied), duration(item.p50Ms), duration(item.p95Ms)]));
+  node.append(scope);
+  if (!report.items.length) { node.append(element('p', 'overview-status', t('No MCP tool calls were recorded in this window.', '当前时间范围内尚未记录 MCP 工具调用。'))); return; }
+  node.append(element('h4', 'mcp-call-list-heading', t('Recent MCP calls', '最近的 MCP 调用')));
+  node.append(element('p', 'trace-scope', t('Call results describe the request outcome. Check ongoing job status in its owning app.', '调用结果记录请求的实际结果；进行中的任务状态请在所属应用中查看。')));
+  for (const item of report.items) {
+    const entry = element('article', 'trace-entry mcp-call'); entry.dataset.callId = item.id;
+    const heading = element('div', 'trace-entry-heading'), title = element('h4'); title.append(element('code', '', mcpTool(item)));
+    heading.append(title, element('time', '', time(item.at))); entry.append(heading);
+    const metadata = element('dl', 'mcp-call-metadata');
+    const rows = [[t('Source', '来源'), item.endpoint === '/mcp' ? t('App MCP (/mcp)', '应用 MCP（/mcp）') : t('MCP', 'MCP')], [t('Type', '类型'), mcpCategories[item.category] || t('Unconfirmed', '待确认')], [t('Result', '结果'), mcpOutcomes[item.outcome || item.status] || t('Unconfirmed', '待确认')], [t('Duration', '耗时'), duration(item.durationMs)]];
+    if (typeof item.appId === 'string' && item.appId) rows.splice(1, 0, [t('App', '应用'), appNames[item.appId] || item.appId]);
+    if (typeof item.actor?.clientRef === 'string' && /^[a-f0-9]{24}$/.test(item.actor.clientRef)) rows.push([t('Client reference', '客户端引用'), item.actor.clientRef.slice(0, 8) + '…']);
+    for (const [name, value] of rows) { const pair = element('div'); pair.append(element('dt', '', name), element('dd', '', value)); metadata.append(pair); }
+    entry.append(metadata);
+    if (typeof item.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(item.code)) entry.append(element('p', 'mcp-call-code', t('Code: {0}', '代码：{0}', item.code)));
+    if (item.lifecycleTraceId) {
+      const details = element('details', 'trace-lifecycle'), disclosure = element('summary', '', t('Call lifecycle', '调用生命周期')), body = element('div', 'trace-lifecycle-body');
+      details.open = openMcpCalls.has(item.id); details.append(disclosure, body); entry.append(details);
+      let loading = false, loaded = false;
+      async function loadLifecycle() {
+        if (!details.open || loading || loaded || !entry.isConnected) return;
+        loading = true; body.replaceChildren(element('p', 'overview-status', t('Loading lifecycle…', '正在读取生命周期…')));
+        try {
+          const value = await loadSteps(item.lifecycleTraceId);
+          if (!entry.isConnected) return;
+          if (!Array.isArray(value.items) || !value.items.length) body.replaceChildren(element('p', 'overview-status', t('No lifecycle record is available for this call.', '此调用暂无可读取的生命周期记录。')));
+          else renderTraces(body, value, loadSteps, { showCoverage: false });
+          loaded = true;
+        } catch {
+          if (!entry.isConnected) return;
+          body.replaceChildren(element('p', 'overview-status', t('Could not load the lifecycle.', '暂时无法读取生命周期。')));
+          const retry = element('button', 'trace-steps-more', t('Retry', '重试')); retry.type = 'button'; retry.addEventListener('click', () => { loaded = false; void loadLifecycle(); }); body.append(retry);
+        } finally { loading = false; }
+      }
+      details.addEventListener('toggle', () => { if (!entry.isConnected) return; if (details.open) { openMcpCalls.add(item.id); void loadLifecycle(); } else openMcpCalls.delete(item.id); });
+      if (details.open) queueMicrotask(() => void loadLifecycle());
+    } else entry.append(element('p', 'trace-scope', t('No app lifecycle was recorded for this call.', '此调用未记录应用生命周期。')));
+    node.append(entry);
+  }
+}
+
+function renderTraces(node, report, loadSteps, options = {}) {
   clearNode(node);
+  if (report?.source === 'mcp') { renderMcpCalls(node, report, loadSteps, options); return; }
   if (!['ready', 'empty'].includes(report?.state) || report.schemaVersion !== 1 || !Array.isArray(report.items)) {
     if (report?.source === 'runtime' && report.state === 'not_configured') { node.append(element('p', 'overview-status', t("Runtime observations are not configured for this installation.", "此安装尚未配置运行观察来源。"))); return; }
     node.append(element('p', 'overview-status', t("Could not load business traces. Refresh to retry.", "暂时无法读取业务留痕，请刷新后重试。"))); return;
   }
+  if (options.showCoverage !== false) {
   const coverage = report.coverage || {};
   node.append(element('p', 'trace-scope', report.source === 'runtime' ? t("Runtime observations show recorded workflow context. They do not establish an MCP call, an application commit or readback.", "运行观察展示已记录的流程上下文，不证明 MCP 调用、应用提交或回读。") : t("Detailed lifecycle coverage begins with recorded traces. Historical access decisions do not prove a commit; app change records do not supply missing invocation or readback steps.", "详细生命周期从实际留痕开始覆盖。历史授权决定不证明已提交，应用变更记录也不补造缺失的调用或回读步骤。")));
   table(node, 'trace-coverage', t("Trace coverage", "留痕覆盖"), [t("Source", "来源"), t("Records", "记录数"), t("First record", "首条记录"), t("Latest record", "最近记录")], Object.entries(traceSources).map(([key, label]) => [label, quantity(coverage[key]?.count), time(coverage[key]?.firstRecordedAt), time(coverage[key]?.lastRecordedAt)]));
+  }
   if (!report.items.length) { node.append(element('p', 'overview-status', t("No records in this source.", "当前来源暂无记录。"))); return; }
   for (const item of report.items) {
     const entry = element('article', 'trace-entry'), heading = element('div', 'trace-entry-heading');
@@ -276,11 +334,12 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
   started = true;
   const panels = document.querySelector('#platform-panels'), notice = document.querySelector('#platform-notice'), updated = document.querySelector('#platform-updated'), refreshButton = document.querySelector('#platform-refresh');
   const experience = document.querySelector('#platform-experience'), observationNode = document.querySelector('#platform-observations'), windowSelect = document.querySelector('#platform-window');
-  const traceSection = document.querySelector('#platform-trace'), traceNode = document.querySelector('#platform-traces'), traceSource = document.querySelector('#platform-trace-source'), traceNewer = document.querySelector('#platform-trace-newer'), traceOlder = document.querySelector('#platform-trace-older');
+  const traceSection = document.querySelector('#platform-trace'), traceNode = document.querySelector('#platform-traces'), traceSource = document.querySelector('#platform-trace-source'), traceWindow = document.querySelector('#platform-trace-window'), traceWindowLabel = document.querySelector('#platform-trace-window-label'), traceNewer = document.querySelector('#platform-trace-newer'), traceOlder = document.querySelector('#platform-trace-older');
   if (!traceSource.querySelector('option[value="runtime"]')) { const option = element('option', '', traceSources.runtime); option.value = 'runtime'; option.dataset.en = 'Runtime observations'; option.dataset.zh = '运行观察'; traceSource.append(option); }
   const groups = { permissions: document.querySelector('#platform-permissions'), connections: document.querySelector('#platform-connections'), storage: document.querySelector('#platform-storage') };
   let epoch = 0, observationEpoch = 0, traceEpoch = 0, controller, observationController, traceController, reading = false, sessionEnded = false, accessAllowed = false;
-  let traceCursors = [null], traceIndex = 0, traceNext = null;
+  let traceCursors = [null], traceIndex = 0, traceNext = null, traceOwner = '', displayedTraceScope = '';
+  const openMcpCalls = new Set();
   function clear() {
     observationEpoch++; traceEpoch++;
     for (const node of Object.values(groups)) { clearNode(node); delete node.dataset.freshUntil; }
@@ -291,6 +350,7 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
     const href = loginUrl(url); if (href) { const link = element('a', '', t("Sign in", "登录")); link.href = href; notice.append(link); }
   }
   function restricted(status, body) {
+    openMcpCalls.clear(); traceOwner = '';
     epoch++; observationEpoch++; controller?.abort(); reading = false; refreshButton.disabled = false; root.setAttribute('aria-busy', 'false'); clear();
     message(status === 401 ? t("Sign in to view permissions, connections and storage.", "登录后查看权限、连接与数据存储状态。") : t("Your account does not have access.", "当前账号没有查看权限。"), status === 401 ? body?.loginUrl : null);
     onSessionRejected(status);
@@ -325,15 +385,20 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
     const currentTrace = ++traceEpoch;
     traceController?.abort(); traceController = new AbortController();
     traceNewer.disabled = true; traceOlder.disabled = true;
-    clearNode(traceNode); traceNode.append(element('p', 'overview-status', t("Loading business traces…", "正在读取业务留痕…")));
+    const selectedWindow = traceWindow?.value === 'week' ? 'week' : 'day';
+    if (traceWindowLabel) traceWindowLabel.hidden = traceSource.value !== 'mcp';
+    const requestedScope = traceSource.value + ':' + (traceSource.value === 'mcp' ? selectedWindow : '') + ':' + traceIndex;
+    if (displayedTraceScope !== requestedScope || !traceNode.children.length) { clearNode(traceNode); traceNode.append(element('p', 'overview-status', traceSource.value === 'mcp' ? t('Loading MCP calls…', '正在读取 MCP 调用…') : t('Loading business traces…', '正在读取业务留痕…'))); }
+
     try {
-      const parameters = { source: traceSource.value, limit: '25', ...(traceCursors[traceIndex] && { before: String(traceCursors[traceIndex]) }) };
+      const parameters = { source: traceSource.value, ...(traceSource.value === 'mcp' && { window: selectedWindow }), limit: '25', ...(traceCursors[traceIndex] && { before: String(traceCursors[traceIndex]) }) };
       const body = await traceRequest(parameters, traceController, currentEpoch);
       if (traceEpoch !== currentTrace) return;
       traceNext = body.nextCursor;
-      renderTraces(traceNode, body, (id, before) => traceRequest({ traceId: id, before: String(before), limit: '25' }, traceController, currentEpoch));
+      renderTraces(traceNode, body, (id, before) => traceRequest({ source: 'lifecycle', traceId: id, ...(before !== undefined && before !== null && { before: String(before) }), limit: '25' }, traceController, currentEpoch), { openMcpCalls });
+      displayedTraceScope = requestedScope;
       traceNewer.disabled = traceIndex === 0; traceOlder.disabled = !traceNext;
-    } catch { if (epoch === currentEpoch && traceEpoch === currentTrace) renderTraces(traceNode, null); }
+    } catch { if (epoch === currentEpoch && traceEpoch === currentTrace) renderTraces(traceNode, { source: traceSource.value, state: 'unavailable' }); }
   }
   async function refresh() {
     if (!accessAllowed || sessionEnded || document.visibilityState === 'hidden') return;
@@ -355,12 +420,15 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
     finally { if (epoch === currentEpoch) { reading = false; refreshButton.disabled = false; root.setAttribute('aria-busy', 'false'); } }
   }
   function deactivate() {
+    const identity = getIdentity(), nextOwner = identity?.user?.id || identity?.userId || '';
+    if (identity?.platformAdmin !== true || !nextOwner || traceOwner !== nextOwner) { openMcpCalls.clear(); traceOwner = ''; }
     epoch++; observationEpoch++; controller?.abort(); reading = false; accessAllowed = false; clear();
     root.hidden = true; refreshButton.disabled = true; root.setAttribute('aria-busy', 'false');
   }
   function updateAccess() {
     deactivate();
     const identity = getIdentity();
+    traceOwner = identity?.user?.id || identity?.userId || '';
     accessAllowed = identity?.platformAdmin === true && identity.expiresAt > Date.now();
     root.hidden = !accessAllowed; refreshButton.disabled = !accessAllowed;
     if (accessAllowed) { sessionEnded = false; message(t("Loading status…", "正在读取状态…")); void refresh(); }
@@ -368,6 +436,7 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
   refreshButton.addEventListener('click', refresh);
   windowSelect.addEventListener('change', () => { if (!panels.hidden) void observations(epoch); });
   traceSource.addEventListener('change', () => { traceCursors = [null]; traceIndex = 0; if (!panels.hidden) void traces(epoch); });
+  traceWindow?.addEventListener('change', () => { traceCursors = [null]; traceIndex = 0; if (!panels.hidden) void traces(epoch); });
   traceOlder.addEventListener('click', () => { if (traceNext && !panels.hidden) { traceCursors = traceCursors.slice(0, traceIndex + 1); traceCursors.push(traceNext); traceIndex++; void traces(epoch); } });
   traceNewer.addEventListener('click', () => { if (traceIndex > 0 && !panels.hidden) { traceIndex--; void traces(epoch); } });
   document.addEventListener('visibilitychange', () => {
