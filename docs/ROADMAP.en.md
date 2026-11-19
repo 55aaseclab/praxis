@@ -12,3 +12,150 @@
 ## Moving an existing installation
 
 Pin the built-in app sources, publish the registry and document how to start the included services. Move the local control checkout and Docker projects together, preserve the existing workspace and persistent stores, and verify the service mounts, reads and rollback point before retiring the old control path.
+
+## Milestones and release history
+
+The record below describes v0.1.0 through v0.1.107 at the time of each decision. Test counts and rollout results refer to those releases. For today’s entry points, service setup and read-only Polaris viewer, use the [running guide](RUNNING.md), [built-in app guide](BUILTINS.md) and [viewer guide](POLARIS-VIEWER.md).
+
+This edition describes the active delivery areas, dependencies and evidence. The detailed week-level plans and individual release records remain in the Chinese archive.
+
+| Area | Objective | Acceptance |
+| --- | --- | --- |
+| Shared operations | Web, API and MCP use the same app rules and source of truth. | An authorized action persists exactly once, can be read back and exposes the same result in the app. |
+| Identity and access | Separate persona, space, resource, action, client and expiry. Protect managed, legacy and background routes. | Positive and negative cases include ordinary members, guests, administrators and revoked credentials. |
+| External clients | Enable scoped external agents while preserving the division between development and product use. | Record a real isolated Paseo Codex operation and an independent physical-phone app separately. |
+| Collaboration and recovery | Deliver committed changes to authorized clients and preserve recoverable history. | Verify conflict/retry, reconnect cursor, durable queue, independent encrypted replica and empty-directory restore. |
+| Workbench UI | Provide stable app/project entry, actionable work, language choice and a reliable return path. | From a fresh browser, open an authorized item and return to the workbench on desktop and at phone width. Check empty, failure, keyboard and permission-loss states. |
+| App development | Provide a common contract for maintained and local-only apps. | An app author can identify ownership, first-run state, locale, navigation, data scope, tests and the difference between registering locally and deploying. |
+| Global participation | Publish readable project information, contribution paths, a code of conduct and licensing boundaries. | English source and Chinese counterpart agree, public pages have distinct URLs and descriptive metadata, and a clean source release can fetch every advertised child revision. |
+
+## Release sequence
+
+1. Update the English requirement and milestone, then the Simplified Chinese counterpart. Identify app and platform ownership.
+2. Implement the smallest complete workflow and select representative behavior, authorization and locale checks. Keep user content out of test fixtures.
+3. For an app launch, record source/target, first-use state, entry policy, data ownership, health/assets and rollback behavior. Verify launch and Home in one flow.
+4. Build and check affected images. Deploy through the applicable release controller and verify the public entry from a fresh session. Record local, live, physical-device and cloud checks distinctly.
+5. For an external source release, choose publication rights and repositories, make required child commits retrievable and verify an anonymous clone/build. Repository visibility, publication and search-engine indexing are tracked separately.
+
+## Dependencies that require an owner
+
+Public source release requires a selected public destination, review of private material and redistribution rights, and reachable pinned submodules. A physical-phone test requires a supported third-party app, eligible account and user consent. External services and adapters require the correct scoped credentials. An optional workspace tool may require deployment-specific network isolation and pairing. Pending prerequisites remain visible in the release report. [Repository inventory](REPOSITORIES.md) · [Verification guide](VERIFICATION.en.md) · [Detailed roadmap archive](ROADMAP.md)
+
+## Release history
+
+The English notes below identify each recorded patch. Build-specific evidence, past plans and decision discussions are in the linked historical ledger.
+
+| Version | Date | Change |
+| --- | --- | --- |
+| v0.1.0 | 2026-11-11 | Establish the root PRD and roadmap, a read-only PRD collection, the Slides entry, an independent Node workbench and separate Knowledge and Travel ownership. Plan protected mobile access using the existing domain and TLS relay. |
+| v0.1.1 | 2026-11-11 | Restore numeric patch increments and guard version consistency. |
+| v0.1.2 | 2026-11-11 | Remove obsolete directories, consolidate VPN maintenance and retain PRDs in the header. |
+| v0.1.3 | 2026-11-11 | Fix TingProof and Knowledge access by configured hostname and check app entries. |
+| v0.1.4 | 2026-11-11 | Add expiring, revocable access to one Travel itinerary. |
+| v0.1.5 | 2026-11-11 | Support a directory of independent itineraries with a shared renderer and per-trip access. |
+| v0.1.6 | 2026-11-11 | Add a restricted TingProof collaborator account and verify cross-app isolation. |
+| v0.1.7 | 2026-11-12 | Introduce a shared native UI style and align Travel's two-column view. |
+| v0.1.8 | 2026-11-12 | Add route categories, cards and a daily timeline for individual itineraries. |
+| v0.1.9 | 2026-11-12 | Improve Travel headings and budget management and restructure the PRD. |
+| v0.1.10 | 2026-11-12 | Add standard place icons, compact contiguous timelines, opening times and budget dates. |
+| v0.1.11 | 2026-11-12 | Add private image caching, conditional responses and revalidation. |
+| v0.1.12 | 2026-11-12 | Add place search, travel preparation and Memo moment-card entry. |
+| v0.1.13 | 2026-11-12 | Consolidate Docker services and introduce recoverable multi-target storage. |
+| v0.1.14 | 2026-11-12 | Define separate development/use identities, business APIs, MCP and two-client acceptance. |
+| v0.1.15 | 2026-11-12 | Clarify connectivity, access boundaries, durable data and presentation goals. |
+| v0.1.16 | 2026-11-12 | Implement controlled business APIs, durable authorization and external MCP. |
+| v0.1.17 | 2026-11-12 | Verify actual Docker operation and initial cloud setup/restore. |
+| v0.1.18 | 2026-11-12 | Add redacted usage and performance observations. |
+| v0.1.19 | 2026-11-12 | Add an authorized overview of permissions, connections and storage. |
+| v0.1.20 | 2026-11-13 | Unify Praxis sign-in and limit the public relay to transport. |
+| v0.1.21 | 2026-11-13 | Define the three-entity architecture and add browser-based user/access management. |
+| v0.1.22 | 2026-11-13 | Grant administrators default entries and return users to the workbench after login/consent. |
+| v0.1.23 | 2026-11-13 | Restore the managed Reminder layout and established interactions. |
+| v0.1.24 | 2026-11-13 | Unify the personalized workbench and use same-tab navigation. |
+| v0.1.25 | 2026-11-13 | Consolidate workbench and business-service documentation in the platform manual. |
+| v0.1.26 | 2026-11-13 | Move global status and usage observations into administrator-only Management. |
+| v0.1.27 | 2026-11-13 | Define task-specific UI layouts and update the launcher. |
+| v0.1.28 | 2026-11-13 | Align the Apps and Projects section headings. |
+| v0.1.29 | 2026-11-13 | Add local Chart.js and accessible tables to administrator status. |
+| v0.1.30 | 2026-11-13 | Move Home navigation and account actions into the Praxis layer. |
+| v0.1.31 | 2026-11-13 | Remove the generic business-space interface and serve app-specific first screens. |
+| v0.1.32 | 2026-11-13 | Assign library materials to Knowledge and project references to Projects. |
+| v0.1.33 | 2026-11-13 | Consolidate Paseo launch commands around the Docker stack. |
+| v0.1.34 | 2026-11-14 | Show Management features by role and remove duplicate authorization entries. |
+| v0.1.35 | 2026-11-14 | Add itinerary maps, linked dates and private Amap runtime configuration. |
+| v0.1.36 | 2026-11-14 | Add Amap server-side place search and driving/walking queries. |
+| v0.1.37 | 2026-11-14 | Link map hover cards, visit numbering and list routes. |
+| v0.1.38 | 2026-11-14 | Add scoped Travel MCP, private itinerary data and separate business execution. |
+| v0.1.39 | 2026-11-14 | Reuse the itinerary UI across existing trips and document structured data/provider adapters. |
+| v0.1.40 | 2026-11-14 | Add administrator-only MCP registration and usage information. |
+| v0.1.41 | 2026-11-14 | Add anonymous public MCP onboarding and home-screen guidance. |
+| v0.1.42 | 2026-11-14 | Use bounded object operations to update three itineraries in the shared UI. |
+| v0.1.43 | 2026-11-14 | Unify desktop, tablet and phone workbench layout and system bar. |
+| v0.1.44 | 2026-11-15 | Introduce shared Projects and cross-team collaboration. |
+| v0.1.45 | 2026-11-15 | Add selectable reverse SSH transport alongside VPN. |
+| v0.1.46 | 2026-11-15 | Launch individual projects with isolated project context. |
+| v0.1.47 | 2026-11-15 | Simplify the project materials section name. |
+| v0.1.48 | 2026-11-15 | Add traceable Knowledge libraries and authorized project references. |
+| v0.1.49 | 2026-11-15 | Align reading across original books and managed libraries. |
+| v0.1.50 | 2026-11-15 | Repair internal Knowledge links and unify legacy HTML reference pages. |
+| v0.1.51 | 2026-11-15 | Move project source material under Projects and remove the former root directory. |
+| v0.1.52 | 2026-11-15 | Retain one Docker launch entry in Paseo and retire obsolete scripts. |
+| v0.1.53 | 2026-11-15 | Flatten the Knowledge homepage and link directly to books and entries. |
+| v0.1.54 | 2026-11-15 | Document agent-handbook design references and their relationship to requirements. |
+| v0.1.55 | 2026-11-15 | Unify navigation and reading views for the PRD collection. |
+| v0.1.56 | 2026-11-15 | Align the Slides list, presentation and video workspaces. |
+| v0.1.57 | 2026-11-15 | Add shared system navigation to PRD index and documents. |
+| v0.1.58 | 2026-11-15 | Scale verification to impact and separate heavyweight integration tests. |
+| v0.1.59 | 2026-11-15 | Advertise authorized capabilities and boundaries in the MCP handshake. |
+| v0.1.60 | 2026-11-15 | Add a read-only MCP capability refresh tool. |
+| v0.1.61 | 2026-11-15 | Design the end-to-end controlled Slides authoring workflow. |
+| v0.1.62 | 2026-11-15 | Deliver controlled Slides MCP authoring and file output. |
+| v0.1.63 | 2026-11-15 | Merge the Lattice repositories and reuse native templates for MCP authoring. |
+| v0.1.64 | 2026-11-15 | Support exclusive template reset on older business decks while preserving history and native viewing. |
+| v0.1.65 | 2026-11-16 | Introduce the synthetic Finance ledger, monthly budgets and savings-target projections. |
+| v0.1.66 | 2026-11-16 | Scope Knowledge reading and its table of contents to one document. |
+| v0.1.67 | 2026-11-16 | Add Knowledge document MCP operations with controlled version editing. |
+| v0.1.68 | 2026-11-16 | Simplify document navigation and display the actual saved version. |
+| v0.1.69 | 2026-11-16 | Link MCP tools to skills and add bounded Knowledge text operations. |
+| v0.1.70 | 2026-11-16 | Support section/chapter/part hierarchy and full chapter navigation. |
+| v0.1.71 | 2026-11-16 | Add blue/green core deployment, readiness gates and rollback. |
+| v0.1.72 | 2026-11-16 | Permit bounded create operations for the external content assistant. |
+| v0.1.73 | 2026-11-16 | Repair grouping and readability in the Knowledge relationship graph. |
+| v0.1.74 | 2026-11-16 | Fix the system Home control's position and remove scroll/layout flicker. |
+| v0.1.75 | 2026-11-16 | Align Knowledge reference-page display titles. |
+| v0.1.76 | 2026-11-16 | Expose static reference-page edits through controlled content MCP. |
+| v0.1.77 | 2026-11-17 | Centralize installation guidance in Praxis and remove the separate Memo prompt. |
+| v0.1.78 | 2026-11-17 | Automatically expand/update the current Knowledge section's directory. |
+| v0.1.79 | 2026-11-17 | Support section creation within chapters with controlled parent selection. |
+| v0.1.80 | 2026-11-17 | Add Memo rights and rental guides and authorized tools separate from local credentials. |
+| v0.1.81 | 2026-11-17 | Remove editing from standalone and managed Reminder while retaining completion and flag display/actions of that version. |
+| v0.1.82 | 2026-11-17 | Remove the completion circle to prevent accidental changes; authorized agents maintain status. |
+| v0.1.83 | 2026-11-18 | Register the existing Polaris repository and its independent data location. |
+| v0.1.84 | 2026-11-18 | Add an administrator-only inventory of app data locations. |
+| v0.1.85 | 2026-11-18 | Unify app working directories and support per-app root overrides. |
+| v0.1.86 | 2026-11-18 | Abbreviate long workspace paths in Management. |
+| v0.1.87 | 2026-11-18 | Use the standard pointer cursor for copy-path controls. |
+| v0.1.88 | 2026-11-18 | Add Intelligence preview with four classes of reading material. |
+| v0.1.89 | 2026-11-18 | Collect historical systems, security and software-engineering conference records and show library statistics. |
+| v0.1.90 | 2026-11-18 | Trigger conference collection when needed and publish statistics through scoped MCP. |
+| v0.1.91 | 2026-11-18 | Add the administrator's native Polaris portal entry. |
+| v0.1.92 | 2026-11-18 | Preserve other years' coverage when publishing a single year of conference statistics. |
+| v0.1.93 | 2026-11-18 | Move Polaris user management to Praxis and preserve workflow runtime ownership. |
+| v0.1.94 | 2026-11-18 | Bind Polaris data to the Praxis workspace. |
+| v0.1.95 | 2026-11-18 | Add Knowledge category counts, attachment ingestion and evidence retrieval. |
+| v0.1.96 | 2026-11-18 | Refresh ingestion directories and preserve reading location across pages. |
+| v0.1.97 | 2026-11-19 | Unify Projects entries and present authorized projects in one load. |
+| v0.1.98 | 2026-11-19 | Extend visual style guidance into a shared UI/UX guide. |
+| v0.1.99 | 2026-11-19 | Audit platform and app navigation, feedback and recovery. |
+| v0.1.100 | 2026-11-19 | Record the empty first-release state and release Matrix Reader with the Docker web slot. |
+| v0.1.101 | 2026-11-19 | Add Matrix Reader to the workbench catalog and include a launch-click check. |
+| v0.1.102 | 2026-11-19 | Fix the TLS entry by serving Matrix Reader through the canonical protected workbench path. |
+| v0.1.103 | 2026-11-19 | Add select-all and clear-all to Matrix room selection. |
+| v0.1.104 | 2026-11-19 | International workbench, Calendar, attention cards, local app development and public project documentation. |
+| v0.1.105 | 2026-11-19 | Localize public MCP discovery and operational skills; use bilingual app manifests |
+| v0.1.106 | 2026-11-19 | Document how agent-native apps compare with harnesses and existing app connectors |
+| v0.1.107 | 2026-11-19 | Add owner-only Letters and Profiles readers with public code and private runtime sources |
+
+### Public applications with private collections
+
+Register Letters and Profiles in the workbench, bind private sources only at runtime and verify authorization, file boundaries, blank state, bilingual navigation and Home return. Establish public organization repositories for missing app upstreams without publishing historical business data.

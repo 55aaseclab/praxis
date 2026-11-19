@@ -51,4 +51,4 @@ With **Knowledge** connected to a managed workbench, you can ask **“Which samp
 - **Run the platform.** Build the Docker image, configure sign-in and supply private files to [Letters](https://github.com/55aaseclab/letters) and [Profiles](https://github.com/55aaseclab/profiles) through read-only mounts. [Running Praxis](docs/RUNNING.md)
 - **Contribute.** Run `npm test` for the synthetic test suite. The product requirements and roadmap describe the work the platform owns. [Requirements](docs/PRD.en.md) · [Roadmap](docs/ROADMAP.en.md) · [Contributing](CONTRIBUTING.md)
 
-[Product positioning](docs/COMPETITIVE-POSITIONING.md) · [How the logo grows](docs/LOGO.md) · [Apache 2.0 license](LICENSE)
+[Documentation index](docs/README.md) · [Product positioning](docs/COMPETITIVE-POSITIONING.md) · [How the logo grows](docs/LOGO.md) · [Apache 2.0 license](LICENSE)

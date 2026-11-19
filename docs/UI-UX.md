@@ -2,12 +2,16 @@
 
 ## English
 
+The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.md) includes the launcher, collection, reader and editor layouts, keyboard behavior and acceptance examples.
+
 - The workbench lists accessible apps and projects. Each app should take the person directly to its main task. Give the main pane to the result and put navigation in the sidebar.
 - Distinguish a successful empty collection from loading, lost access and a failed connection. Preserve the selected item and scroll position on a safe retry. When access expires, clear previously displayed protected content.
 - Give each control a visible focus state and an accessible name. Reserve space for the workbench Home button at the bottom left, including the device's safe area. Check the complete trip from a tile into an app and back using a keyboard, desktop and a narrow viewport.
 - Start with English and add Simplified Chinese in the same change. Test long labels, wrapping and announcements. Keep user-authored content in its original language.
 
 ## 简体中文
+
+[完整设计指南](../skills/praxis-operator/references/ui-style-guide.md)收录了启动台、集合、阅读器与编辑器布局，以及键盘行为和验收示例。
 
 - 首页列出可访问的应用和项目。点开即进入核心任务，主区域展示结果，侧栏提供导航。
 - 明确区分空目录、加载中、失去授权和网络错误。安全重试时保留选择和位置，撤权后清除先前显示的私有内容。

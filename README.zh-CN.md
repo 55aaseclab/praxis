@@ -51,4 +51,4 @@ curl -fsS http://127.0.0.1:4181/mcp/guide \
 - **部署工作台。** 构建 Docker 镜像、配置登录，通过只读挂载向 [Letters（书信）](https://github.com/55aaseclab/letters) 和 [Profiles（个人资料）](https://github.com/55aaseclab/profiles) 提供私有文件。[运行说明](docs/RUNNING.md)
 - **参与贡献。** 运行 `npm test` 执行合成测试。产品需求和路线图说明了平台负责的工作。[产品需求](docs/PRD.md) · [路线图](docs/ROADMAP.md) · [贡献指南](CONTRIBUTING.md)
 
-[竞品分析](docs/COMPETITIVE-POSITIONING.md) · [标志生成方法](docs/LOGO.md#简体中文) · [Apache 2.0 许可证](LICENSE)
+[文档目录](docs/README.md) · [竞品分析](docs/COMPETITIVE-POSITIONING.md) · [标志生成方法](docs/LOGO.md#简体中文) · [Apache 2.0 许可证](LICENSE)
