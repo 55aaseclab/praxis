@@ -46,22 +46,6 @@ http://127.0.0.1:4321/mcp
 
 将现场笔记导入 Knowledge 后，你可以问 **「现场笔记里说，哪些采样点还需要再去一次？」** 智能体可以检索获准文库、回读相关段落并引用出处。你可以在 Knowledge 中打开原文核对。[Knowledge 工具](skills/knowledge-mcp/SKILL.md)
 
-<details>
-<summary>阅读公共连接指南</summary>
-
-同一套安装在 `http://127.0.0.1:4321/mcp/guide` 提供公共指南。使用 curl 查看两项说明工具：
-
-```sh
-curl -fsS http://127.0.0.1:4321/mcp/guide \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
-
-`praxis_about` 和 `praxis_use_guide` 返回公共说明。通过 `/mcp` 登录并委托权限后，可操作自己的应用记录。
-
-</details>
-
 ## 参与贡献
 
 欢迎为平台及应用作贡献。应用改动提交到所属仓库，再更新 Praxis 中的固定版本。小改动运行定向检查，集成变更运行 `npm test`。

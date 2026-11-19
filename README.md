@@ -46,22 +46,6 @@ Sign in through your browser using the account created by your local installatio
 
 After importing your field notes into Knowledge, you can ask **“Which sampling sites do the field notes say we should revisit?”** Your agent can search the permitted library, read the relevant passages and cite their locations. Open the source in Knowledge to check the answer. [Knowledge tools](skills/knowledge-mcp/SKILL.md)
 
-<details>
-<summary>Read the public connection guide</summary>
-
-The same installation provides a public guide at `http://127.0.0.1:4321/mcp/guide`. List its two guidance tools with curl:
-
-```sh
-curl -fsS http://127.0.0.1:4321/mcp/guide \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
-
-`praxis_about` and `praxis_use_guide` return public instructions. Sign in and delegate access at `/mcp` to work with your application records.
-
-</details>
-
 ## Contribute
 
 Platform and app contributions are welcome. Submit app changes to the owning repository and update its pinned revision in Praxis. Run focused checks for small changes and `npm test` for integration changes.
