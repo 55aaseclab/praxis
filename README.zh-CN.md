@@ -1,6 +1,6 @@
 # <img src="public/praxis.svg" width="38" height="38" align="absmiddle" alt=""> Praxis 工作台
 
-[English](README.md) · [快速开始](#快速开始) · [连接 Praxis](#连接-praxis) · [参与贡献](#参与贡献)
+[English](README.md) · [快速开始](#快速开始) · [本机运行 Praxis](#本机运行-praxis) · [连接 Praxis](#连接-praxis) · [参与贡献](#参与贡献)
 
 **Praxis 是一个可自托管的平台，你可以通过自己选择的 AI 智能体使用各种应用。** 在任何兼容 MCP 的智能体运行环境中，你都可以让智能体从笔记里找出一段原文，或更新一项任务。它能访问哪些记录、执行哪些操作，都由你决定。无论是个人或家庭使用，还是为团队或组织部署，你都可以用 Praxis 的 14 款内置应用整理知识、管理项目、规划旅行、记录收支。你也可以开发自己的应用并自行托管。
 

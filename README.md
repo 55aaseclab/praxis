@@ -1,6 +1,6 @@
 # <img src="public/praxis.svg" width="38" height="38" align="absmiddle" alt=""> Praxis
 
-[简体中文](README.zh-CN.md) · [Quickstart](#quickstart) · [Connect to Praxis](#connect-to-praxis) · [Contribute](#contribute)
+[简体中文](README.zh-CN.md) · [Quickstart](#quickstart) · [Run local Praxis](#run-local-praxis) · [Connect to Praxis](#connect-to-praxis) · [Contribute](#contribute)
 
 **Praxis is a self-hosted platform where the AI agent you choose is your interface to your apps.** With any MCP-compatible agent harness, you can ask your agent to find a passage in your notes or update a task. You decide which records it can access and what it can do. Whether you run Praxis for yourself, your family, a team, or an organization, you can use its 14 built-in apps for knowledge, projects, travel, finance, and more. You can also build your own apps and host them yourself.
 
