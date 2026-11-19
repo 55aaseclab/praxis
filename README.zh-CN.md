@@ -1,12 +1,16 @@
-# Praxis 工作台
+# <img src="public/praxis.svg" width="38" height="38" alt=""> Praxis 工作台
 
-[English](README.md)
+[English](README.md) · [本机运行](#本机运行) · [试用 MCP](#试用-mcp)
 
-Praxis 为人提供工作台，为外部 agent 提供应用的 MCP 接口。人可以打开应用阅读结果，外部 agent 可以在指定工作空间和资源的授权范围内调用工具。数据和呈现方式由各应用负责。
+**Praxis 是一个可自托管的工作台，让人和 AI agent 使用同一套应用。** 你可以打开应用读文档、查看任务或听录音。你选择的外部 agent 通过模型上下文协议（MCP），在你授予的范围内处理同一批资料。换一个 agent，记录仍保存在原来的应用里。
 
-## 在本机运行
+![Praxis 工作台显示今天到期的现场笔记审阅任务、六个应用和三个示例项目](docs/images/workbench-zh.png)
 
-使用 Linux、Node.js 22.16 或更高版本以及 npm。
+*受管工作台接入应用后的示例。图中的野外调查项目和待办均为虚构。*
+
+## 本机运行
+
+本机运行需要 Linux、Node.js 22.16 或更高版本，以及 npm。
 
 ```sh
 git clone --recurse-submodules https://github.com/55aaseclab/praxis.git
@@ -15,12 +19,36 @@ npm ci
 npm start
 ```
 
-打开[工作台](http://127.0.0.1:4321/)。新检出的个人桌面为空。打开[产品介绍](http://127.0.0.1:4321/about/zh-cn/)了解使用方式，进入[产品目录](http://127.0.0.1:4321/prds/)阅读需求文档。按 Ctrl+C 停止服务，运行 `npm test` 可用合成资料执行平台测试。
+打开[本机工作台](http://127.0.0.1:4321/)。初次启动时桌面为空。点「关于 Praxis」可查看产品介绍。要添加第一个应用图标，可以按清单示例登记一个在本机运行的应用。仓库随附的书信和个人资料阅读器会在受管环境中向配置的所有者显示。[本地应用接入示例](docs/APP-STANDARD.md#本地开发自己的应用)
 
-## 接入应用
+## 试用 MCP
 
-先启动本机应用，再在本地清单中登记。应用标准提供了完整的双语示例。本地工作台可以直接打开回环地址的应用。受管运行还需配置原生登录、网关与独立应用服务。随仓提供的 Letters 和 Profiles 阅读器只向配置的所有者提供原件。[应用标准](docs/APP-STANDARD.md) · [运行说明](docs/RUNNING.md)
+可以先体验工具发现，再配置账号。保持工作台运行，在第二个终端进入同一仓库目录并启动网关。
 
-## 项目文档
+```sh
+PORT=4181 PRAXIS_WEB_GATEWAY=true PRAXIS_CANONICAL_URL=http://127.0.0.1:4181 npm run gateway
+```
 
-[产品需求](docs/PRD.md) · [路线图](docs/ROADMAP.md) · [竞品分析](docs/COMPETITIVE-POSITIONING.md) · [参与贡献](CONTRIBUTING.md) · [Apache 2.0 许可证](LICENSE)
+用支持 Streamable HTTP 的 MCP 客户端连接 `http://127.0.0.1:4181/mcp/guide`，试着问 **「这条连接提供了哪些 Praxis 工具？」** 公共指南提供 `praxis_about` 和 `praxis_use_guide`，用于读取产品介绍和使用说明，均不读取业务资料。
+
+<details>
+<summary>用 curl 查看工具清单</summary>
+
+```sh
+curl -fsS http://127.0.0.1:4181/mcp/guide \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+</details>
+
+在接入 **Knowledge** 的受管环境里，你可以问 **「现场笔记里说，哪些采样点还需要再去一次？」** 获得授权的 agent 可以检索项目文库，回读相关段落，并引用原文位置。你也可以打开出处，亲自核对答案。[Knowledge 工具](skills/knowledge-mcp/SKILL.md) · [受管运行说明](docs/RUNNING.md)
+
+## 开发与接入
+
+- **接入自己的应用。** 为应用提供独立入口、双语名称和清单，开发期间可用本机工作台打开。[应用标准](docs/APP-STANDARD.md)
+- **部署工作台。** 构建 Docker 镜像、配置登录，通过只读挂载向 [Letters（书信）](https://github.com/55aaseclab/letters) 和 [Profiles（个人资料）](https://github.com/55aaseclab/profiles) 提供私有文件。[运行说明](docs/RUNNING.md)
+- **参与贡献。** 运行 `npm test` 执行合成测试。产品需求和路线图说明了平台负责的工作。[产品需求](docs/PRD.md) · [路线图](docs/ROADMAP.md) · [贡献指南](CONTRIBUTING.md)
+
+[竞品分析](docs/COMPETITIVE-POSITIONING.md) · [Apache 2.0 许可证](LICENSE)
