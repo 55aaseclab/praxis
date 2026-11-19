@@ -1,45 +1,56 @@
 [submodule "letters"]
 	path = third_party/letters
 	url = https://github.com/55aaseclab/letters.git
+	branch = main
 [submodule "profiles"]
 	path = third_party/profiles
 	url = https://github.com/55aaseclab/profiles.git
+	branch = main
 [submodule "calendar"]
 	path = third_party/calendar
 	url = https://github.com/55aaseclab/calendar.git
+	branch = main
 [submodule "matrix-reader"]
 	path = third_party/matrix-reader
 	url = https://github.com/55aaseclab/matrix-reader.git
+	branch = main
 [submodule "reminder"]
 	path = third_party/reminder
 	url = https://github.com/55aaseclab/reminder.git
+	branch = main
 [submodule "intelligence"]
 	path = third_party/intelligence
 	url = https://github.com/55aaseclab/intelligence.git
+	branch = main
 [submodule "finance"]
 	path = third_party/finance
 	url = https://github.com/55aaseclab/finance.git
+	branch = main
 [submodule "projects"]
 	path = third_party/projects
 	url = https://github.com/55aaseclab/projects.git
+	branch = main
 [submodule "travel"]
 	path = third_party/travel
 	url = https://github.com/55aaseclab/travel.git
+	branch = main
 [submodule "knowledge"]
 	path = third_party/knowledge
 	url = https://github.com/55aaseclab/knowledge.git
+	branch = main
 [submodule "memo"]
 	path = third_party/memo
 	url = https://github.com/55aaseclab/memo.git
-	branch = praxis-release
+	branch = main
 [submodule "tingproof"]
 	path = third_party/tingproof
 	url = https://github.com/55aaseclab/tingproof.git
-	branch = praxis-release
+	branch = main
 [submodule "lattice"]
 	path = third_party/lattice
 	url = https://github.com/55aaseclab/lattice.git
-	branch = praxis-release
+	branch = main
 [submodule "polaris"]
 	path = third_party/polaris
-	url = https://github.com/55aaseclab/polaris-reader.git
+	url = https://github.com/55aaseclab/polaris.git
+	branch = main

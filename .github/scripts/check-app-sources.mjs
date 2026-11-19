@@ -44,6 +44,9 @@ for (const module of modules.values()) {
   if (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/.test(module.url ?? '')) {
     throw new Error(`Use a public GitHub HTTPS URL for ${module.path}.`);
   }
+  if (module.branch !== 'main') {
+    throw new Error(`Built-in apps must publish from main: ${module.path}.`);
+  }
 }
 
 const temporary = await mkdtemp(join(tmpdir(), 'praxis-public-sources-'));
@@ -65,13 +68,11 @@ try {
     } else await mkdir(destination, { recursive: true });
     await git(['init', '--quiet', destination], { env });
     await git(['-C', destination, 'remote', 'add', 'origin', module.url], { env });
-    let releaseRef = module.branch && `refs/heads/${module.branch}`;
-    if (!releaseRef) {
-      const head = await git(['ls-remote', '--symref', module.url, 'HEAD'], { env });
-      releaseRef = head.match(/^ref: (refs\/heads\/\S+)\tHEAD$/m)?.[1];
+    const releaseRef = 'refs/heads/main';
+    const head = await git(['ls-remote', '--symref', module.url, 'HEAD'], { env });
+    if (head.match(/^ref: (refs\/heads\/\S+)\tHEAD$/m)?.[1] !== releaseRef) {
+      throw new Error(`The public default branch must be main: ${module.path}.`);
     }
-    if (!releaseRef) throw new Error(`No public release branch found: ${module.path}`);
-    await git(['check-ref-format', releaseRef], { env });
     await git(['-C', destination, 'fetch', '--quiet', '--no-tags', '--depth=1', 'origin', sha], { env });
     const fetched = (await git(['-C', destination, 'rev-parse', 'FETCH_HEAD'], { env })).trim();
     if (fetched !== sha) throw new Error(`Fetched revision differs from the gitlink: ${module.path}`);

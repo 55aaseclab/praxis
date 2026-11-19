@@ -4,6 +4,10 @@ Version: 0.1.113
 
 [简体中文](ROADMAP.md)
 
+## Unified app publication
+
+Use `main` as the default development and release branch for all fourteen built-ins. Verify each canonical repository, the anonymous retrieval and ancestry of its pinned commit, a clean recursive clone and the synthetic platform suite. Preserve the reviewed app trees, existing records and running authorization boundaries during the source cutover.
+
 ## Product direction
 
 | Goal | Evidence to collect |

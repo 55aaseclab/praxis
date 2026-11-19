@@ -33,6 +33,10 @@ The public checkout supplies the complete built-in Docker Compose stack. A fresh
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
 
+## Application publication
+
+Each maintained app publishes verified changes from `main` in its own public repository. Praxis records that branch and an exact app commit, then verifies the combined distribution. Anonymous clones can retrieve every pinned commit from the app’s public `main` history.
+
 ## Platform core naming
 
 Name the platform backend Compose service **core**. Local setup, credentials and management commands use that name. The service owns identity, authorization, external-agent access and app coordination. Existing installation metadata, data volumes and legacy entry points remain readable during the rename.

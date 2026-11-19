@@ -51,7 +51,7 @@ For external cross-app contributions, keep a tracking issue in Praxis and link t
 
 ## One platform and multiple app repositories
 
-1. Confirm the app repository and release branch from [.gitmodules](.gitmodules) and its contribution instructions. Memo, TingProof and Lattice currently publish the Praxis distribution from `praxis-release`; the Polaris component is the independent reader repository.
+1. Confirm the app repository from [.gitmodules](.gitmodules) and its contribution instructions. Every maintained app uses `main` as its default development and release branch. Publish verified app changes there before updating the platform pin.
 2. Implement app behavior and its tests in the app repository. Administrators and maintainers can commit and push to its release branch within their authorization. External contributors open an app PR; a dependent Praxis PR can remain a draft.
 3. Publish the app change first. For an external contribution, review and merge the app PR first. Use the final released commit SHA, including the new SHA produced by a squash merge.
 4. Update the parent gitlink to that released SHA. Record the exact revision, integration checks and any child PR in the task or Praxis PR. A source revision must be anonymously fetchable and reachable from the configured release branch.
@@ -143,7 +143,7 @@ Contributions use the [Apache 2.0 license](LICENSE). Follow the [code of conduct
 
 ### 一主仓、多应用仓的发布顺序
 
-1. 从 [.gitmodules](.gitmodules) 和应用维护说明确认仓库与发行分支。Memo、TingProof、Lattice 当前使用 `praxis-release` 发布 Praxis 组件；Polaris 使用独立 reader 仓库。
+1. 从 [.gitmodules](.gitmodules) 和应用维护说明确认所属仓库。所有受维护应用统一使用 `main` 作为默认开发与发行分支，先在那里发布已验证的应用改动，再更新平台指针。
 2. 应用实现和测试进入应用仓。管理员和 maintainer 可在授权范围直接提交并推送到其发行分支；外部贡献者提交应用 PR，依赖它的 Praxis PR 可先开 draft。
 3. 先发布应用改动。外部贡献先评审合并应用 PR，再取最终发行 SHA；squash merge 后应使用新生成的 SHA。
 4. 父仓更新为该已发布 SHA，在任务或 Praxis PR 中列出具体提交、集成检查及存在的子 PR。源码须可匿名获取，并位于约定发行分支的历史中。
