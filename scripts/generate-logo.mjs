@@ -3,7 +3,7 @@ import { renderIconPng } from './render-logo-png.mjs';
 
 const root = new URL('../', import.meta.url);
 const ink = '#173F32';
-const paper = '#F6F3E8';
+const paper = '#FFFFFF';
 const depth = 3;
 const radians = Math.PI / 180;
 const forks = [

@@ -51,7 +51,7 @@ $$
 
 The different powers form a full shoulder and a longer tapered tip. The branch meets the pad at 47% of its width. A slight upward slope and a sinusoidal modulation of the upper edge give the overlapping pads their low, windswept profile. Each edge is sampled at 41 points.
 
-**4. Fit the silhouette.** All shapes share one ink, `#173F32`. The generator flips the y-axis for SVG and scales the tree to 224 units wide. The icon centers it in a 256-unit rounded square on `#F6F3E8`. To adjust the design, change the generator, run the commands above, and inspect the result at 16 and 24 px as well as at full size.
+**4. Fit the silhouette.** All shapes share one ink, `#173F32`. The generator flips the y-axis for SVG and scales the tree to 224 units wide. The icon centers it in a 256-unit rounded square on `#FFFFFF`. To adjust the design, change the generator, run the commands above, and inspect the result at 16 and 24 px as well as at full size.
 
 ## 简体中文
 
@@ -67,4 +67,4 @@ The different powers form a full shoulder and a longer tapered tip. The branch m
 
 **树冠。** 末梢针叶团宽度为 $2.2(0.58+0.75L)$，高度尺度为 $0.59(0.74+0.46L)$。上方的包络函数 $A(u)$ 用不同的两端指数生成浑圆的肩部和细长的尖端。枝条接在宽度的 47% 处，叶团整体略向右上倾斜，上缘由正弦项轻微起伏。上下缘各取 41 个点，叠成松树的层状树冠。
 
-**成形。** 轮廓使用松绿 `#173F32`。生成器将纵轴翻转为 SVG 坐标，把树缩放到 224 单位宽，再居中放在 256 单位的暖白圆角方块 `#F6F3E8` 内。修改造型时，编辑脚本参数并重新生成，同时检查 16、24 像素和原尺寸下的轮廓。
+**成形。** 轮廓使用松绿 `#173F32`。生成器将纵轴翻转为 SVG 坐标，把树缩放到 224 单位宽，再居中放在 256 单位的纯白圆角方块 `#FFFFFF` 内。修改造型时，编辑脚本参数并重新生成，同时检查 16、24 像素和原尺寸下的轮廓。
