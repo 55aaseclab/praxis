@@ -1,0 +1,230 @@
+name: ${PRAXIS_COMPOSE_PROJECT:-praxis}
+
+x-runtime: &runtime
+  init: true
+  user: "${PRAXIS_UID:-1000}:${PRAXIS_GID:-1000}"
+  restart: unless-stopped
+  stop_grace_period: 30s
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: ["/tmp:rw,nosuid,nodev,size=512m,mode=1777"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+  healthcheck: &health
+    test: [CMD, node, -e, "fetch(process.env.HEALTH_URL).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
+
+x-build: &build
+  context: .
+  dockerfile: Dockerfile
+  args:
+    PRAXIS_UID: ${PRAXIS_UID:-1000}
+    PRAXIS_GID: ${PRAXIS_GID:-1000}
+
+x-slides-volumes: &slides-volumes
+  - type: bind
+    source: ${PRAXIS_SLIDES_DECKS_DIR:?Run scripts/stack.mjs to resolve the registered source configuration}
+    target: /data/slides/decks
+    bind: { create_host_path: false }
+  - type: bind
+    source: ${PRAXIS_SLIDES_STATE_DIR:?Run scripts/stack.mjs to resolve the registered source configuration}
+    target: /data/slides/state
+    bind: { create_host_path: false }
+
+services:
+  praxis:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/praxis:local
+    build: { <<: *build, target: praxis }
+    ports: ["${PRAXIS_BIND_ADDRESS:-127.0.0.1}:4321:4321"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      HEALTH_URL: http://127.0.0.1:4321/health
+      PRAXIS_OBSERVATIONS_FILE: ${PRAXIS_OBSERVATIONS_DIR:?Run scripts/stack.mjs to resolve the private observations directory}/observations.db
+      PRAXIS_CONSOLE_UPSTREAM: ${PRAXIS_CONSOLE_UPSTREAM:-}
+      PRAXIS_CONSOLE_HOST: ${PRAXIS_CONSOLE_HOST:-}
+      PRAXIS_CANONICAL_URL: ${PRAXIS_CANONICAL_URL:-}
+    volumes:
+      - type: bind
+        source: ${PRAXIS_OBSERVATIONS_DIR:?Run scripts/stack.mjs to resolve the private observations directory}
+        target: ${PRAXIS_OBSERVATIONS_DIR}
+        bind: { create_host_path: false }
+
+  praxis-public:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/praxis:local
+    build: { <<: *build, target: praxis }
+    command: [node, scripts/serve-public-praxis.mjs]
+    ports: ["${PRAXIS_BIND_ADDRESS:-127.0.0.1}:14321:14321"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      HEALTH_URL: http://127.0.0.1:14321/health
+      PRAXIS_PUBLIC_URLS_FILE: /run/praxis/public-urls.json
+      PRAXIS_OBSERVATIONS_FILE: ${PRAXIS_OBSERVATIONS_DIR}/observations.db
+      PRAXIS_OBSERVATIONS_ORIGIN: ${PRAXIS_OBSERVATIONS_ORIGIN:-}
+      PRAXIS_CONSOLE_UPSTREAM: ${PRAXIS_CONSOLE_UPSTREAM:-}
+      PRAXIS_CONSOLE_HOST: ${PRAXIS_CONSOLE_HOST:-}
+      PRAXIS_CONSOLE_ORIGIN: ${PRAXIS_CONSOLE_ORIGIN:-}
+      PRAXIS_BUSINESS_URL: ${PRAXIS_PUBLIC_BUSINESS_URL:-}
+      PRAXIS_WEB_GATEWAY: ${PRAXIS_WEB_GATEWAY:-false}
+      PRAXIS_CANONICAL_URL: ${PRAXIS_CANONICAL_URL:-}
+      PRAXIS_ORIGIN_HOST: ${PRAXIS_ORIGIN_HOST:-}
+      PRAXIS_TRAVEL_SHARES_FILE: ${PRAXIS_TRAVEL_SHARES_FILE:-}
+    volumes:
+      - type: bind
+        source: ${PRAXIS_OBSERVATIONS_DIR}
+        target: ${PRAXIS_OBSERVATIONS_DIR}
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${PRAXIS_PUBLIC_URLS_FILE:?Set the existing private public-urls configuration path}
+        target: /run/praxis/public-urls.json
+        read_only: true
+        bind: { create_host_path: false }
+
+  reminder:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/reminder:local
+    build: { context: ./third_party/reminder, dockerfile: ../../Dockerfile.builtins, target: reminder }
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4322:4322"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4322"
+      HEALTH_URL: http://127.0.0.1:4322/
+      REMINDER_DATA: /data/checklist.json
+      REMINDER_ALLOWED_ORIGINS: ${REMINDER_ALLOWED_ORIGINS:-}
+    volumes:
+      - type: bind
+        source: ${PRAXIS_REMINDER_DATA_DIR:?Run scripts/stack.mjs to resolve the registered source configuration}
+        target: /data
+        bind: { create_host_path: false }
+
+  travel:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/travel:local
+    build: { context: ./third_party/travel, dockerfile: ../../Dockerfile.builtins, target: travel }
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4323:4323"]
+    environment: { HOST: "0.0.0.0", PORT: "4323", HEALTH_URL: "http://127.0.0.1:4323/" }
+
+  knowledge:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/knowledge:local
+    build: { context: ./third_party/knowledge, dockerfile: ../../Dockerfile.builtins, target: knowledge }
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4324:4324"]
+    environment: { HOST: "0.0.0.0", PORT: "4324", HEALTH_URL: "http://127.0.0.1:4324/" }
+
+  knowledge-public:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/knowledge:local
+    build: { context: ./third_party/knowledge, dockerfile: ../../Dockerfile.builtins, target: knowledge }
+    command: [node, src/runtime/server.mjs, --host, "0.0.0.0", --port, "14324"]
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:14324:14324"]
+    environment: { HOST: "0.0.0.0", PORT: "14324", HEALTH_URL: "http://127.0.0.1:14324/" }
+
+  tingproof:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/tingproof:local
+    build: { context: ./third_party/tingproof, dockerfile: ../../Dockerfile.builtins, target: tingproof }
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:5173:5173"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "5173"
+      HEALTH_URL: http://127.0.0.1:5173/
+      TINGPROOF_DATA_DIR: /data
+      TINGPROOF_LLM_BASE_URL: ${TINGPROOF_LLM_BASE_URL:-}
+      TINGPROOF_LLM_MODEL: ${TINGPROOF_LLM_MODEL:-}
+      TINGPROOF_LLM_API_KEY: ${TINGPROOF_LLM_API_KEY:-}
+    volumes:
+      - type: bind
+        source: ${PRAXIS_TINGPROOF_DATA_DIR:?Run scripts/stack.mjs to resolve the registered source configuration}
+        target: /data
+        bind: { create_host_path: false }
+
+  tingproof-public:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/tingproof:local
+    build: { context: ./third_party/tingproof, dockerfile: ../../Dockerfile.builtins, target: tingproof }
+    working_dir: /app
+    command: [node, dist-server/main.js]
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:15173:15173"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "15173"
+      HEALTH_URL: http://127.0.0.1:15173/
+      TINGPROOF_DATA_DIR: /data
+      TINGPROOF_LLM_BASE_URL: ${TINGPROOF_LLM_BASE_URL:-}
+      TINGPROOF_LLM_MODEL: ${TINGPROOF_LLM_MODEL:-}
+      TINGPROOF_LLM_API_KEY: ${TINGPROOF_LLM_API_KEY:-}
+    volumes:
+      - type: bind
+        source: ${PRAXIS_TINGPROOF_DATA_DIR:?Run scripts/stack.mjs to resolve the registered source configuration}
+        target: /data
+        bind: { create_host_path: false }
+
+  slides:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/slides:local
+    build: { context: ./third_party/lattice, dockerfile: ../../Dockerfile.builtins, target: lattice, additional_contexts: { platform: . } }
+    read_only: false
+    shm_size: 1gb
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4666:4666"]
+    environment: { PRAXIS_LATTICE_ROOT: /app, HOST: "0.0.0.0", PORT: "4666", HEALTH_URL: "http://127.0.0.1:4666/" }
+    volumes: *slides-volumes
+
+  slides-public:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/slides:local
+    build: { context: ./third_party/lattice, dockerfile: ../../Dockerfile.builtins, target: lattice, additional_contexts: { platform: . } }
+    read_only: false
+    shm_size: 1gb
+    working_dir: /app
+    command: [node, /opt/praxis/scripts/serve-slides-public.mjs]
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:14666:14666"]
+    environment:
+      PRAXIS_LATTICE_ROOT: /app
+      HOST: 0.0.0.0
+      PORT: "14666"
+      HEALTH_URL: http://127.0.0.1:14666/
+      PUBLIC_BASE_PATH: /apps/slides
+    volumes: *slides-volumes
+
+  memo:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/memo:local
+    build: { context: ./third_party/memo, dockerfile: ../../Dockerfile.builtins, target: memo }
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4325:4325"]
+    environment: { HOST: "0.0.0.0", PORT: "4325", HEALTH_URL: "http://127.0.0.1:4325/health" }
+
+  finance:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/finance:local
+    build: { context: ./third_party/finance, dockerfile: ../../Dockerfile.builtins, target: finance }
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4329:4329"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4329"
+      HEALTH_URL: http://127.0.0.1:4329/health
+      FINANCE_DATA: /data/finance.json
+      FINANCE_ALLOWED_ORIGINS: ${FINANCE_ALLOWED_ORIGINS:-}
+    # Configured working roots replace this mount through the generated app override.
+    volumes: ["finance-data:/data"]
+
+
+  intelligence:
+    <<: *runtime
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/intelligence:local
+    build: { context: ./third_party/intelligence, dockerfile: ../../Dockerfile.builtins, target: intelligence }
+    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4330:4330"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4330"
+      HEALTH_URL: http://127.0.0.1:4330/health
+      INTELLIGENCE_PREVIEW: ${PRAXIS_INTELLIGENCE_PREVIEW:-1}
+
+
+volumes:
+  finance-data:

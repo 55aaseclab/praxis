@@ -1,0 +1,69 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, lstat, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { resolveAppPaths, appStorageSources, assertAppBindings, validateAppPathParents } from '../src/storage/app-paths.mjs';
+import { planAppData } from '../src/storage/app-data-plan.mjs';
+import { relocateVerified, rollbackRelocation, validateRelocations } from '../src/storage/relocate.mjs';
+const configuration = root => ({ dataRoot: root, workspaceId: '11111111-1111-4111-8111-111111111111', stateRoot: join(root, 'state'), repositories: [{ type: 'local', path: join(root, 'backups'), passwordFile: join(root, 'config/key') }], appSources: [] });
+test('default and per-app roots drive all working paths without changing another app', () => {
+  const c = configuration('/private/praxis'), normal = resolveAppPaths(c);
+  c.workingData = { version: 1, roots: { memo: '/mnt/nas/private/memo' } };
+  const changed = resolveAppPaths(c);
+  assert.equal(changed.memo, '/mnt/nas/private/memo');
+  assert.equal(changed.knowledge, normal.knowledge);
+  assert.equal(changed.slidesState, join(normal.roots.lattice, 'native/.lattice'));
+  assert.equal(appStorageSources(changed).find(item => item.id === 'memo').source, '/mnt/nas/private/memo/memo.db');
+});
+test('unknown, relative, overlapping, source, backup and secret roots fail closed', () => {
+  for (const roots of [{ unknown: '/private/x/y' }, { memo: 'relative' }, { memo: '/private/data', travel: '/private/data/travel' }, { memo: '/private/praxis/backups/memo' }, { memo: '/private/praxis/config/memo' }, { memo: process.cwd() + '/data' }, { memo: '/tmp/a/../b' }]) {
+    assert.throws(() => resolveAppPaths({ ...configuration('/private/praxis'), workingData: { version: 1, roots } }));
+  }
+});
+test('parent validation rejects symlink aliases', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'praxis-app-path-')); t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'real'), { mode: 0o700 }); await symlink(join(root, 'real'), join(root, 'alias'));
+  await assert.rejects(validateAppPathParents({ roots: { memo: join(root, 'alias', 'data') } }));
+});
+test('plan preserves identifiers and maps every configured store to its app root', () => {
+  const storage = configuration('/private/praxis'); storage.appSources = [{ id: 'tingproof', target: 'tingproof.db', source: '/old/ting/tingproof.db' }, { id: 'slides', target: 'decks', source: '/old/slides/decks' }, { id: 'slides', target: '.lattice', source: '/old/slides/.lattice' }];
+  const business = { database: '/old/auth/auth.db', eventsDatabase: '/old/auth/events.db', observationsFile: '/old/obs/observations.db', apps: Object.fromEntries(['knowledge', 'memo', 'projects', 'travel', 'slides'].map(id => [id, { dataDir: `/old/${id}` }])) };
+  const plan = planAppData({ storage, business, reminderMapping: { spaces: { spaceA: '/old/reminder/checklist.json', spaceB: '/old/reminder-two/checklist.json' } }, slidesMapping: { spaces: { spaceA: '/old/slides/a.json' } }, polaris: { enabled: false }, financeFile: '/old/finance/finance.json' });
+  assert.equal(plan.reminderMapping.spaces.spaceB, join(plan.paths.reminder, 'spaceB/checklist.json'));
+  assert.equal(plan.slidesMapping.spaces.spaceA, join(plan.paths.slidesBusiness, 'a.json'));
+  assert.equal(plan.business.database, join(plan.paths.platform, 'auth.db'));
+  assert.equal(business.database, '/old/auth/auth.db');
+  assert.doesNotThrow(() => assertAppBindings(plan.storage, plan.business, { reminderSpaces: plan.reminderMapping.spaces, slidesSpaces: plan.slidesMapping.spaces }));
+  plan.business.apps.memo.dataDir = '/old/memo'; assert.throws(() => assertAppBindings(plan.storage, plan.business));
+});
+test('same-device migration preserves bytes and inode, and rollback restores source', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'praxis-relocate-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const from = join(root, 'from'), to = join(root, 'to'); await mkdir(from); await writeFile(join(from, '汉字.json'), '{"text":"业务内容"}\n');
+  const inode = (await lstat(join(from, '汉字.json'))).ino;
+  const [pair] = await validateRelocations([{ id: 'test', from, to }]); const moved = await relocateVerified(pair);
+  assert.equal(moved.method, 'rename'); assert.equal((await lstat(join(to, '汉字.json'))).ino, inode);
+  assert.equal(await readFile(join(to, '汉字.json'), 'utf8'), '{"text":"业务内容"}\n');
+  await rollbackRelocation(moved); assert.equal((await lstat(join(from, '汉字.json'))).ino, inode);
+});
+test('migration refuses occupied and overlapping targets before changing source', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'praxis-relocate-reject-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const from = join(root, 'from'), to = join(root, 'to'); await mkdir(from); await mkdir(to);
+  await assert.rejects(validateRelocations([{ from, to }]));
+  await assert.rejects(validateRelocations([{ from, to: join(from, 'nested') }]));
+  assert.ok((await lstat(from)).isDirectory());
+});
+
+test('deployment metadata rebase changes only typed paths and preserves unrelated environment values', async () => {
+  const { rebaseDeploymentPrototype } = await import('../src/storage/app-data-plan.mjs');
+  const original = { Mounts: [{ Type: 'bind', Source: '/old/obs', Destination: '/old/obs' }, { Type: 'bind', Source: '/config/private', Destination: '/config/private' }], Config: { Env: ['PRAXIS_OBSERVATIONS_FILE=/old/obs/observations.db', 'UNRELATED=/old/obs', 'SECRET=opaque'] } };
+  const next = rebaseDeploymentPrototype(original, [{ from: '/old/obs', to: '/new/obs' }]);
+  assert.equal(next.Mounts[0].Source, '/new/obs'); assert.equal(next.Config.Env[0], 'PRAXIS_OBSERVATIONS_FILE=/new/obs/observations.db');
+  assert.equal(next.Config.Env[1], original.Config.Env[1]); assert.equal(next.Mounts[1].Source, original.Mounts[1].Source);
+});
+
+test('Polaris environment follows typed data-root binding without altering private values', async () => {
+  const { rebasePolarisEnvironment } = await import('../src/storage/app-data-plan.mjs');
+  assert.equal(rebasePolarisEnvironment('POLARIS_DATA_ROOT="/old/data"\nPRIVATE_VALUE=retained\n', '/old/data', '/new/data'), 'POLARIS_DATA_ROOT=/new/data\nPRIVATE_VALUE=retained\n');
+  assert.throws(() => rebasePolarisEnvironment('POLARIS_DATA_ROOT=/unexpected\n', '/old/data', '/new/data'));
+});

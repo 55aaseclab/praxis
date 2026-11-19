@@ -1,6 +1,6 @@
 {
   "name": "praxis",
-  "version": "0.1.111",
+  "version": "0.1.112",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node src/server.mjs --host 127.0.0.1",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node scripts/version.mjs check && node --test tests/*.test.mjs",
     "app:demo": "bash scripts/demo-app.sh",
     "apps:dev": "node scripts/local-app.mjs",
     "business": "node src/business/server.mjs",
@@ -18,7 +18,22 @@
     "deploy": "node scripts/deploy.mjs",
     "storage": "node scripts/storage.mjs",
     "logo:generate": "node scripts/generate-logo.mjs",
-    "logo:check": "node scripts/generate-logo.mjs --check"
+    "logo:check": "node scripts/generate-logo.mjs --check",
+    "test:prd": "node scripts/version.mjs check && node --test tests/prd-catalog.test.mjs tests/prd-renderer.test.mjs tests/workbench-http.test.mjs",
+    "test:navigation": "node scripts/version.mjs check && node --test tests/system-navigation.test.mjs tests/app-launcher.test.mjs tests/workbench-http.test.mjs",
+    "test:full": "PRAXIS_BUSINESS_DOCKER_TEST=1 PRAXIS_STORAGE_DOCKER_TEST=1 PRAXIS_RESTIC_TEST=1 npm test",
+    "stack": "node scripts/stack.mjs",
+    "stack:all": "node scripts/run-stack.mjs",
+    "business:stack": "node scripts/business-stack.mjs",
+    "storage:register": "node scripts/storage-bootstrap.mjs register",
+    "app:data": "node scripts/app-data.mjs",
+    "data:inventory": "node scripts/data-inventory.mjs publish",
+    "storage:worker": "node scripts/storage-worker.mjs",
+    "business:sync": "node scripts/business-sync-worker.mjs",
+    "observations": "node scripts/observations.mjs",
+    "polaris:stack": "node scripts/polaris-stack.mjs",
+    "version:patch": "node scripts/version.mjs patch",
+    "version:check": "node scripts/version.mjs check"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "7.2.0",

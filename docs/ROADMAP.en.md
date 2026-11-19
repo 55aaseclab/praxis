@@ -1,5 +1,7 @@
 # Praxis roadmap
 
+Version: 0.1.112
+
 [简体中文](ROADMAP.md)
 
 | Delivery | Outcome |
@@ -30,7 +32,7 @@ Rename the workbench’s Manage entry to **Settings**. Place the language prefer
 
 ## Container quickstart
 
-Publish a clean default `compose.yaml` with a workbench service and an optional anonymous guide profile. Validate a fresh source build, Calendar and Matrix Reader assets, Settings/Home navigation, guide discovery and loopback-only ports. Maintain the separate private deployment descriptor and blue/green workflow for managed installations.
+Restore the full built-in stack from the frozen platform contracts, including every native application, identity, scoped operations and persistence. Preserve the original management and recovery workflows alongside the private deployment descriptors. Validate all fourteen entries, real synthetic native writes and reads, authorization, media/authoring functions, first-start retry and restart persistence.
 
 ## Moving an existing installation
 

@@ -1,0 +1,30 @@
+name: praxis-business
+services:
+  business:
+    image: praxis-business/server:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: praxis
+      args:
+        PRAXIS_UID: ${PRAXIS_UID:-1000}
+        PRAXIS_GID: ${PRAXIS_GID:-1000}
+    command: [node, src/business/server.mjs, --host, 0.0.0.0, --port, "4326"]
+    network_mode: host
+    init: true
+    user: "${PRAXIS_UID:-1000}:${PRAXIS_GID:-1000}"
+    read_only: true
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m,mode=1777"]
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, node, -e, "fetch(process.env.HEALTH_URL).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

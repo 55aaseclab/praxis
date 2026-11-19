@@ -8,7 +8,7 @@ import { registerWorkspace } from '../src/storage/registry.mjs';
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'praxis-lattice-registry-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  for (const id of ['reminder', 'tingproof', 'lattice', 'memo', 'travel', 'knowledge', 'vpns']) {
+  for (const id of ['reminder', 'tingproof', 'lattice', 'memo', 'travel', 'knowledge', 'finance', 'intelligence', 'projects', 'calendar', 'matrix-reader', 'letters', 'profiles', 'polaris']) {
     await mkdir(join(root, 'third_party', id, '.git'), { recursive: true });
   }
   for (const path of ['reminder/data/checklist.json', 'tingproof/data/tingproof.db']) {
@@ -42,15 +42,24 @@ test('fresh native Lattice registration uses the merged application root', async
   ]);
 });
 
-test('optional Polaris code is registered without adding its live data as a source', async t => {
+test('all built-in source repositories and build recipes are registered with existing ancillary sources', async t => {
   const { root, config } = await fixture(t);
   for (const target of ['decks', '.lattice']) await mkdir(join(root, 'third_party/lattice', target));
-  const before = await registerWorkspace(config, root);
-  assert.equal(before.sourceRepos.some(item => item.id === 'polaris'), false);
-  await mkdir(join(root, 'third_party/polaris'), { recursive: true });
-  await writeFile(join(root, 'third_party/polaris/.git'), 'gitdir: ../../.git/modules/third_party/polaris\n');
-  const after = await registerWorkspace(config, root);
-  assert.deepEqual(after.sourceRepos.find(item => item.id === 'polaris'), { id: 'polaris', path: join(root, 'third_party/polaris') });
-  assert.ok(after.sourceRepos.find(item => item.id === 'praxis').paths.includes('compose.polaris.yaml'));
-  assert.deepEqual(after.appSources, before.appSources);
+  for (const file of ['Dockerfile.builtins', 'Dockerfile.builtins.dockerignore', 'compose.apps.yaml', 'compose.business.yaml', 'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml']) {
+    await writeFile(join(root, file), '# Synthetic recipe');
+  }
+  await mkdir(join(root, 'packaging'));
+  const ancillary = { id: 'private-ancillary', path: join(root, 'private', 'archived-source') };
+  config.sourceRepos = [ancillary];
+  const result = await registerWorkspace(config, root);
+  assert.equal(result.sourceRepos.length, 16);
+  for (const id of ['finance', 'projects', 'calendar', 'matrix-reader', 'letters', 'profiles', 'polaris']) {
+    assert.deepEqual(result.sourceRepos.find(item => item.id === id), { id, path: join(root, 'third_party', id) });
+  }
+  assert.deepEqual(result.sourceRepos.find(item => item.id === ancillary.id), ancillary);
+  const paths = result.sourceRepos.find(item => item.id === 'praxis').paths;
+  for (const path of ['Dockerfile.builtins', 'Dockerfile.builtins.dockerignore', 'packaging', 'compose.apps.yaml', 'compose.business.yaml', 'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml']) assert.ok(paths.includes(path));
+  assert.equal(result.appSources.some(item => item.source.includes('polaris')), false);
+  await rm(join(root, 'third_party/finance/.git'), { recursive: true });
+  await assert.rejects(registerWorkspace(config, root), /Required source repository is missing: finance/);
 });

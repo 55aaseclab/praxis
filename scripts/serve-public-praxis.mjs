@@ -13,6 +13,7 @@ const server = createPraxisServer({
     privateDocumentOwnerId: process.env.PRAXIS_DOCUMENT_OWNER_ID,
     privateDocumentRoots: { letters: process.env.PRAXIS_LETTERS_DIR, profiles: process.env.PRAXIS_PROFILES_DIR },
     enabled: managed,
+    requireTingproofNativeScope: process.env.PRAXIS_TINGPROOF_SCOPED === 'true',
     canonicalUrl: process.env.PRAXIS_CANONICAL_URL,
     coreUrl: process.env.PRAXIS_WEB_CORE_URL || 'http://127.0.0.1:4326',
     originHost: process.env.PRAXIS_ORIGIN_HOST || 'localhost',

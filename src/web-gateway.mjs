@@ -97,7 +97,7 @@ export function gatewayApps(apps, access, origin) {
   });
 }
 
-export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:4326', originHost = 'localhost', appTargets = {}, travelSharesFile, staticApps = {}, privateDocumentOwnerId, timeoutMs = 3000, revalidateMs = 5000, clock = Date.now } = {}) {
+export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:4326', originHost = 'localhost', appTargets = {}, travelSharesFile, staticApps = {}, privateDocumentOwnerId, requireTingproofNativeScope = false, timeoutMs = 3000, revalidateMs = 5000, clock = Date.now } = {}) {
   const canonical = canonicalOrigin(canonicalUrl);
   const core = localOrigin(coreUrl);
   if (!/^[a-zA-Z0-9.-]+$/.test(originHost)) throw new Error('Legacy origin Host must be a fixed hostname.');
@@ -326,6 +326,10 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
         }
         const legacy = route.id === 'knowledge' && knowledgeLegacyPath(route.pathname);
         if (legacy) { const scope = await legacyAccess(request); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
+        const tingproofNative = requireTingproofNativeScope && route.id === 'tingproof';
+        if (tingproofNative) { const scope = await legacyAccess(request, 'tingproof', 'native-projects'); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
+        const slidesNativeRender = route.id === 'lattice-slides' && request.method === 'POST' && route.pathname === '/workbench/api/render';
+        if (slidesNativeRender) { const scope = await legacyAccess(request, 'slides', 'native-render'); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
         let slidesLegacy = false;
         if (route.id === 'lattice-slides') {
           const parameters = new URLSearchParams(search);
@@ -339,7 +343,11 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
             if (shell) route.pathname = '/_viewer/';
           }
         }
-        const permitted = async next => canOpenApp(next, route.id) && (!legacy || (await legacyAccess(request)).allowed) && (!slidesLegacy || (await legacyAccess(request, 'slides', 'legacy-decks')).allowed);
+        const permitted = async next => canOpenApp(next, route.id) &&
+          (!legacy || (await legacyAccess(request)).allowed) &&
+          (!slidesLegacy || (await legacyAccess(request, 'slides', 'legacy-decks')).allowed) &&
+          (!tingproofNative || (await legacyAccess(request, 'tingproof', 'native-projects')).allowed) &&
+          (!slidesNativeRender || (await legacyAccess(request, 'slides', 'native-render')).allowed);
         if (route.id === 'lattice-slides' && route.pathname.startsWith('/api/slides/')) {
           await proxy(request, response, { target: core, pathname: `/api/business/slides/web/${route.pathname.slice('/api/slides/'.length)}`, search, credentials: true, initial: identity, permitted });
           return true;
@@ -363,13 +371,18 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
       const identity = await access(request);
       if (!canOpenApp(identity, route.id)) throw fail(403, 'FORBIDDEN');
       if (route.id === 'lattice-slides') await legacyAccess(request, 'slides', 'legacy-decks');
+      if (requireTingproofNativeScope && route.id === 'tingproof') {
+        const scope = await legacyAccess(request, 'tingproof', 'native-projects');
+        identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt);
+      }
       const target = targets[route.id];
       const headers = cleanHeaders(request.headers, { upgrade: true });
       headers.host = `${originHost}:${target.port}`; headers.connection = 'Upgrade'; headers.upgrade = 'websocket';
       const outgoing = httpRequest(new URL(`${route.pathname}${search}`, target), { headers });
       let stop = () => {};
       const destroy = () => { outgoing.destroy(); socket.destroy(); };
-      stop = watch(request, socket, identity, next => canOpenApp(next, route.id), destroy);
+      stop = watch(request, socket, identity, async next => canOpenApp(next, route.id) &&
+        (route.id !== 'tingproof' || (await legacyAccess(request, 'tingproof', 'native-projects')).allowed), destroy);
       outgoing.setTimeout(timeoutMs, destroy);
       outgoing.once('upgrade', (incoming, upstream, upstreamHead) => {
         outgoing.setTimeout(0); upstream.setTimeout(0);

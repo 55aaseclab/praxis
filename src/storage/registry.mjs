@@ -26,15 +26,24 @@ export async function registerWorkspace(config, repositoryRoot, { runtime = 'nat
   for (const item of config.appSources ?? []) {
     if (!appSources.some(current => current.id === item.id && current.target === item.target)) appSources.push(item);
   }
-  const sourceRepos = [{ id: 'praxis', path: root, paths: ['src', 'scripts', 'tests', 'public', 'docs', 'skills', 'config', 'infra', 'docker', 'Dockerfile', 'Dockerfile.storage', 'compose.yaml', 'compose.storage.yaml', 'compose.polaris.yaml', '.dockerignore', '.gitignore', '.gitmodules', 'package.json', 'package-lock.json', 'paseo.json', 'AGENTS.md', 'README.md'] }];
-  for (const id of ['reminder', 'tingproof', 'lattice', 'memo', 'travel', 'knowledge', 'vpns']) {
+  const platformPaths = ['src', 'scripts', 'tests', 'public', 'docs', 'skills', 'config', 'packaging',
+    'Dockerfile', 'Dockerfile.builtins', 'Dockerfile.builtins.dockerignore', 'Dockerfile.storage',
+    'compose.yaml', 'compose.apps.yaml', 'compose.business.yaml', 'compose.storage.yaml',
+    'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml', '.dockerignore',
+    '.gitignore', '.gitmodules', 'package.json', 'package-lock.json', 'AGENTS.md',
+    'README.md', 'README.zh-CN.md', 'CONTRIBUTING.md', 'LICENSE', 'CODE_OF_CONDUCT.md'];
+  const paths = [];
+  for (const name of platformPaths) if (await exists(join(root, name))) paths.push(name);
+  const sourceRepos = [{ id: 'praxis', path: root, paths }];
+  const builtinIds = ['reminder', 'knowledge', 'lattice', 'travel', 'tingproof', 'memo',
+    'finance', 'intelligence', 'projects', 'calendar', 'matrix-reader', 'letters', 'profiles', 'polaris'];
+  for (const id of builtinIds) {
     const path = join(root, 'third_party', id);
     if (!await exists(join(path, '.git'))) throw new Error(`Required source repository is missing: ${id}`);
     sourceRepos.push({ id, path });
   }
-  const intelligence = join(root, 'third_party/intelligence');
-  if (await exists(join(intelligence, '.git'))) sourceRepos.push({ id: 'intelligence', path: intelligence });
-  const polaris = join(root, 'third_party/polaris');
-  if (await exists(join(polaris, '.git'))) sourceRepos.push({ id: 'polaris', path: polaris });
+  for (const registered of config.sourceRepos ?? []) {
+    if (!sourceRepos.some(current => current.id === registered.id)) sourceRepos.push(registered);
+  }
   return { ...config, runtime, appSources, sourceRepos, coverage: { ...config.coverage, omitted: [...new Set([...browserOmissions, ...(config.coverage?.omitted ?? [])])] } };
 }

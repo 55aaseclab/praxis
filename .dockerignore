@@ -55,3 +55,5 @@
 !third_party/lattice/src/business/schema.mjs
 !third_party/polaris/apps/docs/site/development/prd.md
 !third_party/polaris/apps/docs/site/development/prd.zh-CN.md
+!packaging/builtins/start-lattice.mjs
+!packaging/builtins/prune-video-engines.mjs

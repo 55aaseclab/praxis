@@ -56,7 +56,7 @@ export async function resolveKnowledgeRuntime(app, { uid, workspace, protectedPa
 
 export function knowledgeComposeService(runtime, { contentRoot } = {}) {
   return {
-    environment: { KNOWLEDGE_MANAGED: '1', ...(runtime.inboxDir || runtime.attachments?.length ? { KNOWLEDGE_INBOX_ROOT: '/run/knowledge-inbox' } : {}), KNOWLEDGE_DATA_DIR: '/data/knowledge', KNOWLEDGE_ADAPTER_KEY_FILE: '/run/secrets/knowledge-key', KNOWLEDGE_BUSINESS_CONFIG: '/run/config/knowledge-business.json', KNOWLEDGE_BASE_PATH: '/apps/knowledge/', KNOWLEDGE_STATIC_DIR: contentRoot ? '/data/content/published' : '/workspace/third_party/knowledge/dist-public', ...(contentRoot ? { KNOWLEDGE_CONTENT_ROOT: '/data/content' } : {}) },
+    environment: { KNOWLEDGE_MANAGED: '1', ...(runtime.inboxDir || runtime.attachments?.length ? { KNOWLEDGE_INBOX_ROOT: '/run/knowledge-inbox' } : {}), KNOWLEDGE_DATA_DIR: '/data/knowledge', KNOWLEDGE_ADAPTER_KEY_FILE: '/run/secrets/knowledge-key', KNOWLEDGE_BUSINESS_CONFIG: '/run/config/knowledge-business.json', KNOWLEDGE_BASE_PATH: '/apps/knowledge/', ...(contentRoot ? { KNOWLEDGE_STATIC_DIR: '/data/content/published', KNOWLEDGE_CONTENT_ROOT: '/data/content' } : {}) },
     volumes: [
       { source: runtime.dataDir, target: '/data/knowledge', read_only: false },
       { source: runtime.keyFile, target: '/run/secrets/knowledge-key', read_only: true },

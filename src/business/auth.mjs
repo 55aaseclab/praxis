@@ -760,6 +760,8 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         const resourceRoutes = {
           '/api/business/web-resource-access/knowledge/legacy-library': { appId: 'knowledge', webAppId: 'knowledge', resourceId: 'legacy-library' },
           '/api/business/web-resource-access/slides/legacy-decks': { appId: 'slides', webAppId: 'lattice-slides', resourceId: 'legacy-decks' },
+          '/api/business/web-resource-access/slides/native-render': { appId: 'slides', webAppId: 'lattice-slides', resourceId: 'legacy-decks', actions: ['read', 'render'] },
+          '/api/business/web-resource-access/tingproof/native-projects': { appId: 'tingproof', webAppId: 'tingproof', resourceId: 'native-projects', allSpaces: true },
         };
         const target = resourceRoutes[path];
         if (!target || webGateway?.enabled !== true) fail('Resource access route was not found.', 404, 'NOT_FOUND');
@@ -771,9 +773,34 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         const token = parseCookie(request), session = store.requireNativeSession(token), web = store.getWebAccess(token);
         if (!web.apps.includes(target.webAppId)) fail('Application access is not allowed.', 403, 'FORBIDDEN');
         let expiresAt = 0;
-        for (const spaceId of apps[target.appId]?.spaces || []) {
-          try { const scope = store.authorize(token, { appId: target.appId, spaceId, action: 'read', resourceId: target.resourceId }, { auditDenied: false }); expiresAt = Math.max(expiresAt, Math.min(scope.expiresAt, session.expiresAt, web.permissionsExpireAt ?? Infinity)); }
-          catch (error) { if (error.status !== 403) throw error; }
+        if (target.allSpaces) {
+          const spaces = apps[target.appId]?.spaces || [];
+          const actions = ['read', 'assign'];
+          const rules = store.availableRules(session.user.id, { [target.appId]: actions });
+          if (!spaces.length) fail('Native authoring access is not allowed.', 403, 'FORBIDDEN');
+          expiresAt = Math.min(session.expiresAt, web.permissionsExpireAt ?? Infinity);
+          for (const spaceId of spaces) {
+            for (const action of actions) {
+              const fullRule = rules.find(rule => rule.appId === target.appId &&
+                rule.spaceId === spaceId && rule.actions.includes(action) && rule.resources.includes('*'));
+              if (!fullRule) fail('Native authoring access is not allowed.', 403, 'FORBIDDEN');
+              const scope = store.authorize(token, { appId: target.appId, spaceId, action }, { auditDenied: false });
+              if (!scope.resources.includes('*')) fail('Native authoring access is not allowed.', 403, 'FORBIDDEN');
+              expiresAt = Math.min(expiresAt, scope.expiresAt);
+            }
+          }
+        } else {
+          for (const spaceId of apps[target.appId]?.spaces || []) {
+            try {
+              let scopeExpiry = Math.min(session.expiresAt, web.permissionsExpireAt ?? Infinity);
+              for (const action of target.actions || ['read']) {
+                const scope = store.authorize(token, { appId: target.appId, spaceId, action, resourceId: target.resourceId }, { auditDenied: false });
+                scopeExpiry = Math.min(scopeExpiry, scope.expiresAt);
+              }
+              expiresAt = Math.max(expiresAt, scopeExpiry);
+            }
+            catch (error) { if (error.status !== 403) throw error; }
+          }
         }
         if (expiresAt <= store.clock()) fail('Legacy resource access is not allowed.', 403, 'FORBIDDEN');
         send(response, 200, { allowed: true, expiresAt }); return true;

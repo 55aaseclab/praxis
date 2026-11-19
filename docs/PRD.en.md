@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.111 · [简体中文](PRD.md)
+Version: 0.1.112 · [简体中文](PRD.md)
 
 People should be able to ask an agent for work and open the resulting document, schedule or other app record. Each app defines the meaning, storage and presentation of its records. The workbench handles discovery and navigation. External clients choose their own agent harness.
 
@@ -13,9 +13,13 @@ People should be able to ask an agent for work and open the resulting document, 
 | Add a local app | An operator can supply a bilingual manifest for a loopback service, then launch that app on their own machine. |
 | Work in either language | Open **Settings → General → Language** on the workbench to choose English (default) or Simplified Chinese. The choice applies immediately and persists in this browser for the workbench and its PRD reader. Standalone users and signed-in members can change it without administrator privileges. User-authored material keeps its original language. |
 
-The public checkout supplies a default Docker Compose entry. A fresh clone starts the local workbench with Calendar and the built Matrix Reader, with an optional anonymous connection guide. Native development remains available. Managed identity, app data and services use the installation’s explicit configuration. Verify the published commands from a clean checkout using separate loopback ports and an isolated Compose project.
+The public checkout supplies the complete built-in Docker Compose stack. A fresh clone starts the native services for all fourteen apps, the authenticated workbench and scoped business interface. First-start initialization creates a private owner account, workspace, service keys and persistent stores. Existing identities, configuration and records survive restarts and retries. Verify every native entry, protected resource, write/read-back flow and restart from an isolated clean installation. Preserve the original stack-management and recovery workflows during migration.
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
+
+## Video-engine availability
+
+The current installation keeps the Lattice video implementation and dependency declarations, while Remotion and HyperFrames are uninstalled from its runtime environment. Check backend installation before video work and skip missing engines. Keep existing video records and artifacts. Authoring, normal PNG/PDF/HTML exports and audio retain their native implementations.
 
 ## Home-screen identity · v0.1.111
 
