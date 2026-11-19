@@ -11,8 +11,8 @@ Praxis builds and polishes its built-in apps so people can read, watch or listen
 You can try the [hosted workbench](https://polaris.jianxiaoyitech.com/) before setting up your own instance.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-en.png">
-  <img src="docs/images/workbench-en.gif" alt="Real Paseo input beside Praxis switching from Apps to a synthetic Reminder card">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-en.png?v=2">
+  <img src="docs/images/workbench-en.gif?v=2" alt="Real Paseo conversation beside Praxis showing a synthetic Reminder card after the prompt is sent">
 </picture>
 
 ## Quickstart

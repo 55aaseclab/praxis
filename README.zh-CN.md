@@ -11,8 +11,8 @@ Praxis 打磨内置应用，让人可以直接读、看、听结果，并据此�
 部署前可以试用[在线工作台](https://polaris.jianxiaoyitech.com/)。
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-zh.png">
-  <img src="docs/images/workbench-zh.gif" alt="真实 Paseo 输入框与 Praxis 工作台：从应用视图切换到一条合成提醒卡片">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-zh.png?v=2">
+  <img src="docs/images/workbench-zh.gif?v=2" alt="真实 Paseo 对话与 Praxis 工作台：发送提醒后显示对应的合成提醒卡片">
 </picture>
 
 ## 快速开始
