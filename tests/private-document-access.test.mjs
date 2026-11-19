@@ -143,3 +143,21 @@ test('revocation between the initial owner check and private metadata delivery s
   assert.equal(result.status, 401);
   assert.doesNotMatch(result.body, /fixture\.txt|synthetic private|items/);
 });
+
+test('managed discovery uses gateway routes with a legacy standalone URL map configured', async t => {
+  const { read } = await fixture(t);
+  const dir = await mkdtemp(join(tmpdir(), 'standalone-urls-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = join(dir, 'urls.json');
+  await writeFile(file, JSON.stringify({ 'old-shortcut': 'https://legacy.example.test/' }));
+  const previous = process.env.PRAXIS_PUBLIC_URLS_FILE;
+  process.env.PRAXIS_PUBLIC_URLS_FILE = file;
+  try {
+    const catalog = await read('/api/apps');
+    assert.equal(catalog.status, 200);
+    assert.deepEqual(JSON.parse(catalog.body).apps.map(app => app.url), apps.map(id => origin + '/apps/' + id + '/'));
+  } finally {
+    if (previous === undefined) delete process.env.PRAXIS_PUBLIC_URLS_FILE;
+    else process.env.PRAXIS_PUBLIC_URLS_FILE = previous;
+  }
+});

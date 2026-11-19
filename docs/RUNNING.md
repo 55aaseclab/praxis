@@ -18,7 +18,7 @@ To build the workbench image after initializing the pinned submodules, run `dock
 
 For private Compose groups and blue/green slots, follow the [managed deployment guide](MANAGED-DEPLOYMENT.md).
 
-For a managed install, supply a native identity service and the enabled app services, then configure the web gateway with `PRAXIS_WEB_GATEWAY=true`, the HTTPS `PRAXIS_CANONICAL_URL` and local `PRAXIS_WEB_CORE_URL`. Run `npm run gateway` behind your TLS endpoint. `PRAXIS_PUBLIC_URLS_FILE` can point to a private JSON object mapping registered app IDs to HTTPS URLs. The public MCP guide runs at `/mcp/guide`. Business MCP requires a separate authorization for each accessible resource.
+For a managed install, supply a native identity service and the enabled app services, then configure the web gateway with `PRAXIS_WEB_GATEWAY=true`, the HTTPS `PRAXIS_CANONICAL_URL` and local `PRAXIS_WEB_CORE_URL`. Run `npm run gateway` behind your TLS endpoint. The managed gateway generates same-origin links from the signed-in account’s grants. A standalone workbench can use `PRAXIS_PUBLIC_URLS_FILE` to map registered app IDs to HTTPS URLs. The public MCP guide runs at `/mcp/guide`. Business MCP requires a separate authorization for each accessible resource.
 
 Set `PRAXIS_DOCUMENT_OWNER_ID` to the immutable native ID of the owner and set `PRAXIS_LETTERS_DIR` and `PRAXIS_PROFILES_DIR` to separate private directories. Each reader requires the owner’s active administrator session. Keep native-user databases, source documents, account tokens, snapshots and deployment manifests outside the checkout. Validate your installation using synthetic records.
 
@@ -40,6 +40,6 @@ npm start
 
 私有 Compose 服务组和蓝绿槽的运维步骤见[受管部署指南](MANAGED-DEPLOYMENT.md)。
 
-受管安装需提供原生身份服务和启用的应用服务。配置 `PRAXIS_WEB_GATEWAY=true`、HTTPS 地址 `PRAXIS_CANONICAL_URL` 和本机核心服务地址 `PRAXIS_WEB_CORE_URL`，在 TLS 入口后启动 `npm run gateway`。可用 `PRAXIS_PUBLIC_URLS_FILE` 提供应用标识到 HTTPS 地址的私有映射。公共 MCP 指南路径为 `/mcp/guide`，业务 MCP 需按资源另行授权。
+受管安装需提供原生身份服务和启用的应用服务。配置 `PRAXIS_WEB_GATEWAY=true`、HTTPS 地址 `PRAXIS_CANONICAL_URL` 和本机核心服务地址 `PRAXIS_WEB_CORE_URL`，在 TLS 入口后启动 `npm run gateway`。受管网关按登录账号的授权生成同源入口。独立工作台可用 `PRAXIS_PUBLIC_URLS_FILE` 将已登记应用映射到 HTTPS 地址。公共 MCP 指南路径为 `/mcp/guide`，业务 MCP 需按资源另行授权。
 
 `PRAXIS_DOCUMENT_OWNER_ID` 使用所有者固定原生账号标识。`PRAXIS_LETTERS_DIR` 和 `PRAXIS_PROFILES_DIR` 指向不同的私有目录，访问需有所有者的有效管理员会话。将账号数据库、文档、令牌、快照和部署配置保存在源码检出目录外，用合成记录验收。

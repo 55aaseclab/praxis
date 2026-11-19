@@ -1,7 +1,8 @@
 import { access } from 'node:fs/promises';
 import { createPraxisServer } from '../src/server.mjs';
 
-const publicUrlsFile = process.env.PRAXIS_PUBLIC_URLS_FILE;
+const managed = process.env.PRAXIS_WEB_GATEWAY === 'true';
+const publicUrlsFile = managed ? null : process.env.PRAXIS_PUBLIC_URLS_FILE;
 if (publicUrlsFile) await access(publicUrlsFile);
 const port = Number(process.env.PORT || 14321);
 const host = process.env.HOST || '127.0.0.1';
@@ -11,7 +12,7 @@ const server = createPraxisServer({
   webGateway: {
     privateDocumentOwnerId: process.env.PRAXIS_DOCUMENT_OWNER_ID,
     privateDocumentRoots: { letters: process.env.PRAXIS_LETTERS_DIR, profiles: process.env.PRAXIS_PROFILES_DIR },
-    enabled: process.env.PRAXIS_WEB_GATEWAY === 'true',
+    enabled: managed,
     canonicalUrl: process.env.PRAXIS_CANONICAL_URL,
     coreUrl: process.env.PRAXIS_WEB_CORE_URL || 'http://127.0.0.1:4326',
     originHost: process.env.PRAXIS_ORIGIN_HOST || 'localhost',

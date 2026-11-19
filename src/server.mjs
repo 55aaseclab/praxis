@@ -92,7 +92,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       if (path.includes('\0') || path.includes('\\') || path.split('/').some(part => part.startsWith('.'))) return send(request, response, 404, 'Not found.', 'text/plain; charset=utf-8');
       if (path === '/health') return send(request, response, 200, '{"status":"ok"}', 'application/json');
       if (path === '/api/apps') {
-        const apps = await readApps(root, { publicUrlsFile: gateway ? undefined : publicUrlsFile });
+        const apps = await readApps(root, { publicUrlsFile: gateway ? null : publicUrlsFile });
         const visibleApps = gateway ? gatewayApps(apps, request.webAccess, gateway.origin) : [...await Promise.all(apps.filter(app => !app.adminOnly).map(localEntry)), ...developmentApps];
         return send(request, response, 200, JSON.stringify({ apps: visibleApps }), 'application/json; charset=utf-8');
       }
