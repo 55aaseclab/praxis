@@ -62,3 +62,13 @@ The v0.1.17 ledger records a real scoped Paseo Codex Reminder round trip with cl
 - **Knowledge and Projects (F62/M63).** A scoped client could read the authorized project and submit a snapshot to one library. The test also exercised resource discovery, rejection outside the grant, the event outbox and history. At the November 15 milestone 497 platform checks, 23 Knowledge checks and 22 Projects checks passed, alongside native and standalone browser tests.
 - **Slides (v0.1.62–64).** Independent permissions covered authoring, notes, rendering and export. Preview image sizes and hashes, PDF and editable presentations were separate assertions. Producing a PNG attachment did not establish that a model saw or reviewed the image. The native integration checks covered template protection, resource isolation, chunked assets, authenticated range requests, CAS, idempotency, job revocation and template reset.
 - **Finance and Knowledge (v0.1.65–70).** Finance used a synthetic ledger for its three native views. Knowledge proceeded from document-level isolation to targeted edits, generated contents, per-operation discovery and chapter navigation. The acceptance steps compared saved versions and earlier hashes, exercised both root and prefixed builds, and checked reader layouts at 320–1440 px and larger text sizes. The detailed per-version test counts are in the Chinese ledger.
+
+## v0.1.114 source checkpoint · 2026-11-19
+
+This checkpoint records source and synthetic checks. Production rollout and read-back remain a separate release record.
+
+- All fourteen application worktrees were clean. Each selected revision contains its app-owned `praxis-provider.mjs`; the documentation index links to those revisions. Platform packaging includes all fourteen modules, with native image copies and video-engine removal covered by the packaging checks.
+- The final integration run passed **372 platform checks**, including **13 collector checks**. Explicit `io.praxis.app` and `io.praxis.role` labels select an installed app before inspection; conventional service aliases remain supported. Unknown labels and unrelated services are excluded.
+- Synthetic provider and HTTP checks cover source-backed cards, resource/owner isolation, preference persistence and conflicts, existing-installation provider upgrades, native TingProof assignment access and runtime observation metadata. Runtime coverage is distinct from an application commit or MCP read-back. Browser checks use fictional data. These results do not establish a new physical-phone, live business-client or cloud-restore acceptance result.
+
+Anonymous checks of the final parent commit and production entry-point verification belong to the publication and deployment checkpoints.
