@@ -12,7 +12,7 @@ umask 077
 build_root=$(mktemp -d "${TMPDIR:-/tmp}/praxis-viewer-build-XXXXXXXX")
 trap 'rm -rf -- "$build_root"' EXIT
 git -C "$platform/third_party/polaris" archive --format=tar "$revision" \
-  package.json package-lock.json apps/polaris-portal packages/polaris-shell packages/surface-wanghai server.mjs |
+  package.json package-lock.json apps/polaris-portal packages/polaris-shell packages/surface-wanghai server.mjs praxis-provider.mjs |
   tar -xf - -C "$build_root"
 cp "$platform/packaging/polaris-viewer/"{Dockerfile,entrypoint.mjs,ingress.mjs} "$build_root/"
 docker build --build-arg "REVISION=$revision" --tag "praxis-polaris-viewer:$revision" "$build_root"
