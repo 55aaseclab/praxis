@@ -16,23 +16,25 @@ A Praxis account is required for the online service. Self-service account regist
 
 ### Run local Praxis
 
-Install Git, Docker Engine and Docker Compose v2.
+1. **Start Praxis.** Install Git, Docker Engine and Docker Compose v2, then run the following commands.
 
-```sh
-git clone --recurse-submodules https://github.com/55aaseclab/praxis.git
-cd praxis
-docker compose up --build -d --wait
-```
+   ```sh
+   git clone --recurse-submodules https://github.com/55aaseclab/praxis.git
+   cd praxis
+   docker compose up --build -d --wait
+   ```
 
-Compose builds and starts all 14 built-in apps with the workbench, native app services, identity and authorized business endpoints. First startup generates the owner account, service keys and persistent application stores.
+   Compose builds and starts all 14 built-in apps with the workbench, native app services, identity and authorized business endpoints. First startup generates the owner account, service keys and persistent application stores.
 
-Retrieve the initial login details from this installation:
+2. **Get your login details.** Retrieve the initial account from this installation.
 
-```sh
-docker compose exec core node scripts/builtin-install.mjs credentials
-```
+   ```sh
+   docker compose exec core node scripts/builtin-install.mjs credentials
+   ```
 
-Open [Praxis](http://127.0.0.1:4321/) and sign in. App and resource permissions apply to both browser access and agent operations. Keep the generated account details private. `docker compose down` stops the stack while preserving its data volumes. [Running Praxis](docs/RUNNING.md) · [Built-in apps](docs/BUILTINS.md) · [Managed deployment](docs/MANAGED-DEPLOYMENT.md)
+3. **Open the workbench.** Open [Praxis](http://127.0.0.1:4321/) and sign in. App and resource permissions apply to both browser access and agent operations.
+
+Keep the generated account details private. `docker compose down` stops the stack while preserving its data volumes. [Running Praxis](docs/RUNNING.md) · [Built-in apps](docs/BUILTINS.md) · [Managed deployment](docs/MANAGED-DEPLOYMENT.md)
 
 ### Connect to Praxis
 

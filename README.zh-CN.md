@@ -16,23 +16,25 @@
 
 ### 本机运行 Praxis
 
-安装 Git、Docker Engine 和 Docker Compose v2。
+1. **启动 Praxis。** 安装 Git、Docker Engine 和 Docker Compose v2，然后运行。
 
-```sh
-git clone --recurse-submodules https://github.com/55aaseclab/praxis.git
-cd praxis
-docker compose up --build -d --wait
-```
+   ```sh
+   git clone --recurse-submodules https://github.com/55aaseclab/praxis.git
+   cd praxis
+   docker compose up --build -d --wait
+   ```
 
-Compose 会构建并启动全部 14 款内置应用、工作台、各应用原生服务、身份服务及已授权业务接口。首次启动生成所有者账号、服务密钥和持久应用存储。
+   Compose 会构建并启动全部 14 款内置应用、工作台、各应用原生服务、身份服务及已授权业务接口。首次启动生成所有者账号、服务密钥和持久应用存储。
 
-读取本次安装的初始登录信息：
+2. **获取登录信息。** 读取本次安装生成的初始账号。
 
-```sh
-docker compose exec core node scripts/builtin-install.mjs credentials
-```
+   ```sh
+   docker compose exec core node scripts/builtin-install.mjs credentials
+   ```
 
-打开 [Praxis](http://127.0.0.1:4321/) 并登录。浏览器访问和智能体操作均按应用与资源授权，生成的账号信息请私有保存。`docker compose down` 停止服务并保留数据卷。[运行说明](docs/RUNNING.md) · [内置应用](docs/BUILTINS.md) · [受管部署](docs/MANAGED-DEPLOYMENT.md)
+3. **打开工作台。** 打开 [Praxis](http://127.0.0.1:4321/) 并登录。浏览器访问和智能体操作均按应用与资源授权。
+
+生成的账号信息请私有保存。`docker compose down` 停止服务并保留数据卷。[运行说明](docs/RUNNING.md) · [内置应用](docs/BUILTINS.md) · [受管部署](docs/MANAGED-DEPLOYMENT.md)
 
 ### 连接 Praxis
 
