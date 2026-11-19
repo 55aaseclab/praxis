@@ -1,0 +1,51 @@
+name: praxis-local
+
+x-runtime: &runtime
+  image: ${PRAXIS_IMAGE:-praxis-workbench:local}
+  init: true
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  praxis:
+    <<: *runtime
+    build:
+      context: .
+      target: praxis
+    ports:
+      - "127.0.0.1:${PRAXIS_PORT:-4321}:4321"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4321/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+
+  guide:
+    <<: *runtime
+    profiles: [guide]
+    pull_policy: never
+    depends_on:
+      praxis:
+        condition: service_healthy
+    command: [node, scripts/serve-public-praxis.mjs]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4181"
+      PRAXIS_WEB_GATEWAY: "true"
+      PRAXIS_CANONICAL_URL: http://127.0.0.1:${PRAXIS_GUIDE_PORT:-4181}
+    ports:
+      - "127.0.0.1:${PRAXIS_GUIDE_PORT:-4181}:4181"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4181/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 5s
+      retries: 3

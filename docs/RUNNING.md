@@ -2,15 +2,31 @@
 
 ## English
 
-From a clean checkout, use Node.js 22.16 or later and run the following commands.
+### Docker Compose
+
+Install Git, Docker Engine and Compose v2. From the root of a recursive checkout, run:
 
 ```sh
 git submodule update --init --recursive
+docker compose up --build -d --wait
+```
+
+Open <http://127.0.0.1:4321/>. The image includes Calendar and a production build of Matrix Reader. Both provide the Home control. Calendar's private agenda requires the authorized business service. The default service starts the local workbench. Service-backed apps use their installation's identity and app services. Polaris, Letters and Profiles are available through their authorized managed routes.
+
+`docker compose logs -f praxis` shows the workbench logs. `docker compose down` stops it. To select a free loopback port, set `PRAXIS_PORT`, for example `PRAXIS_PORT=24321 docker compose up --build -d --wait`.
+
+Start the optional public guide with `docker compose --profile guide up -d --wait`. Its two public tools are available at `http://127.0.0.1:4181/mcp/guide`. `PRAXIS_GUIDE_PORT` selects a different loopback port. Stop both services with `docker compose --profile guide down`. For authorized business tools, use the configured installation's HTTPS `/mcp` endpoint and sign in through the client.
+
+### Native development
+
+Use Node.js 22.16 or later for platform development:
+
+```sh
 npm ci
 npm start
 ```
 
-Open <http://127.0.0.1:4321/>. Calendar opens from the installed static files. To enable Matrix Reader, run `npm ci --prefix third_party/matrix-reader` and `npm run build --prefix third_party/matrix-reader`, then reload the workbench. The Home control in either app returns to Praxis. Calendar's private agenda requires the authorized business service. Service-backed apps appear with their access requirement. The local command starts only the workbench. Use the [built-in app guide](BUILTINS.md) to launch an isolated demo of a service-backed app. Polaris, Letters and Profiles are available through their authorized managed routes.
+For Matrix Reader in native mode, run `npm ci --prefix third_party/matrix-reader` and `npm run build --prefix third_party/matrix-reader`. Use the [built-in app guide](BUILTINS.md) to launch an isolated service-backed demo.
 
 The local workbench binds to `127.0.0.1:4321`. Open `/about/` for an overview, `/prds/` for requirements, and `/health` for a JSON status. For a local app, run its service and pass a manifest to `npm run apps:dev -- /absolute/path/to/manifest.json`. That command starts a separate loopback workbench on port 4180. [App manifest example](APP-STANDARD.md)
 
@@ -24,15 +40,31 @@ Set `PRAXIS_DOCUMENT_OWNER_ID` to the immutable native ID of the owner and set `
 
 ## 简体中文
 
-全新检出后，使用 Node.js 22.16 或更高版本，在仓库根目录依次运行：
+### Docker Compose
+
+安装 Git、Docker Engine 和 Compose v2，在递归检出的仓库根目录运行：
 
 ```sh
 git submodule update --init --recursive
+docker compose up --build -d --wait
+```
+
+打开 <http://127.0.0.1:4321/>。镜像包含日历与 Matrix 阅读器的生产构建，均可通过主页按钮返回工作台。日历的私人日程需要已授权的业务服务。默认服务启动本机工作台，依赖后端的应用使用各安装环境配置的身份和应用服务。Polaris、信件和个人材料通过受管入口验权访问。
+
+使用 `docker compose logs -f praxis` 查看日志，`docker compose down` 停止服务。可设置 `PRAXIS_PORT` 选择空闲的回环端口，例如 `PRAXIS_PORT=24321 docker compose up --build -d --wait`。
+
+运行 `docker compose --profile guide up -d --wait` 启动可选的公共指南，在 `http://127.0.0.1:4181/mcp/guide` 发现两项公共工具。需要更换回环端口时设置 `PRAXIS_GUIDE_PORT`。运行 `docker compose --profile guide down` 停止两个服务。已授权的业务工具使用配置好的安装环境中的 HTTPS `/mcp` 入口，并由客户端引导登录。
+
+### 原生开发
+
+平台开发使用 Node.js 22.16 或更高版本：
+
+```sh
 npm ci
 npm start
 ```
 
-打开 <http://127.0.0.1:4321/>。日历使用本地安装的静态文件。要启用 Matrix 阅读器，依次运行 `npm ci --prefix third_party/matrix-reader` 和 `npm run build --prefix third_party/matrix-reader`，然后刷新工作台。两个应用都可通过主页按钮返回 Praxis。日历的私人日程需由已授权的业务服务提供。依赖服务的应用会显示授权要求。本机启动命令仅运行工作台。需要试用依赖服务的应用时，请按[内置应用指南](BUILTINS.md)启动独立演示。Polaris、信件和个人材料通过受管入口验权访问。
+原生模式下的 Matrix 阅读器需要运行 `npm ci --prefix third_party/matrix-reader` 和 `npm run build --prefix third_party/matrix-reader`。需要隔离试用依赖服务的应用时，请按[内置应用指南](BUILTINS.md)启动。
 
 本机工作台默认监听 `127.0.0.1:4321`。`/about/zh-cn/` 提供中文介绍，`/prds/` 展示需求，`/health` 返回 JSON 状态。启动自己的应用后，执行 `npm run apps:dev -- /绝对路径/manifest.json`，即可在回环地址的 4180 端口打开独立工作台。[应用清单示例](APP-STANDARD.md)
 

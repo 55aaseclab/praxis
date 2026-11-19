@@ -28,6 +28,10 @@ Use one small icon in the existing bottom bar to toggle Apps / For you and remov
 
 Rename the workbench’s Manage entry to **Settings**. Place the language preference in General in both standalone and managed installations. Verify that a member can change language, return Home, reload and read a PRD in the selected language. Account and administrator sections keep their existing access rules.
 
+## Container quickstart
+
+Publish a clean default `compose.yaml` with a workbench service and an optional anonymous guide profile. Validate a fresh source build, Calendar and Matrix Reader assets, Settings/Home navigation, guide discovery and loopback-only ports. Maintain the separate private deployment descriptor and blue/green workflow for managed installations.
+
 ## Moving an existing installation
 
 Pin the built-in app sources, publish the registry and document how to start the included services. Move the local control checkout and Docker projects together, preserve the existing workspace and persistent stores, and verify the service mounts, reads and rollback point before retiring the old control path.

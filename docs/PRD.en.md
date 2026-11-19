@@ -13,6 +13,8 @@ People should be able to ask an agent for work and open the resulting document, 
 | Add a local app | An operator can supply a bilingual manifest for a loopback service, then launch that app on their own machine. |
 | Work in either language | Open **Settings → General → Language** on the workbench to choose English (default) or Simplified Chinese. The choice applies immediately and persists in this browser for the workbench and its PRD reader. Standalone users and signed-in members can change it without administrator privileges. User-authored material keeps its original language. |
 
+The public checkout supplies a default Docker Compose entry. A fresh clone starts the local workbench with Calendar and the built Matrix Reader, with an optional anonymous connection guide. Native development remains available. Managed identity, app data and services use the installation’s explicit configuration. Verify the published commands from a clean checkout using separate loopback ports and an isolated Compose project.
+
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
 
 ## Home-screen identity · v0.1.111

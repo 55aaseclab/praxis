@@ -1,38 +1,48 @@
 # <img src="public/praxis.svg" width="38" height="38" align="absmiddle" alt=""> Praxis 工作台
 
-[English](README.md) · [本机运行](#本机运行) · [试用 MCP](#试用-mcp)
+[English](README.md) · [快速开始](#快速开始) · [连接 Praxis](#连接-praxis) · [参与贡献](#参与贡献)
 
 **Praxis 是一个可自托管的平台，你可以通过自己选择的 AI 智能体使用各种应用。** 在任何兼容 MCP 的智能体运行环境中，你都可以让智能体从笔记里找出一段原文，或更新一项任务。它能访问哪些记录、执行哪些操作，都由你决定。无论是个人或家庭使用，还是为团队或组织部署，你都可以用 Praxis 的 14 款内置应用整理知识、管理项目、规划旅行、记录收支。你也可以开发自己的应用并自行托管。如果想在部署前先体验 Praxis，欢迎访问我们的[在线工作台](https://polaris.jianxiaoyitech.com/)。
 
-![左侧为 Paseo 中的智能体会话，右侧为 Praxis 工作台](docs/images/workbench-zh.png)
+![左侧为真实 Codex 会话的 Paseo 截图，右侧为使用合成示例数据的 Praxis 工作台](docs/images/workbench-zh.png)
 
-*左侧为真实 Codex 会话在 Paseo 中的截图，右侧为实际运行的 Praxis 工作台。演示资料和项目记录使用合成数据。*
 
-## 本机运行
+## 快速开始
 
-本机运行需要 Linux、Node.js 22.16 或更高版本，以及 npm。
+安装 Git、Docker Engine 和 Docker Compose v2。
 
 ```sh
 git clone --recurse-submodules https://github.com/55aaseclab/praxis.git
 cd praxis
-npm ci
-npm start
+docker compose up --build -d --wait
 ```
 
-打开[本机工作台](http://127.0.0.1:4321/)，点开「日历」，再用主页按钮返回。要用临时数据试用依赖后端的应用，可在另一个终端运行 `npm run app:demo -- finance`，打开命令输出的演示工作台地址。受管安装会按账号权限显示入口。[内置应用指南](docs/BUILTINS.md) · [接入本地应用](docs/APP-STANDARD.md#本地开发自己的应用)
+打开[工作台](http://127.0.0.1:4321/)。镜像包含日历与 Matrix 阅读器，可通过主页按钮返回工作台。需要账号和已授权业务操作的安装环境，还需配置身份与应用服务。[运行说明](docs/RUNNING.md) · [内置应用](docs/BUILTINS.md) · [受管部署](docs/MANAGED-DEPLOYMENT.md)
 
-## 试用 MCP
+运行 `docker compose down` 停止这套本机工作台。
 
-可以先体验工具发现，再配置账号。保持工作台运行，在第二个终端进入同一仓库目录并启动网关。
+## 连接 Praxis
 
-```sh
-PORT=4181 PRAXIS_WEB_GATEWAY=true PRAXIS_CANONICAL_URL=http://127.0.0.1:4181 npm run gateway
+在支持 Streamable HTTP MCP 和 OAuth 的智能体客户端中，将 Praxis 添加为远程服务。
+
+```text
+https://polaris.jianxiaoyitech.com/mcp
 ```
 
-用支持 Streamable HTTP 的 MCP 客户端连接 `http://127.0.0.1:4181/mcp/guide`，试着问 **「这条连接提供了哪些 Praxis 工具？」** 公共指南提供 `praxis_about` 和 `praxis_use_guide`，用于读取产品介绍和使用说明，均不读取业务资料。
+在浏览器中登录，选择智能体可以访问的记录及执行的操作。可在**设置 → 智能体委托**中查看或撤销授权。自托管环境配置好身份与应用服务后，使用自己的 Praxis HTTPS 地址并在末尾加上 `/mcp`。
+
+账号有 Knowledge 权限时，你可以问 **「现场笔记里说，哪些采样点还需要再去一次？」** 智能体可以检索获准文库、回读相关段落并引用出处。你可以在 Knowledge 中打开原文核对。[Knowledge 工具](skills/knowledge-mcp/SKILL.md)
 
 <details>
-<summary>用 curl 查看工具清单</summary>
+<summary>在本机体验公共连接指南</summary>
+
+在本机工作台之外，启动可选的指南服务。
+
+```sh
+docker compose --profile guide up -d --wait
+```
+
+将客户端连接到 `http://127.0.0.1:4181/mcp/guide`，也可以用 curl 查看两项公共工具。
 
 ```sh
 curl -fsS http://127.0.0.1:4181/mcp/guide \
@@ -41,14 +51,14 @@ curl -fsS http://127.0.0.1:4181/mcp/guide \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
+`praxis_about` 和 `praxis_use_guide` 返回公共说明。业务操作需要上文所述的安装配置及用户授权。运行 `docker compose --profile guide down` 停止两个服务。
+
 </details>
 
-在接入 **Knowledge** 的受管环境里，你可以问 **「现场笔记里说，哪些采样点还需要再去一次？」** 获得授权的 agent 可以检索项目文库，回读相关段落，并引用原文位置。你也可以打开出处，亲自核对答案。[Knowledge 工具](skills/knowledge-mcp/SKILL.md) · [受管运行说明](docs/RUNNING.md)
+## 参与贡献
 
-## 开发与接入
+欢迎为平台及应用作贡献。应用改动提交到所属仓库，再更新 Praxis 中的固定版本。小改动运行定向检查，集成变更运行 `npm test`。
 
-- **接入自己的应用。** 为应用提供独立入口、双语名称和清单，开发期间可用本机工作台打开。[应用标准](docs/APP-STANDARD.md)
-- **部署工作台。** 构建 Docker 镜像、配置登录，通过只读挂载向 [Letters（书信）](https://github.com/55aaseclab/letters) 和 [Profiles（个人资料）](https://github.com/55aaseclab/profiles) 提供私有文件。[运行说明](docs/RUNNING.md)
-- **参与贡献。** 运行 `npm test` 执行合成测试。产品需求和路线图说明了平台负责的工作。[产品需求](docs/PRD.md) · [路线图](docs/ROADMAP.md) · [贡献指南](CONTRIBUTING.md)
+[贡献指南](CONTRIBUTING.md) · [应用标准](docs/APP-STANDARD.md) · [产品需求](docs/PRD.md) · [路线图](docs/ROADMAP.md)
 
 [文档目录](docs/README.md) · [竞品分析](docs/COMPETITIVE-POSITIONING.md) · [标志生成方法](docs/LOGO.md#简体中文) · [Apache 2.0 许可证](LICENSE)
