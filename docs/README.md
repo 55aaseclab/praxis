@@ -6,6 +6,7 @@ Start with the [platform manual](PLATFORM.en.md) for user journeys and the [app 
 
 | Topic / 主题 | English | 简体中文 |
 | --- | --- | --- |
+| Collaboration / 协作贡献 | [Roles, PRs and acceptance](../CONTRIBUTING.md) | [角色、PR 与验收](../CONTRIBUTING.md#简体中文) |
 | Getting started / 本机运行 | [Local workbench](RUNNING.md#english) | [运行 Praxis](RUNNING.md#简体中文) |
 | Built-in apps / 内置应用 | [Isolated demos](BUILTINS.md#english) | [试用内置应用](BUILTINS.md#简体中文) |
 | Managed deployment / 受管部署 | [Compose and blue/green slots](MANAGED-DEPLOYMENT.md#english) | [服务组与蓝绿槽](MANAGED-DEPLOYMENT.md#简体中文) |

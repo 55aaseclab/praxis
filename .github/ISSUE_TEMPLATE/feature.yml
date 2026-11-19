@@ -5,12 +5,18 @@ body:
     id: task
     attributes:
       label: Who needs to do what? / 谁需要完成什么任务？
-      description: Describe the current workflow and where it breaks down. / 描述当前流程和遇到的困难。
+      description: Describe the current workflow and where it breaks down. Name the app or platform area if known. / 描述当前流程和遇到的困难，已知时注明应用或平台范围。
     validations:
       required: true
   - type: textarea
     id: example
     attributes:
       label: One example and the result you would expect / 一个例子及预期结果
+      description: Give observable acceptance conditions, including what should remain protected. / 给出可观察的验收条件，包括应保留的保护边界。
     validations:
       required: true
+  - type: textarea
+    id: related
+    attributes:
+      label: Related work / 相关工作
+      description: Optional links to requirement/guide sections or platform/app issues and PRs. / 可选，关联需求或指南章节、平台或应用议题及 PR。

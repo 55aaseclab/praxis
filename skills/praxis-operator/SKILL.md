@@ -33,6 +33,12 @@ Maintenance verification may use isolated synthetic fixtures and inspect redacte
 
 Private runtime records, exports, backups, credentials and their contents stay out of commits and fixtures. Changing schema or writing a migration implementation does not authorize running it on live business data under this maintenance role.
 
+### Repository collaboration
+
+Follow [Contributing](../../CONTRIBUTING.md) for administrator, maintainer, external contributor and agent responsibilities. Administrators and maintainers can implement, verify, commit and push directly within their assigned scope. External contributors use issues and PRs, reviewed by a maintainer or administrator. Agents follow the directing person's path and existing authorization. Before edits, identify the owning repository and release branch, relevant contract sections, acceptance criteria and check plan. Report actual evidence and explicit results. The administrator accepts sensitive contracts and controls production rollout.
+
+Submit app implementation and tests to the app repository. Publish the app change before pinning its final public release SHA in the platform; external app PRs merge first. Validate the actual native interface and platform combination. Record source publication, release readiness and deployed verification in the task delivery or PR.
+
 ### Product and code changes
 
 For each requested requirement:
@@ -41,8 +47,8 @@ For each requested requirement:
 2. Implement the required app, platform, adapter, or schema changes. Reuse working interfaces; extend or replace them when necessary to achieve the task. Do not rewrite unrelated systems just because replacement is possible.
 3. For a versioned platform change, synchronize the root package, lockfile, PRD and roadmap in both languages. Keep the historical release rows and use the same version for the implementation, tests and deployment. Independent apps follow their own version policy.
 4. Select checks by the changed behavior. Open changed PRDs through the workbench reader. For navigation, run `node --test tests/system-navigation.test.mjs tests/app-launcher.test.mjs` and exercise the changed flow. Run `npm test` for integration changes. Finish source and browser checks before building affected images. A documentation-only correction does not need an application rebuild.
-5. Commit that verified requirement locally. Stage only its files. In a submodule, commit the child first, then the parent gitlink and associated integration changes. Preserve unrelated working changes. Publish within the user’s authorization.
-6. For a local self-hosted installation, deploy verified runtime or behavior changes and check the running entry point before reporting completion. For a SaaS service, deploy according to release needs and the target environment’s release policy. Rebuild only affected services. Documentation or source changes that leave running behavior intact can be delivered without a service rebuild. Report the commit, validation and deployment outcome.
+5. Commit the verified requirement, staging only its files. In a submodule, publish the child first, then the parent gitlink and associated integration changes. Preserve unrelated working changes. Administrators and maintainers can push directly within existing authorization. External contributions use the issue and PR process.
+6. For a task targeting a local self-hosted installation, deploy verified runtime or behavior changes in the assigned environment and check the running entry point before reporting completion. For a SaaS service, deploy according to release needs and the target environment’s release policy. Rebuild only affected services. Documentation or source changes that leave running behavior intact can be delivered without a service rebuild. For source PRs, record local/staging evidence and a separately assigned production rollout where required. Report the commit, validation, review and deployment outcome.
 
 Do not let optional advisory agents or unrelated checks block a small completed change. Once its acceptance checks pass, proceed to delivery; stop adding polish or reopening settled choices. Missing evidence must be stated precisely, not addressed by automatically launching every available suite.
 
