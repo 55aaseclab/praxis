@@ -13,7 +13,7 @@ export PRAXIS_POLARIS_VIEWER_REVISION=$(git rev-parse HEAD:third_party/polaris)
 docker compose -f compose.polaris-viewer.yaml up -d --wait
 ```
 
-The image contains the read-only server and built browser assets. Compose uses an internal network, an unprivileged account, a read-only root filesystem, and an empty capability set. The base service has zero host mounts. The GET/HEAD API reads observation projections. HTTP mutations receive 405.
+The image contains the read-only server and built browser assets. The viewer joins only an internal network. A separate ingress container forwards to the fixed viewer address and publishes the loopback port. Both containers use non-root accounts, read-only root filesystems, and empty capability sets. The base configuration has zero host mounts. The GET/HEAD API reads observation projections. HTTP mutations receive 405.
 
 ### Display authorized academic observations
 
@@ -48,7 +48,7 @@ export PRAXIS_POLARIS_VIEWER_REVISION=$(git rev-parse HEAD:third_party/polaris)
 docker compose -f compose.polaris-viewer.yaml up -d --wait
 ```
 
-镜像携带只读服务和编译后的浏览器资源。Compose 使用内部网络、非特权账号、只读根文件系统和空的 Linux 能力集。基础服务没有宿主机挂载。GET/HEAD 接口读取观察数据，写请求返回 405。
+镜像携带只读服务和编译后的浏览器资源。查看器只加入内部网络。单独的入口容器向固定查看器地址转发流量，并发布回环端口。两个容器都使用非 root 账号、只读根文件系统和空的 Linux 能力集。基础配置没有宿主机挂载。GET/HEAD 接口读取观察数据，写请求返回 405。
 
 ### 展示已授权的学术观察数据
 

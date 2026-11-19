@@ -15,10 +15,10 @@ ARG REVISION
 LABEL org.opencontainers.image.revision=$REVISION
 WORKDIR /viewer
 COPY --from=build /src/apps/polaris-portal/dist/ ./apps/polaris-portal/dist/
-COPY --chmod=0444 server.mjs entrypoint.mjs ./
+COPY --chmod=0444 server.mjs entrypoint.mjs ingress.mjs ./
 # A fixed regular-file target makes the runtime reject a directory bind here.
 RUN mkdir -p /run/praxis && touch /run/praxis/observations.json && chmod 000 /run/praxis/observations.json
 ENV NODE_ENV=production
 USER node
 EXPOSE 18787
-ENTRYPOINT ["node", "entrypoint.mjs"]
+ENTRYPOINT ["node", "--permission", "--allow-fs-read=/viewer", "--allow-fs-read=/run/praxis/observations.json", "entrypoint.mjs"]

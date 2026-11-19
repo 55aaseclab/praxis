@@ -1,21 +1,36 @@
 name: praxis-polaris-viewer
+x-runtime: &runtime
+  image: praxis-polaris-viewer:${PRAXIS_POLARIS_VIEWER_REVISION:?set the pinned viewer commit}
+  pull_policy: never
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 96
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18787/api/workspace',{method:'HEAD'}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+    interval: 30s
+    timeout: 5s
+    start_period: 5s
+  restart: unless-stopped
 services:
   viewer:
-    image: praxis-polaris-viewer:${PRAXIS_POLARIS_VIEWER_REVISION:?set the pinned viewer commit}
-    pull_policy: never
+    <<: *runtime
+    networks: [viewer]
+  ingress:
+    <<: *runtime
+    entrypoint: ["node", "--permission", "--allow-fs-read=/viewer/ingress.mjs", "ingress.mjs"]
+    depends_on:
+      viewer:
+        condition: service_healthy
     ports:
       - "127.0.0.1:18787:18787"
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    pids_limit: 96
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18787/api/workspace',{method:'HEAD'}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      start_period: 5s
-    networks: [viewer]
-    restart: unless-stopped
+    networks:
+      edge:
+        gw_priority: 1
+      viewer: {}
 networks:
   viewer:
     internal: true
+  edge:
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
