@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md) · [Quickstart](#quickstart) · [Try MCP](#try-mcp)
 
-**Praxis is a self-hosted workbench for you and the AI agents you choose.** Run it on your own, share it with your family, or use it across a team or organization. Its 14 built-in apps cover notes and knowledge, tasks and projects, travel, calendars, communication and more. Open an app yourself or grant an external agent access to specific records and actions. You can also build your own apps and run them alongside the built-ins.
+**Praxis is a self-hosted platform where the AI agent you choose is your interface to your apps.** With any MCP-compatible agent harness, you can ask your agent to find a passage in your notes or update a task. You decide which records it can access and what it can do. Whether you run Praxis for yourself, your family, a team, or an organization, you can use its 14 built-in apps for knowledge, projects, travel, finance, and more. You can also build your own apps and host them yourself. To try Praxis before setting up your own instance, visit our [hosted workbench](https://polaris.jianxiaoyitech.com/).
 
 ![Praxis workbench showing a field-notes reminder due today, six apps and three sample projects](docs/images/workbench-en.png)
 
