@@ -27,7 +27,7 @@ Start with the [platform manual](PLATFORM.en.md) for user journeys and the [app 
 | Verification / 验收 | [Current procedures](VERIFICATION.en.md) | [验收方案及历史台账](VERIFICATION.md) |
 | UI/UX audit / 交互审计 | [19 November 2026](UI-UX-AUDIT-2026-11-19.en.md) | [2026-11-19](UI-UX-AUDIT-2026-11-19.md) |
 | New apps / 新应用 | [App standard](APP-STANDARD.md#english) | [应用标准](APP-STANDARD.md#简体中文) |
-| Paseo | [Workbench panel](PASEO.md#paseo-on-the-workbench) | [工作台侧栏](PASEO.md#工作台中的-paseo) |
+| Paseo | [External client](PASEO.md#external-paseo-client) | [独立客户端](PASEO.md#独立-paseo-客户端) |
 | Source release / 源码发布 | [Repositories and publication](REPOSITORIES.md#english) | [仓库与发布](REPOSITORIES.md#简体中文) |
 
 Use the current running and managed deployment guides for commands on a new installation. The requirements, deployment and verification ledgers record decisions, commands and evidence in the context of their original release. Their English editions describe current contracts and checks. The roadmap includes English release notes. Some independent apps publish an English requirements brief alongside their detailed Chinese history. User-authored documents and external works retain their original language.

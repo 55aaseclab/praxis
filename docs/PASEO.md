@@ -1,33 +1,19 @@
-# Paseo on the workbench
+# External Paseo client
 
-Signed-in users can open **Paseo** from the workbench toolbar. The desktop
-panel loads the official client on its own origin. Paste a pairing offer from
-your authorized host in Paseo to connect. For business work, pair the isolated
-business host assigned to you. The platform supplies no host keys, passwords,
-session history or daemon proxy to the panel.
+Use Paseo through its own client interface and pair the host authorized for your role. For business work, use the isolated business host assigned to you and its scoped MCP connection. The app checks the user’s permissions, delegation scope and resource access for each operation. The workbench displays the resulting app records through their native interfaces. [Agent authorization](BUSINESS-AUTH.en.md) · [Paseo connection options](https://paseo.sh/docs/connectivity)
 
-The embedded client uses temporary browser storage for this workbench
-document. Closing it removes the frame. Signing out removes the panel.
-To use a persistent Paseo browser session, select **Open in new tab**. Narrow
-screens and browsers without the necessary frame isolation open the web
-client in a new tab. The panel denies access to the browser's local network
-and loopback addresses. Pair a remote host through its existing relay.
+Deploy and authorize each Paseo host independently. Keep its daemon state, credentials, session history and projects in that host’s private storage. The Polaris observation viewer reads a private, workspace-scoped observation file. [Polaris viewer](POLARIS-VIEWER.md) · [External-client verification](VERIFICATION.en.md)
 
-The workbench module ships with the Praxis web slot. Deploy and authorize the
-Paseo host separately. Keep its daemon state and projects in that host’s
-private storage. The Polaris observation viewer reads a private observation
-file. [Paseo connection options](https://paseo.sh/docs/connectivity) · [Polaris viewer](POLARIS-VIEWER.md)
+## Workbench integration history
 
-# 工作台中的 Paseo
+The optional Paseo toolbar entry and panel were retired on 2026-11-19. Earlier releases loaded the official client from its own origin in an isolated desktop frame, using temporary browser storage. Closing the panel or signing out removed the frame. A new-tab link provided persistent browser storage and supported narrow screens and browsers without the required frame isolation. The frame denied local-network and loopback access; users paired their authorized remote host through its relay. This record describes the former integration.
 
-登录后可从工作台工具栏打开 **Paseo**。桌面侧栏从 Paseo 官方来源加载客户端。
-在 Paseo 中粘贴获准主机的配对链接即可连接。处理业务时请使用分配给你的
-隔离业务主机。工作台向侧栏提供网页入口；主机密钥、密码、会话历史和 daemon
-连接由 Paseo 管理。
+# 独立 Paseo 客户端
 
-嵌入页使用当前工作台页面的临时浏览器存储。关闭侧栏会移除嵌入页，退出工作台
-会移除侧栏。需要持久会话时点击「在新标签页打开」。窄屏或缺少嵌入隔离能力的
-浏览器直接以新标签页打开网页客户端。侧栏禁止访问浏览器所在的本地网络和回环
-地址，远程主机可使用已有的 relay 配对。
+通过 Paseo 自己的客户端配对与你的角色相符、已获授权的主机。业务使用请选择分配给你的隔离业务主机，通过限定范围的 MCP 连接操作。应用会在每次操作时检查用户权限、委托范围和资源权限，工作台则通过各应用的原生界面展示结果。[智能体授权](BUSINESS-AUTH.md) · [Paseo 连接说明](https://paseo.sh/docs/connectivity)
 
-此入口随 Praxis 网页槽发布。Paseo 主机独立部署与授权，daemon 状态及项目保存在该主机的私有存储。Polaris 观察查看器读取独立的私有观察文件。[Paseo 连接说明](https://paseo.sh/docs/connectivity) · [Polaris 查看器](POLARIS-VIEWER.md)
+各个 Paseo 主机独立部署和授权，其 daemon 状态、凭据、会话历史及项目保存在对应主机的私有存储。Polaris 观察查看器读取限定工作区的私有观察文件。[Polaris 查看器](POLARIS-VIEWER.md) · [外部客户端验收](VERIFICATION.md)
+
+## 工作台集成历史
+
+可选的 Paseo 工具栏入口与面板已于 2026-11-19 移除。早期版本在隔离的桌面框架中从官方来源加载客户端，使用临时浏览器存储。关闭面板或退出工作台时会移除框架。新标签页链接支持持久浏览器存储，也用于窄屏及缺少所需框架隔离能力的浏览器。框架拒绝本地网络及回环访问，用户通过 relay 配对已获授权的远程主机。本段保留当时的集成记录。

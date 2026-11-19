@@ -10,7 +10,7 @@ The [developer and operator documentation index](README.md) lists paired procedu
 
 | Surface | Evidence and limits |
 | --- | --- |
-| Workbench, sign-in, authorization, admin and shared navigation | Browser checks covered English and Chinese sign-in, deep-link retention, the app list, account controls, attention cards, the managed Home link and mobile navigation. Tests cover consent scopes, expiry and retry. The selected language also applies to the workbench’s own Paseo controls. The embedded Paseo client has a separate release and language policy. |
+| Workbench, sign-in, authorization, admin and shared navigation | Browser checks covered English and Chinese sign-in, deep-link retention, the app list, account controls, attention cards, the managed Home link and mobile navigation. Tests cover consent scopes, expiry and retry. The earlier embedded Paseo client had its own release and language policy. Its workbench entry and panel were retired on 2026-11-19. |
 | MCP guidance and skills | Official SDK tests read the scoped skill resources, verified each registered operation in both language editions, and checked resource denial after revocation. The two public guidance tools support English by default and Chinese through `Accept-Language`. [Platform reference](PLATFORM.en.md) |
 | Calendar | The app owns English/Chinese controls for dates and events. A synthetic browser journey covered export and returning to the workbench. Event titles stay as entered. [Calendar](../third_party/calendar/PRD.md) |
 | Matrix Reader | Typed messages cover setup, reader views, keyboard/accessibility labels, counts, dates and recovery states. Browser checks covered switching, refresh, the setup screen and the managed Home link at mobile width. Historical message availability depends on Matrix devices and keys. [Reader](../third_party/matrix-reader/PRD.md) |
@@ -34,7 +34,7 @@ The [developer and operator documentation index](README.md) lists paired procedu
 
 | 界面 | 验证和边界 |
 | --- | --- |
-| 工作台、登录、授权、管理、公共导航 | 浏览器验证了中英文登录、深链接保留、应用列表、账号控件、事务卡片、受管小房子与移动导航，测试覆盖授权范围、过期及重试。工作台拥有的 Paseo 控件跟随语言，嵌入的 Paseo 客户端有自己的发布及语言策略。 |
+| 工作台、登录、授权、管理、公共导航 | 浏览器验证了中英文登录、深链接保留、应用列表、账号控件、事务卡片、受管小房子与移动导航，测试覆盖授权范围、过期及重试。此前嵌入的 Paseo 客户端有自己的发布及语言策略，其工作台入口与面板已于 2026-11-19 移除。 |
 | MCP 指南与技能 | 官方 SDK 测试读取受限技能资源，逐工具核验英中文档，检查撤销后拒绝访问。两个公共指南工具默认返回英语，可通过 `Accept-Language` 选择中文。[平台手册](PLATFORM.md) |
 | 日历 | 日期与日程控件有中英文。合成浏览器验证了导出和返回工作台。日程标题保留录入内容。[日历](../third_party/calendar/PRD.md) |
 | Matrix Reader | 类型化词条覆盖首次设置、阅读、键盘与无障碍标签、计数、日期及恢复提示。浏览器验证了切换、刷新、移动宽度的设置页面与返回工作台。历史消息可读性仍取决于 Matrix 设备及密钥。[阅读器](../third_party/matrix-reader/PRD.md) |

@@ -9,6 +9,11 @@
 | Additional app integrations | Each app can be distributed after its public source, license, synthetic fixtures, data contract and pinned revision are verified. |
 | Managed deployment | Operators provide their own identity, storage, routing and app services. Each installation verifies access, revocation, return navigation and recovery against its own configuration. |
 
+### v0.1.110 · Remove the workbench Paseo portal
+
+Remove the toolbar entry, embedded panel and their assets. Verify that the workbench makes no Paseo client request and that view switching, top alignment, Settings and Home navigation still work on desktop and phone. Deploy the verified result and read back the live workbench.
+
+
 ### v0.1.109 · Bottom-bar view selection
 
 Use one small icon in the existing bottom bar to toggle Apps / For you and remove the top-left selector and task preview from Apps. Align both views to the top, including sparse and empty content. Verify icon state, keyboard focus, card retention, empty/error states, language changes and loss of access on desktop and phone. Deploy and read back the verified change in the self-hosted installation.
