@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { AppProviderRegistry } from './business/app-providers.mjs';
 import { createServer } from 'node:http';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { resolve, relative, sep, extname } from 'node:path';
@@ -27,6 +29,7 @@ function send(request, response, status, body, type = 'text/html; charset=utf-8'
 }
 
 export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(root, 'public'), publicUrlsFile, businessUrl = process.env.PRAXIS_BUSINESS_URL, observationsFile = process.env.PRAXIS_OBSERVATIONS_FILE, observationsOrigin = process.env.PRAXIS_OBSERVATIONS_ORIGIN, consoleUpstream = process.env.PRAXIS_CONSOLE_UPSTREAM, consoleHost = process.env.PRAXIS_CONSOLE_HOST, consoleOrigin = process.env.PRAXIS_CONSOLE_ORIGIN, webGateway, canonicalUrl, demoApp, developmentApps = [] } = {}) {
+  const appProviders = new AppProviderRegistry({ root });
   const privateApps = Object.fromEntries(['letters', 'profiles'].map(id => {
     const serve = createManagedStaticHandler(resolve(root, 'third_party', id, 'public'), ['/app.css', '/app.js']);
     const documents = createPrivateDocumentHandler(webGateway?.privateDocumentRoots?.[id]);
@@ -35,11 +38,22 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       : serve(request, response, pathname, navigation, reauthorize)];
   }));
   const localStatic = {
-    calendar: { directory: resolve(root, 'third_party/calendar/public'), assets: ['/calendar.js', '/calendar.css'] },
+    calendar: { directory: resolve(root, 'third_party/calendar/public'), assets: ['/calendar.js', '/calendar.css', '/calendar-events.js'] },
     'matrix-reader': { directory: resolve(root, 'third_party/matrix-reader/dist'), assets: [] },
   };
   const staticReaders = Object.fromEntries(Object.entries(localStatic).map(([id, app]) =>
-    [id, createManagedStaticHandler(app.directory, app.assets)]));
+    [id, async (request,response,pathname,navigation,reauthorize) => {
+      if(id==='calendar'&&pathname==='/api/agenda'&&webGateway?.enabled){
+        if(!['GET','HEAD'].includes(request.method))return send(request,response,405,'Method not allowed.','text/plain',{Allow:'GET, HEAD'});
+        await reauthorize();
+        const upstream=new URL('/api/business/workbench/agenda',webGateway.coreUrl||'http://127.0.0.1:4326');
+        const reply=await fetch(upstream,{method:'GET',headers:{host:new URL(webGateway.canonicalUrl).host,cookie:request.headers.cookie||'',Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(7000)});
+        const bytes=await reply.arrayBuffer();if(bytes.byteLength>2*1024*1024)throw new Error('Calendar source too large.');
+        await reauthorize();
+        return send(request,response,reply.status,Buffer.from(bytes),'application/json; charset=utf-8',{Vary:'Cookie'});
+      }
+      return createManagedStaticHandler(app.directory,app.assets)(request,response,pathname,navigation,reauthorize);
+    }]));
   async function localEntry(app) {
     if (!app.builtin || app.url) return app;
     if (!app.adminOnly && demoApp?.id === app.id) {
@@ -91,6 +105,21 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       }
       if (path.includes('\0') || path.includes('\\') || path.split('/').some(part => part.startsWith('.'))) return send(request, response, 404, 'Not found.', 'text/plain; charset=utf-8');
       if (path === '/health') return send(request, response, 200, '{"status":"ok"}', 'application/json');
+      if (path === '/api/workbench/providers' || /^\/app-providers\/[a-z][a-z0-9-]*\.mjs$/.test(path)) {
+        if(!['GET','HEAD'].includes(request.method))return send(request,response,405,'Method not allowed.','text/plain',{Allow:'GET, HEAD'});
+        const available=(await appProviders.providers()).filter(value=>!value.error&&value.descriptor.cards.supported&&value.descriptor.cards.execution==='browser'&&(gateway?request.webAccess?.apps.includes(value.app.id):!value.app.adminOnly));
+        if(path==='/api/workbench/providers'){
+          const providers=await Promise.all(available.map(async value=>{
+            const bytes=await readFile(resolve(root,value.app.source,'praxis-provider.mjs'));
+            const version=createHash('sha256').update(bytes).digest('hex').slice(0,20);
+            return{appId:value.app.id,moduleUrl:`/app-providers/${value.app.id}.mjs?v=${version}`,dataExecution:'server'};
+          }));
+          return send(request,response,200,JSON.stringify({schemaVersion:1,providers}),'application/json; charset=utf-8',{Vary:'Cookie'});
+        }
+        const appId=path.slice('/app-providers/'.length,-4),provider=available.find(value=>value.app.id===appId);
+        if(!provider)return send(request,response,404,'Not found.','text/plain');
+        return send(request,response,200,await readFile(resolve(root,provider.app.source,'praxis-provider.mjs')),'application/javascript; charset=utf-8',{Vary:'Cookie'});
+      }
       if (path === '/api/apps') {
         const apps = await readApps(root, { publicUrlsFile: gateway ? null : publicUrlsFile });
         const visibleApps = gateway ? gatewayApps(apps, request.webAccess, gateway.origin) : [...await Promise.all(apps.filter(app => !app.adminOnly).map(localEntry)), ...developmentApps];

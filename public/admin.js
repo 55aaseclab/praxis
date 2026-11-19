@@ -7,7 +7,7 @@ const titles = { general: t('General', '通用'), overview: t("Overview", "状�
 const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入内容。"), READ_TIMEOUT: t("Read timed out. Try again.", "读取超时，请重试。"), WRITE_TIMEOUT: t("Request timed out. Refresh to check whether it was saved.", "请求超时，尚未确认是否保存。请先刷新核对结果。"), INVALID_REQUEST: t("Check the form fields.", "请检查输入内容。"), NOT_FOUND: t("This record no longer exists. Refresh to continue.", "这条记录已不存在，请刷新。"), CONFLICT: t("Account already exists or its state changed. Check and try again.", "账号已存在或状态已变化，请检查后重试。"), LAST_ADMIN_REQUIRED: t("Keep at least one active platform administrator.", "至少需要保留一名启用的平台管理员。"), POLICY_BUSY: t("Authorization is being updated. Try again shortly.", "授权正在更新，请稍后重试。"), CSRF_REJECTED: t("Session changed. Sign in again.", "登录状态已变化，请重新登录。"), UNAVAILABLE: t("Service unavailable. Try again later.", "服务暂时不可用，请稍后重试。"), DATA_INVENTORY_UNAVAILABLE: t("Could not load data locations. Refresh to retry.", "暂时无法读取数据位置，请稍后刷新。"), ADMIN_DEFAULT_ACCESS: t("Platform administrators have access to all app entries.", "平台管理员默认拥有全部入口，无需单独授权。") };
 const content = document.querySelector('#content'), notice = document.querySelector('#notice');
 let session = null, users = [], nextCursor = null, selectedId = null, view = null, epoch = 0, ended = false, writing = false, createOpen = false;
-let expiryTimer, accessTimer, overview, overviewLoading, mcpView, mcpLoading, dataView, dataLoading, booting = false, bootRevision = 0, usersLoaded = false;
+let expiryTimer, accessTimer, overview, overviewLoading, mcpView, mcpLoading, dataView, dataLoading, dataController, booting = false, bootRevision = 0, usersLoaded = false;
 const controllers = new Set();
 const selected = () => users.find(user => user.id === selectedId);
 function loadOverviewAsset(path, kind) {
@@ -78,7 +78,7 @@ function terminal(status, text) {
   if (ended) return;
   ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; nextCursor = null; selectedId = null;
   for (const controller of controllers) controller.abort();
-  overview?.clear(); document.querySelector('#overview-controls').hidden = true;
+  overview?.clear(); dataController?.destroy(); dataController = null; document.querySelector('#overview-controls').hidden = true;
   document.querySelector('#general-view').hidden = true;
   content.replaceChildren(); content.setAttribute('aria-busy', 'false');
   document.querySelector('#account-name').textContent = '';
@@ -264,7 +264,7 @@ function renderGrants(user, value, own = false) {
 async function render() {
   if (ended || !session) return;
   if (!session.platformAdmin && !['general', 'access', 'grants'].includes(view)) view = 'general';
-  overview?.clear();
+  overview?.clear(); dataController?.destroy(); dataController = null;
   document.querySelector('#overview-controls').hidden = view !== 'overview' || ended;
   document.querySelector('#refresh').hidden = view === 'overview' || view === 'general';
   document.querySelector('#general-view').hidden = view !== 'general';
@@ -292,7 +292,7 @@ async function render() {
     try {
       const [module, value] = await Promise.all([ensureData(), api('/api/business/console/data')]);
       if (ended || current !== epoch || !session?.platformAdmin || view !== 'data') return;
-      module?.renderDataManagement(content, value);
+      dataController = module?.mountDataManagement(content, { initial: value, load: () => api('/api/business/console/data'), getIdentity: () => !ended && session?.platformAdmin && view === 'data' ? { userId: session.user.id, username: session.user.username } : null });
     } catch (error) { if (current === epoch && !ended) { content.querySelector('.loading')?.remove(); report(error); } }
     finally { if (current === epoch) content.setAttribute('aria-busy', 'false'); }
     return;

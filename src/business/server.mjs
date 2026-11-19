@@ -18,8 +18,14 @@ import { createMcpManagementHandler } from './mcp-management.mjs';
 import { PUBLIC_GUIDANCE_MCP_PATH, PUBLIC_GUIDANCE_TOOLS } from '../public-mcp-registry.mjs';
 import { createSlidesWebHandler } from './slides-web.mjs';
 import { createSlidesJobAuthorizationHandler } from './slides-job-authorization.mjs';
+import { AppProviderRegistry } from './app-providers.mjs';
+import { AppCards } from './app-cards.mjs';
+import { CardPreferences } from './card-preferences.mjs';
+import { createDataSourceResolver, readProviderRuntime } from './provider-data.mjs';
+import { readDataInventory } from './data-inventory.mjs';
+import { createRuntimeTraceReader } from './runtime-traces.mjs';
 
-const ADMIN_ASSETS = Object.freeze({ '/admin.js': ['admin.js', 'application/javascript'], '/admin.css': ['admin.css', 'text/css'], '/admin-mcp.js': ['admin-mcp.js', 'application/javascript'], '/admin-data.js': ['admin-data.js', 'application/javascript'], '/admin-mcp.css': ['admin-mcp.css', 'text/css'], '/platform.js': ['platform.js', 'application/javascript'], '/platform.css': ['platform.css', 'text/css'], '/platform-charts.js': ['platform-charts.js', 'application/javascript'], '/vendor/chartjs-4.6.1.umd.min.js': [new URL('../../node_modules/chart.js/dist/chart.umd.min.js', import.meta.url), 'application/javascript'] });
+const ADMIN_ASSETS = Object.freeze({ '/app-providers.js': ['app-providers.js', 'application/javascript'], '/admin.js': ['admin.js', 'application/javascript'], '/admin.css': ['admin.css', 'text/css'], '/admin-mcp.js': ['admin-mcp.js', 'application/javascript'], '/admin-data.js': ['admin-data.js', 'application/javascript'], '/admin-mcp.css': ['admin-mcp.css', 'text/css'], '/platform.js': ['platform.js', 'application/javascript'], '/platform.css': ['platform.css', 'text/css'], '/platform-charts.js': ['platform-charts.js', 'application/javascript'], '/vendor/chartjs-4.6.1.umd.min.js': [new URL('../../node_modules/chart.js/dist/chart.umd.min.js', import.meta.url), 'application/javascript'] });
 const APP_PAGES = Object.freeze({ '/business/reminder/': 'reminder.html', '/business/tingproof/': 'tingproof.html' });
 const APP_ASSETS = Object.freeze({ '/i18n.js': ['i18n.js', 'application/javascript'], '/reminder.js': ['reminder.js', 'application/javascript'], '/tingproof.js': ['tingproof.js', 'application/javascript'], '/tingproof.css': ['tingproof.css', 'text/css'], '/app-transport.js': ['app-transport.js', 'application/javascript'], '/reminder-view.js': ['reminder-view.js', 'application/javascript'], '/reminder-view-model.js': ['reminder-view-model.js', 'application/javascript'], '/reminder-view.css': ['reminder-view.css', 'text/css'] });
 
@@ -35,8 +41,25 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
   const gate = new PolicyGate();
   const observations = new ObservationStore({ file: config.observationsFile });
   const bridge = new BusinessBridge({ auth, events, apps: config.apps, fetchImpl, gate, observeAdapter: value => recordObservation(observations, { event_name: 'adapter_request', route_id: 'business_invoke', method: 'POST', source: value.system ? 'system' : 'http', ...classifyCapability(value.appId, value.operation), ...classifyOutcome(value.status, value.code), duration_ms: value.durationMs }) });
+  const providers = new AppProviderRegistry({ root: config.providerRoot });
+  const appCards = new AppCards({ auth, bridge, config, registry: providers, fetchImpl });
+  const cardPreferences = new CardPreferences({ db: auth.db });
+  const appInventory = async file => {
+    let bindings; try { bindings = await readDataInventory(file); } catch { bindings = { apps: [] }; }
+    const runtime = await readProviderRuntime(config.appProviderRuntimeFile);
+    const appProviders = { ...(config.appProviders || {}) };
+    for (const value of runtime?.apps || []) {
+      const previous = appProviders[value.appId] || {}, saved = previous.runtime;
+      const merged = saved?.bindingSource === 'installation-layout'
+        ? { ...value, ...saved, bindings: value.bindings, mounts: value.mounts, observedAt: runtime.generatedAt,
+            environment: { ...(value.environment || {}), ...(saved.environment || {}) }, pathMaps: { ...(value.pathMaps || {}), ...(saved.pathMaps || {}) } }
+        : { ...saved, ...value, pathMaps: { ...(saved?.pathMaps || {}), ...(value.pathMaps || {}) } };
+      appProviders[value.appId] = { ...previous, runtime: merged };
+    }
+    return providers.inventory({ bindings, workspaceRoot: bindings.workspaceRoot, resolveDataSource: createDataSourceResolver({ config: { ...config, appProviders }, root: providers.root }) });
+  };
   const handleAuth = createAuthHandler({ store: auth, issuer: config.issuer, webGateway: config.webGateway, apps: config.apps });
-  const handleConsole = createConsoleHandler({ auth, config, events, observations, fetchImpl: consoleFetchImpl });
+  const handleConsole = createConsoleHandler({ auth, config, events, observations, fetchImpl: consoleFetchImpl, readInventory: appInventory, getRuntimeTraces: createRuntimeTraceReader({ auth, config, registry: providers, fetchImpl }) });
   const handleAdmin = createAdminHandler({ auth });
   const handleSlidesWeb = createSlidesWebHandler({ auth, bridge });
   const handleSlidesJobAuthorization = createSlidesJobAuthorizationHandler({ auth, config });
@@ -50,6 +73,7 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
     collectionWork = (async () => {
       try {
         events.notePolicyVersion(auth.policyVersion); collectionErrors.delete('policy');
+        if (collectionErrors.has('card-preferences-backup')) { try { events.requestPeriodicSync(); collectionErrors.delete('card-preferences-backup'); } catch {} }
         for (const [appId, app] of Object.entries(config.apps)) for (const spaceId of app.spaces || []) {
           if (quiescing) return;
           const key = `${appId}:${spaceId}`;
@@ -113,6 +137,30 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
         if (!request.headers.authorization) throw businessError(401, 'BEARER_REQUIRED');
         return await handleMcp(request, response, { bridge, token, version, body: await readJson(request, 3 * 1024 * 1024), observations });
       }
+      if (url.pathname === '/api/business/workbench/preferences') {
+        const session = requireAccountSession(request, { auth });
+        const token = credentialFromRequest(request);
+        if (url.search) throw businessError(400, 'INVALID_REQUEST');
+        if (request.method === 'GET') return json(response, 200, cardPreferences.get(session.user.id), { Vary: 'Cookie' });
+        if (request.method !== 'POST') return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET, POST' });
+        auth.requireRequestCsrf(request);
+        const input = await readJson(request, 16 * 1024);
+        const appId = typeof input?.cardId === 'string' ? input.cardId.split(':')[0] : '';
+        const catalog = await providers.catalog();
+        const value = await gate.run(() => auth.withPolicyLease(() => {
+          const current = requireAccountSession(request, { auth });
+          auth.requireRequestCsrf(request);
+          const access = auth.getWebAccess(token);
+          if (!catalog.some(app => app.id === appId && app.id !== 'polaris') || input.state !== 'visible' && !access.apps.includes(appId)) throw businessError(403, 'FORBIDDEN');
+          try { const data = cardPreferences.set(current.user.id, input); return { status: 200, data }; }
+          catch (error) { if (error.status) return { status: error.status, data: { code: error.code, ...(error.current ? { current: error.current } : {}) } }; throw error; }
+        }));
+        if (value.status === 200) {
+          try { events.requestPeriodicSync(); collectionErrors.delete('card-preferences-backup'); }
+          catch { collectionErrors.add('card-preferences-backup'); }
+        }
+        return json(response, value.status, value.data, { Vary: 'Cookie' });
+      }
       if (['/api/business/workbench/projects', '/api/business/workbench/agenda', '/api/business/workbench/attention'].includes(url.pathname)) {
         if (request.method !== 'GET') return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET' });
         if (url.search) throw businessError(400, 'INVALID_REQUEST');
@@ -120,7 +168,7 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
         const token = credentialFromRequest(request);
         const source = url.pathname.split('/').at(-1);
         const reads = { projects: 'workbenchProjects', agenda: 'workbenchAgenda', attention: 'workbenchAttention' };
-        const data = await bridge[reads[source]](token);
+        const data = source === 'attention' ? await appCards.get(token) : await bridge[reads[source]](token);
         return json(response, 200, data, { Vary: 'Cookie' });
       }
       if (url.pathname === '/api/business/catalog' && request.method === 'GET') return json(response, 200, { spaces: bridge.catalog(credentialFromRequest(request)) });

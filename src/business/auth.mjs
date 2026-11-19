@@ -305,7 +305,7 @@ export class AuthStore {
   getWebAccess(token) {
     const session = this.getSession(token);
     if (session.clientId !== 'praxis-browser') fail('Native browser login is required.', 401, 'UNAUTHENTICATED');
-    const base = { username: session.user.username, workbench: true, expiresAt: session.expiresAt, csrfToken: session.csrfToken };
+    const base = { userId: session.user.id, username: session.user.username, workbench: true, expiresAt: session.expiresAt, csrfToken: session.csrfToken };
     if (this.isPlatformAdmin(session.user.id)) return { ...base, userId: session.user.id, apps: [...WEB_APP_IDS], prds: true, permissionsExpireAt: null, platformAdmin: true };
     const policy = this.getWebEntryPolicy(session.user.id);
     if (!policy || policy.expiresAt !== null && policy.expiresAt <= this.clock()) return { ...base, apps: [], prds: false, permissionsExpireAt: null, platformAdmin: false };
@@ -910,7 +910,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         const authorization = store.browserAuthorization(token);
         let spaces = [];
         if (authorization.authorizationMode !== 'none') { try { spaces = store.listSpaces(token); } catch (error) { if (![401, 403].includes(error.status)) throw error; } }
-        send(response, 200, { user: session.user, csrfToken: session.csrfToken, ...authorization, spaces, grants: store.listGrants(session.user.id) });
+        send(response, 200, { user: session.user, csrfToken: session.csrfToken, expiresAt: session.expiresAt, ...authorization, spaces, grants: store.listGrants(session.user.id) });
       } else if (path === '/auth/delegate' && request.method === 'GET') {
         const target = localReturn(url.searchParams.get('return_to'), webGateway?.enabled === true ? '/' : '/business/');
         let session;

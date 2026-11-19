@@ -177,17 +177,23 @@ export class BusinessBridge {
   async invoke(token, request) {
     return this.gate.run(() => this.auth.withPolicyLease(() => this.executeInvocation(token, request)));
   }
-  async executeInvocation(token, request) {
+  async invokeProjection(token, request) {
+    return this.gate.run(() => this.auth.withPolicyLease(() => this.executeInvocation(token, request, { projection: true })));
+  }
+  async executeInvocation(token, request, { projection = false } = {}) {
     const action = validateInvocation(request);
     const requestId = randomUUID();
-    let actor, scope;
+    let actor, scope, traceId;
+    const traceStep = value => { if (traceId) this.events.recordTrace(traceId, value); };
     const captureProject = request.appId === 'knowledge' && request.operation === 'capture_project';
     const authorizeSource = () => this.auth.authorize(token, captureProject ? { appId: 'projects', spaceId: request.input.sourceSpaceId, action: 'read', resourceId: request.input.projectId } : { appId: request.appId, spaceId: request.spaceId, action: 'read', resourceId: request.sourceResourceId });
     let committed = false;
     try {
       actor = this.auth.authenticate(token);
+      if (!projection && (action !== 'read' || actor.grantId) && this.events?.beginTrace) traceId = this.events.beginTrace({ requestId, appId: request.appId, spaceId: request.spaceId, resourceId: request.resourceId, operation: request.operation, action, userId: actor.userId, clientId: actor.clientId, grantId: actor.grantId, source: actor.grantId ? 'mcp' : 'web' });
       if (!this.apps[request.appId]?.spaces?.includes(request.spaceId)) throw businessError(403, 'FORBIDDEN');
       scope = this.auth.authorize(token, { appId: request.appId, spaceId: request.spaceId, action, resourceId: request.resourceId });
+      traceStep({ stage: 'authorization', status: 'allowed' });
       const slidesScopes = [];
       let actionsGranted;
       if (request.appId === 'slides') {
@@ -205,11 +211,15 @@ export class BusinessBridge {
         const source = await this.callAdapter('projects', { operation: 'read_project', spaceId: request.input.sourceSpaceId, resourceId: request.input.projectId }, sourceScope);
         if (!source.project || source.project.id !== request.input.projectId || source.revision !== request.input.projectRevision || source.project.revision !== source.revision) throw businessError(409, 'SOURCE_REVISION_CONFLICT');
         authorizeSource();
+        traceStep({ stage: 'readback', status: 'succeeded', sources: [{ appId: 'projects', spaceId: request.input.sourceSpaceId, resourceId: request.input.projectId, revision: source.revision }] });
         adapterRequest = { ...request, input: { ...request.input, snapshot: source.project } };
       }
+      traceStep({ stage: 'dispatch', status: 'started' });
       const result = await this.callAdapter(request.appId, adapterRequest, sourceScope ? { ...scope, expiresAt: Math.min(scope.expiresAt, sourceScope.expiresAt) } : scope, { requestId, sourceReadGranted: request.operation === 'record' || captureProject, actionsGranted });
       committed = action !== 'read';
-      this.events?.audit({ requestId, userId: scope.userId, clientId: scope.clientId, grantId: scope.grantId, appId: request.appId, spaceId: request.spaceId, resourceId: request.resourceId, action, decision: 'allow' });
+      const traceRevision = result.revision ?? result.item?.revision ?? result.project?.revision;
+      traceStep({ stage: committed ? 'commit' : 'readback', status: 'succeeded', ...(committed ? { committed: true } : {}), ...(typeof traceRevision === 'string' || typeof traceRevision === 'number' ? { revision: String(traceRevision) } : {}) });
+      if (!projection) this.events?.audit({ requestId, userId: scope.userId, clientId: scope.clientId, grantId: scope.grantId, appId: request.appId, spaceId: request.spaceId, resourceId: request.resourceId, action, decision: 'allow' });
       // Application outboxes recover a committed change even if collection fails.
       if (action !== 'read') await this.harvest(request.appId, request.spaceId, request.appId === 'travel' ? request.resourceId : undefined).catch(() => {});
       try { this.auth.authorize(token, { appId: request.appId, spaceId: request.spaceId, action, resourceId: request.resourceId }); }
@@ -227,13 +237,22 @@ export class BusinessBridge {
             actions.set(hintAction, new Set(hintScope.resources));
           } catch (error) { if (error.status !== 403 || error.code !== 'FORBIDDEN') throw error; }
         }
+        if (traceId) this.events.endTrace(traceId, { status: 'succeeded' });
         return { ...result, items: result.items.map(entry => ({ ...entry, allowedActions: ['read', ...['update', 'complete'].filter(hintAction => {
           if (typeof entry.resourceId !== 'string' || hintAction === 'complete' && entry.collection === 'recurring') return false;
           const resources = actions.get(hintAction);
           return resources?.has('*') || resources?.has(entry.resourceId);
         })] })), requestId };
       }
-      return { ...result, requestId };
+      if (request.appId === 'tingproof' && request.operation === 'get_assignment') {
+        let submit = false;
+        try { this.auth.authorize(token, { appId: 'tingproof', spaceId: request.spaceId, resourceId: request.resourceId, action: 'submit' }, { auditDenied: false }); submit = true; }
+        catch (error) { if (error.status !== 403) throw error; }
+        if (traceId) this.events.endTrace(traceId, { status: 'succeeded' });
+        return { ...result, permissions: { submit }, requestId, ...(traceId ? { traceId } : {}) };
+      }
+      if (traceId) this.events.endTrace(traceId, { status: 'succeeded', ...(committed ? { committed: true } : {}) });
+      return { ...result, requestId, ...(traceId ? { traceId } : {}) };
     } catch (error) {
       if (request.appId === 'slides' && (error.fieldErrors || error.currentRevision)) {
         try {
@@ -245,8 +264,10 @@ export class BusinessBridge {
       // serialized until its signed execution window has expired.
       if (error.validUntil) await delay(Math.max(0, error.validUntil - this.clock()));
       if (committed) { error.committed = true; error.requestId = requestId; }
+      if (!projection && !traceId && this.events?.beginTrace && action !== 'read') traceId = this.events.beginTrace({ requestId, appId: request.appId, spaceId: request.spaceId, resourceId: request.resourceId, operation: request.operation, action, userId: actor?.userId, clientId: actor?.clientId, grantId: actor?.grantId, source: actor?.grantId ? 'mcp' : 'web' });
+      if (traceId) this.events.endTrace(traceId, { status: 'failed', code: /^[A-Z0-9_]{1,64}$/.test(error.code || '') ? error.code : 'REQUEST_FAILED', ...(committed ? { committed: true } : {}) });
       const identity = scope || actor;
-      this.events?.audit({ requestId, userId: identity?.userId, clientId: identity?.clientId, grantId: identity?.grantId, appId: request.appId, spaceId: request.spaceId, resourceId: request.resourceId, action, decision: 'reject', code: error.code || 'REQUEST_FAILED' });
+      if (!projection) this.events?.audit({ requestId, userId: identity?.userId, clientId: identity?.clientId, grantId: identity?.grantId, appId: request.appId, spaceId: request.spaceId, resourceId: request.resourceId, action, decision: 'reject', code: error.code || 'REQUEST_FAILED' });
       throw error;
     }
   }

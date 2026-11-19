@@ -27,8 +27,8 @@ const blockedParts = new Set(['node_modules', '@fs', '@id', '@vite', 'src', 'ser
 const portalRequestHeaders = new Set(['accept', 'accept-encoding', 'accept-language', 'content-type', 'content-length', 'origin', 'range', 'if-range', 'if-none-match', 'if-modified-since', 'last-event-id', 'idempotency-key', 'x-polaris-expected-version']);
 const sessionPattern = /^praxis_business_session=[a-zA-Z0-9_-]{16,512}$/;
 const installAssets = new Set(['/manifest.webmanifest', '/praxis-180.png', '/praxis-192.png', '/praxis-512.png']);
-const desktopPaths = new Set(['/', '/index.html', '/api/apps', '/api/observations', '/app.js', '/identity.js', '/experience.js', '/install.js', '/styles.css', '/praxis.svg', '/praxis-nav.js', '/praxis-nav.css', '/reminder-icon.svg', '/knowledge-icon.svg', '/slides-icon.svg', '/travel-icon.svg', '/tingproof-icon.svg', '/memo-icon.svg', '/projects-icon.svg', '/finance-icon.svg', '/intelligence-icon.svg', '/matrix-reader-icon.svg', '/calendar-icon.svg', '/letters-icon.svg', '/profiles-icon.svg', '/i18n.js', '/attention.js', '/attention.css', '/polaris-icon.svg']);
-const platformPaths = new Set(['/api/platform/status', '/api/platform/observations']);
+const desktopPaths = new Set(['/', '/index.html', '/api/apps', '/api/observations', '/app.js', '/identity.js', '/experience.js', '/install.js', '/styles.css', '/praxis.svg', '/praxis-nav.js', '/praxis-nav.css', '/reminder-icon.svg', '/knowledge-icon.svg', '/slides-icon.svg', '/travel-icon.svg', '/tingproof-icon.svg', '/memo-icon.svg', '/projects-icon.svg', '/finance-icon.svg', '/intelligence-icon.svg', '/matrix-reader-icon.svg', '/calendar-icon.svg', '/letters-icon.svg', '/profiles-icon.svg', '/i18n.js', '/attention.js', '/attention.css', '/app-providers.js', '/api/workbench/providers', '/polaris-icon.svg']);
+const platformPaths = new Set(['/api/platform/status', '/api/platform/observations', '/api/platform/traces']);
 
 function fail(status, code) { return Object.assign(new Error('Gateway request rejected.'), { status, code }); }
 export function gatewayPath(raw) {
@@ -83,6 +83,13 @@ function appRoute(pathname) {
 }
 export function knowledgeLegacyPath(pathname) {
   return !['/', '/index.html', '/health', '/api/config', '/workspace-assets/app.js', '/workspace-assets/styles.css'].includes(pathname) && !/^\/k\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}\/[a-z0-9][a-z0-9-]{0,79}\/(?:[a-z0-9][a-z0-9-]{0,79}\/)?$/.test(pathname);
+}
+function tingproofPublicEntry(request, route, search) {
+  if (!['GET', 'HEAD'].includes(request.method)) return false;
+  if (/^\/assets\/(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:js|mjs|css|woff2?|ttf|svg|png|jpe?g|gif|webp|ico)$/.test(route.pathname)) return true;
+  if (!['/', '/index.html'].includes(route.pathname)) return false;
+  const parameters = new URLSearchParams(search), valid = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(value);
+  return parameters.getAll('assignment').length === 1 && parameters.getAll('space').length === 1 && valid(parameters.get('assignment')) && valid(parameters.get('space')) && [...parameters.keys()].every(key => ['assignment', 'space'].includes(key));
 }
 function canOpenApp(identity, id) {
   if (personalApps.has(id)) return identity.documentOwner === true;
@@ -307,6 +314,7 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
         if (!canOpenApp(identity, route.id)) throw fail(403, 'FORBIDDEN');
         // The coding gateway serves a separate application's active content. Keep it on its isolated origin.
         if (route.id === 'polaris' && (!['GET', 'HEAD'].includes(request.method) || route.pathname === '/g' || route.pathname.startsWith('/g/'))) throw fail(404, 'NOT_FOUND');
+        if (route.id === 'polaris' && (decodeURIComponent(route.pathname) === '/api/praxis/traces' || decodeURIComponent(route.pathname).startsWith('/api/praxis/traces/'))) throw fail(404, 'NOT_FOUND');
         if (pathname === route.prefix) { response.writeHead(308, { Location: `${route.prefix}/${search}`, 'Cache-Control': 'no-store' }); response.end(); return true; }
         if (!targets[route.id]) {
           const serve = staticApps[route.id];
@@ -326,7 +334,7 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
         }
         const legacy = route.id === 'knowledge' && knowledgeLegacyPath(route.pathname);
         if (legacy) { const scope = await legacyAccess(request); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
-        const tingproofNative = requireTingproofNativeScope && route.id === 'tingproof';
+        const tingproofNative = requireTingproofNativeScope && route.id === 'tingproof' && !tingproofPublicEntry(request, route, search);
         if (tingproofNative) { const scope = await legacyAccess(request, 'tingproof', 'native-projects'); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
         const slidesNativeRender = route.id === 'lattice-slides' && request.method === 'POST' && route.pathname === '/workbench/api/render';
         if (slidesNativeRender) { const scope = await legacyAccess(request, 'slides', 'native-render'); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
@@ -357,7 +365,9 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
       if (pathname === '/polaris-icon.svg' && !canOpenApp(identity, 'polaris')) throw fail(403, 'FORBIDDEN');
       const prd = pathname === '/prds' || pathname.startsWith('/prds/');
       if (prd && !identity.prds || platformPaths.has(pathname) && !identity.canViewPlatform) throw fail(403, 'FORBIDDEN');
-      if (!prd && !desktopPaths.has(pathname) && !platformPaths.has(pathname)) throw fail(404, 'NOT_FOUND');
+      const providerModule=/^\/app-providers\/([a-z][a-z0-9-]*)\.mjs$/.exec(pathname);
+      if(providerModule&&!canOpenApp(identity,providerModule[1]))throw fail(403,'FORBIDDEN');
+      if (!prd && !desktopPaths.has(pathname) && !platformPaths.has(pathname) && !providerModule) throw fail(404, 'NOT_FOUND');
       if (/^Basic\s/i.test(request.headers.authorization || '')) delete request.headers.authorization;
       request.webAccess = identity;
       return false;

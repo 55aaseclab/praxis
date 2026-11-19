@@ -3,7 +3,7 @@ import { lstat, open, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 
 export const DATA_INVENTORY_MAX_BYTES = 128 * 1024;
-const kinds = new Set(['json', 'sqlite', 'directory', 'browser', 'docker-volume', 'source', 'cache', 'unknown']);
+const kinds = new Set(['json', 'sqlite', 'directory', 'browser', 'docker-volume', 'source', 'cache', 'unknown', 'browser-file', 'derived', 'external']);
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fields = (value, required, optional = []) => object(value) && required.every(key => Object.hasOwn(value, key)) && Object.keys(value).every(key => required.includes(key) || optional.includes(key));
 const text = (value, maximum) => typeof value === 'string' && value.length > 0 && value.length <= maximum && value === value.trim() && !/[\u0000-\u001f\u007f<>]/.test(value);
@@ -22,8 +22,8 @@ export function validateDataInventory(value) {
     if (!fields(app, ['id', 'name', 'locations']) || typeof app.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(app.id) || ids.has(app.id) || !text(app.name, 160) || !Array.isArray(app.locations) || !app.locations.length || app.locations.length > 32) fail();
     ids.add(app.id);
     for (const location of app.locations) {
-      if (!fields(location, ['label', 'kind'], ['hostPath', 'containerPath', 'volumeName', 'storageKey', 'description']) || !text(location.label, 160) || !kinds.has(location.kind)) fail();
-      for (const key of ['hostPath', 'containerPath']) if (Object.hasOwn(location, key) && !path(location[key])) fail();
+      if (!fields(location, ['label', 'kind'], ['id', 'status', 'applicationPath', 'labels', 'hostPath', 'containerPath', 'volumeName', 'storageKey', 'description']) || !text(location.label, 160) || !kinds.has(location.kind)) fail();
+      for (const key of ['hostPath', 'containerPath', 'applicationPath']) if (Object.hasOwn(location, key) && !path(location[key])) fail();
       if (Object.hasOwn(location, 'volumeName') && (typeof location.volumeName !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$/.test(location.volumeName))) fail();
       if (Object.hasOwn(location, 'storageKey') && !text(location.storageKey, 160)) fail();
       if (Object.hasOwn(location, 'description') && !text(location.description, 1000)) fail();

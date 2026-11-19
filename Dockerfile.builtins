@@ -15,6 +15,7 @@ FROM base AS reminder
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src/ ./src/
 COPY --chown=node:node public/ ./public/
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=4322 REMINDER_DATA=/data/checklist.json
 EXPOSE 4322
 CMD ["node", "src/server.js"]
@@ -29,6 +30,7 @@ COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 COPY --chown=node:node src/ ./src/
 COPY --chown=node:node scripts/ ./scripts/
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=14324 KNOWLEDGE_DATA_DIR=/data
 EXPOSE 14324
 CMD ["node", "src/runtime/server.mjs"]
@@ -37,6 +39,7 @@ FROM base AS projects
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src/ ./src/
 COPY --chown=node:node public/ ./public/
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=4327 PROJECTS_DATA_DIR=/data
 EXPOSE 4327
 CMD ["node", "src/server.mjs", "--host", "127.0.0.1", "--port", "4327"]
@@ -45,6 +48,7 @@ FROM base AS finance
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src/ ./src/
 COPY --chown=node:node public/ ./public/
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=4329 FINANCE_DATA=/data/finance.json
 EXPOSE 4329
 CMD ["node", "src/server.mjs"]
@@ -53,6 +57,7 @@ FROM base AS memo
 COPY --chown=node:node package.json index.html sw.js records-client.js ./
 COPY --chown=node:node src/ ./src/
 COPY --chown=node:node scripts/ ./scripts/
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=4325 MEMO_DATA_DIR=/data
 EXPOSE 4325
 CMD ["node", "src/main.mjs"]
@@ -61,6 +66,7 @@ FROM base AS intelligence
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src/ ./src/
 COPY --chown=node:node public/ ./public/
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=4330 INTELLIGENCE_PREVIEW=0 INTELLIGENCE_DATA_DIR=/data
 EXPOSE 4330
 CMD ["node", "src/server.mjs"]
@@ -74,6 +80,7 @@ COPY --chown=node:node data/trips.json data/routes.json data/photo-credits.json 
 COPY --chown=node:node public/index.html public/routes.json ./public/
 COPY --chown=node:node assets/vendor/material-icons/LICENSE ./assets/vendor/material-icons/
 RUN node scripts/build-trips.js
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=4323
 EXPOSE 4323
 CMD ["node", "src/server.js"]
@@ -93,6 +100,7 @@ COPY --from=tingproof-build --chown=node:node /app/node_modules/ ./node_modules/
 COPY --from=tingproof-build --chown=node:node /app/dist/ ./dist/
 COPY --from=tingproof-build --chown=node:node /app/dist-public/ ./dist-public/
 COPY --from=tingproof-build --chown=node:node /app/dist-server/ ./dist-server/
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=15173 TINGPROOF_DATA_DIR=/data
 EXPOSE 15173
 CMD ["node", "dist-server/main.js"]
@@ -108,7 +116,9 @@ COPY --chown=node:node package.json package-lock.json ./
 COPY --chown=node:node packages/runtime/package.json ./packages/runtime/
 COPY --chown=node:node packages/cli/package.json ./packages/cli/
 COPY --chown=node:node packages/cli/src/index.js ./packages/cli/src/
-RUN ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci --include=dev --no-audit --no-fund
+COPY --from=platform --chown=node:node /packaging/builtins/prune-video-engines.mjs /opt/praxis/scripts/
+RUN ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci --include=dev --no-audit --no-fund \
+    && node /opt/praxis/scripts/prune-video-engines.mjs /app
 COPY --chown=node:node packages/runtime/src/ ./packages/runtime/src/
 COPY --chown=node:node packages/runtime/themes/ ./packages/runtime/themes/
 COPY --chown=node:node packages/cli/src/ ./packages/cli/src/
@@ -131,6 +141,7 @@ RUN node /opt/praxis/scripts/build-slides-public.mjs \
     && ln -s /app/.lattice/runtime/business /app/dist-public-business \
     && ln -s dist-public-business /app/dist-business
 RUN node /opt/praxis/scripts/prune-video-engines.mjs /app
+COPY --chown=node:node praxis-provider.mjs ./
 ENV PORT=14666 HOME=/data/slides/home XDG_CACHE_HOME=/data/slides/cache LATTICE_CHROMIUM=/usr/bin/chromium LATTICE_TTS_CACHE=/data/slides/cache/kokoro LATTICE_PIPER_DIR=/data/slides/cache/piper
 EXPOSE 14666 4328
 CMD ["node", "/opt/praxis/scripts/start-lattice.mjs"]
@@ -151,7 +162,7 @@ COPY --chown=node:node packages/surface-wanghai/tsconfig.json ./packages/surface
 RUN npm run build
 
 FROM base AS polaris
-COPY --chown=node:node package.json server.mjs ./
+COPY --chown=node:node package.json server.mjs praxis-provider.mjs ./
 COPY --from=polaris-build --chown=node:node /app/apps/polaris-portal/dist/ ./apps/polaris-portal/dist/
 ENV PORT=18787
 EXPOSE 18787

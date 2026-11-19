@@ -1,6 +1,6 @@
 # Workbench cards — design proposal
 
-Status: Draft for review, 2026-11-19. Product behavior is unchanged. [简体中文](workbench-cards.md) · [Interactive prototype](workbench-cards.html)
+Status: Implementation and acceptance design for v0.1.114, 2026-11-19. The interactive prototype remains a synthetic illustration. [简体中文](workbench-cards.md) · [Interactive prototype](workbench-cards.html)
 
 
 
@@ -49,16 +49,16 @@ Open enters the owning app at the particular object. Home returns to the same ca
 
 ## Data and implementation boundaries
 
-The current attention API aggregates Reminder and Projects. It supplies identity fields, title and date, plus Reminder flags or Projects domain/review fields. It does not currently supply result previews, evidence excerpts, object revisions or personal Later/Hide storage.
+The app-owned provider contract supplies cards for all thirteen non-runtime apps and data inventory for all fourteen apps. Polaris is the runtime and supplies inventory and runtime trace metadata rather than workbench cards. Projections include source-backed previews, evidence and revisions. Owner-only Later/Hide state is persisted independently. See the [provider contract](../APP-PROVIDERS.md#english).
 
-The full design therefore needs:
+The implementation contract requires:
 
 1. An app-owned projection with stable object identity, revision, source-backed preview, explicit reason and authorized evidence references. Readable titles, previews and counts inherit the original resource permissions. Model speculation does not become a source fact.
 2. Owner-only presentation preferences keyed by user, object and revision. Deferral and hiding must not use Reminder date changes, completion or deletion as a shortcut.
 3. A clear update boundary: coalesce object revisions, retain focus and let the reader choose when to display new content.
 4. The existing source-app navigation and authorization rules. Additional app sources need explicit integration. An administrator-only app does not become visible to ordinary members through a card.
 
-The first implementation can reuse the current card shell, source links and navigation while the projection and private-preference contracts are completed. This document specifies the full target; preview and personal actions in the prototype are proposed capabilities.
+The running card renderer follows this target while app-owned projectors supply the data. The prototype is an interaction reference, and source, persistence and authorization checks use isolated synthetic services and app stores.
 
 ## States
 
@@ -82,4 +82,4 @@ The first implementation can reuse the current card shell, source links and navi
 - Missing context, partial refresh, denied resources and stale versions remain distinct. Identity loss clears protected content; the design does not promise instantaneous cross-device resource revocation that the current system lacks.
 - Evaluate voluntary user effort per accepted result, evidence-finding time and avoidable interruptions. Queue-clearing rate, reading speed and individual response times are not employee scores.
 
-Prototype checks cover layout, navigation, local illustrative actions and states. Persistence, server-side permissions, deduplication and actual business actions remain implementation acceptance work.
+Acceptance separates prototype layout checks, actual app/store projections, native HTTP authorization and preference persistence, browser-local owner boundaries, and deployed verification. A synthetic fixture or prototype is not evidence of a live business operation.

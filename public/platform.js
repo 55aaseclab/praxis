@@ -2,7 +2,7 @@ import { message as t, locale } from './i18n.js';
 const language = locale() === 'en' ? 'en' : 'zh-CN';
 import { drawBarChart } from './platform-charts.js';
 
-const appNames = { reminder: 'Reminder', knowledge: 'Knowledge', 'lattice-slides': 'Slides', travel: 'Travel', tingproof: t("TingProof", "听校"), memo: 'Memo', projects: 'Projects', finance: 'Finance', intelligence: 'Intelligence', polaris: 'Polaris', calendar: 'Calendar', 'matrix-reader': 'Matrix Reader' };
+const appNames = { reminder: 'Reminder', knowledge: 'Knowledge', 'lattice-slides': 'Slides', slides: 'Slides', letters: 'Letters', profiles: 'Profiles', travel: 'Travel', tingproof: t("TingProof", "听校"), memo: 'Memo', projects: 'Projects', finance: 'Finance', intelligence: 'Intelligence', polaris: 'Polaris', calendar: 'Calendar', 'matrix-reader': 'Matrix Reader' };
 const capabilityNames = { read: t("Read", "读取"), create: t("Create", "新增"), update: t("Update", "修改"), complete: t("Complete", "完成"), delete: t("Delete", "删除"), record: t("Record activity", "记录执行"), stats: t("Statistics", "统计"), assign: t("Assignment", "任务分配"), submit: t("Submit", "提交"), search: t("Search", "搜索"), share: t("Share", "分享"), import: t("Import", "导入"), export: t("Export", "导出"), schedule: t("Schedule", "计划安排"), other: t("Other capability", "其他能力") };
 const eventNames = { http_request: t("Page and API requests", "页面与接口请求"), business_action: t("Business operations", "业务操作"), adapter_request: t("App adapter requests", "应用适配请求"), mcp_protocol: t("Tool protocol", "工具协议"), page_load: t("Workbench load", "工作台加载"), registry_load: t("App registry load", "应用目录加载"), app_open: t("App icon click", "应用图标点击"), page_error: t("Client-side error", "客户端页面异常") };
 const routeNames = { home: t("Workbench", "工作台"), registry: t("App registry", "应用目录"), prd_catalog: t("Document directory", "需求文档目录"), prd_document: t("Product document", "需求文档"), legacy_redirect: t("Legacy redirect", "旧入口跳转"), static: t("Page asset", "页面资源"), other: t("Other entry", "其他入口"), business_ui: t("App page", "应用界面"), business_static: t("App asset", "应用资源"), business_invoke: t("Business operations", "业务操作"), business_catalog: t("Business capability catalog", "业务能力目录"), business_events: t("Business update", "业务更新"), mcp: t("Agent tools", "智能体工具"), auth: t("Account login and authorization", "账号登录与授权"), oauth: t("External agent authorization", "外部智能体授权"), health: t("Service check", "服务检查"), browser_ingress: t("Experience report", "体验上报"), platform_status: t("Management overview", "管理概览") };
@@ -165,6 +165,102 @@ function renderObservations(node, report) {
   table(node, 'capabilities', t("Capability signals to review", "待复核的能力线索"), [t("App", "应用"), t("Capability", "能力"), t("Signal count", "线索数"), t("Review status", "复核状态")], candidates.map(row => [appNames[row.app_id] || t("Other app", "其他应用"), capabilityNames[row.capability] || t("Other capability", "其他能力"), quantity(row.samples), row.requires_review === true ? t("Needs human review", "需要人工复核") : t("Unconfirmed", "待确认")]), t("No clear unsupported capability signals", "暂无明确的未支持能力线索"));
 }
 
+
+const traceSources = { lifecycle: t("Operation lifecycle", "操作生命周期"), audit: t("Historical access decisions", "历史授权决定"), outbox: t("Application changes", "应用变更记录"), runtime: t("Runtime observations", "运行观察") };
+const traceStages = { authorization: t("Authorization", "授权"), dispatch: t("App invocation", "调用应用"), commit: t("Commit", "提交"), readback: t("Readback", "回读"), result: t("Result", "结果"), runtime: t("Runtime step", "运行步骤") };
+const traceStates = { started: t("Outcome not yet recorded", "尚未记录最终结果"), allowed: t("Allowed", "已允许"), denied: t("Denied", "已拒绝"), succeeded: t("Succeeded", "已成功"), failed: t("Failed", "失败"), unknown: t("Outcome unknown", "结果未知"), committed: t("Committed by app", "应用已提交"), not_recorded: t("Not recorded", "未记录"), queued: t("Queued", "排队中"), running: t("Running", "运行中"), waiting: t("Waiting", "等待中"), cancelled: t("Cancelled", "已取消") };
+function appendTraceReference(parent, reference) {
+  if (!reference || typeof reference.href !== 'string') return;
+  const runtime = reference.appId === 'polaris' && reference.href.startsWith('/apps/polaris/') && !/[\\\s]|%(?:2e|2f|5c)|(?:^|\/)\.{1,2}(?:\/|$)/i.test(reference.href.split(/[?#]/, 1)[0]);
+  if (!runtime && !/^\/apps\/[a-z][a-z0-9-]*\/$/.test(reference.href)) return;
+  const link = element('a', 'trace-reference', t("Open {0}", "打开{0}", appNames[reference.appId] || reference.appId));
+  link.href = reference.href;
+  parent.append(link);
+  const identity = [reference.spaceId, reference.resourceId, reference.revision === undefined ? null : t("revision {0}", "版本 {0}", reference.revision)].filter(Boolean);
+  if (identity.length) parent.append(element('span', '', identity.join(' / ')));
+}
+function appendTraceMetadata(parent, value) {
+  if (value.workflowRecorded) parent.append(element('p', '', value.workflow ? t("Workflow {0}, version {1}, run {2}", "流程 {0}，版本 {1}，运行 {2}", value.workflow.id, value.workflow.version || t("not recorded", "未记录"), value.workflow.runId || t("not recorded", "未记录")) : t("Workflow recorded; business read access is required for its reference.", "已记录流程；查看引用需要相应业务读取权限。")));
+  if (value.humanDecisionRecorded) parent.append(element('p', '', value.humanDecision ? t("Human decision: {0} ({1})", "人工决定：{0}（{1}）", ({ approved: t("Approved", "已批准"), rejected: t("Rejected", "已拒绝"), changes_requested: t("Changes requested", "要求修改") })[value.humanDecision.decision] || t("Recorded", "已记录"), value.humanDecision.id) : t("Human decision recorded; business read access is required for its reference.", "已记录人工决定；查看引用需要相应业务读取权限。")));
+  if (value.sourceCount) {
+    const paragraph = element('p');
+    paragraph.append(document.createTextNode(t("Recorded sources: {0}. ", "已记录来源：{0}项。", value.sourceCount)));
+    for (const reference of value.sources || []) appendTraceReference(paragraph, reference);
+    if ((value.sources || []).length < value.sourceCount) paragraph.append(document.createTextNode(t("Some references require additional business read access.", "部分引用需要相应业务读取权限。")));
+    parent.append(paragraph);
+  }
+}
+function traceStepNode(step) {
+  const row = element('li', 'trace-step');
+  row.append(element('strong', '', traceStages[step.stage] || t("Recorded step", "已记录步骤")), element('span', '', traceStates[step.status] || t("Unconfirmed", "待确认")), element('time', '', time(step.at)));
+  if (step.code) row.append(element('span', '', step.code));
+  if (step.stage === 'runtime' && step.stepId) row.append(element('span', '', step.stepId));
+  if (step.generation !== undefined) row.append(element('span', '', t("Generation {0}", "代次 {0}", step.generation)));
+  if (step.committed === true) row.append(element('span', '', t("Commit confirmed", "已确认提交")));
+  if (step.reference) { const line = element('p'); appendTraceReference(line, step.reference); row.append(line); }
+  else if (step.revisionRecorded) row.append(element('p', '', t("Version recorded; business read access is required.", "版本已记录，查看需要业务读取权限。")));
+  appendTraceMetadata(row, step);
+  return row;
+}
+function renderTraces(node, report, loadSteps) {
+  clearNode(node);
+  if (!['ready', 'empty'].includes(report?.state) || report.schemaVersion !== 1 || !Array.isArray(report.items)) {
+    if (report?.source === 'runtime' && report.state === 'not_configured') { node.append(element('p', 'overview-status', t("Runtime observations are not configured for this installation.", "此安装尚未配置运行观察来源。"))); return; }
+    node.append(element('p', 'overview-status', t("Could not load business traces. Refresh to retry.", "暂时无法读取业务留痕，请刷新后重试。"))); return;
+  }
+  const coverage = report.coverage || {};
+  node.append(element('p', 'trace-scope', report.source === 'runtime' ? t("Runtime observations show recorded workflow context. They do not establish an MCP call, an application commit or readback.", "运行观察展示已记录的流程上下文，不证明 MCP 调用、应用提交或回读。") : t("Detailed lifecycle coverage begins with recorded traces. Historical access decisions do not prove a commit; app change records do not supply missing invocation or readback steps.", "详细生命周期从实际留痕开始覆盖。历史授权决定不证明已提交，应用变更记录也不补造缺失的调用或回读步骤。")));
+  table(node, 'trace-coverage', t("Trace coverage", "留痕覆盖"), [t("Source", "来源"), t("Records", "记录数"), t("First record", "首条记录"), t("Latest record", "最近记录")], Object.entries(traceSources).map(([key, label]) => [label, quantity(coverage[key]?.count), time(coverage[key]?.firstRecordedAt), time(coverage[key]?.lastRecordedAt)]));
+  if (!report.items.length) { node.append(element('p', 'overview-status', t("No records in this source.", "当前来源暂无记录。"))); return; }
+  for (const item of report.items) {
+    const entry = element('article', 'trace-entry'), heading = element('div', 'trace-entry-heading');
+    heading.append(element('h4', '', `${appNames[item.appId] || item.appId || t("Unidentified app", "应用未确认")} · ${item.operation || capabilityNames[item.action] || item.action || traceSources[item.kind] || t("Business operation", "业务操作")}`), element('time', '', time(item.at)));
+    entry.append(heading, element('p', '', t("Result: {0}", "结果：{0}", traceStates[item.status] || t("Unconfirmed", "待确认"))));
+    if (item.kind === 'runtime') {
+      const value = item.runtime || {};
+      table(entry, `runtime-${item.cursor}`, t("Recorded runtime metadata", "已记录运行元数据"), [t("Field", "字段"), t("Value", "值")], [
+        [t("Run", "运行"), value.runId || '—'], [t("Pack", "领域包"), value.packId || '—'], [t("Pack version", "领域包版本"), value.packVersion || t("Not recorded", "未记录")],
+        [t("Created", "创建"), time(value.createdAt)], [t("Started", "开始"), time(value.startedAt)], [t("Updated", "更新"), time(value.updatedAt)],
+        [t("Recorded steps", "已记录步骤"), `${item.steps?.length || 0} / ${quantity(value.stepCount)}`], [t("Artifact references", "产物引用"), `${value.artifactRefs?.length || 0} / ${quantity(value.artifactCount)}`],
+        ...(value.artifactRefs || []).map(reference => [t("Opaque artifact reference", "不透明产物引用"), reference]),
+      ]);
+    }
+    else if (item.kind === 'audit') entry.append(element('p', '', t("Access decision only. Commit and readback were not recorded in this source.", "此来源仅记录授权决定，没有记录提交与回读。")));
+    else {
+      const commit = item.committed === true ? t("Confirmed", "已确认") : item.committed === false ? t("Not confirmed", "未确认") : t("Not recorded", "未记录");
+      entry.append(element('p', '', t("Commit: {0}. Readback: {1}.", "提交：{0}。回读：{1}。", commit, traceStates[item.readback] || t("Not recorded", "未记录"))));
+    }
+    if (item.requestId) entry.append(element('p', '', t("Request {0}", "请求 {0}", item.requestId)));
+    if (item.code) entry.append(element('p', '', item.code));
+    if (item.reference) { const reference = element('p'); appendTraceReference(reference, item.reference); entry.append(reference); }
+    else if (item.kind !== 'audit') entry.append(element('p', '', t("Source references require current business read access.", "来源引用需要当前有效的业务读取权限。")));
+    appendTraceMetadata(entry, item);
+    if (Array.isArray(item.steps)) {
+      const steps = element('ol', 'trace-steps');
+      for (const step of item.steps) steps.append(traceStepNode(step));
+      entry.append(steps);
+      if (item.olderStepsCursor) {
+        const more = element('button', 'trace-steps-more', t("Earlier steps", "较早步骤")); more.type = 'button';
+        let cursor = item.olderStepsCursor;
+        more.addEventListener('click', async () => {
+          more.disabled = true;
+          try {
+            const previous = await loadSteps(item.id, cursor);
+            if (!entry.isConnected) return;
+            const page = previous.items?.[0];
+            if (!page || !Array.isArray(page.steps)) throw new Error('Trace steps unavailable.');
+            steps.prepend(...page.steps.map(traceStepNode)); cursor = page.olderStepsCursor;
+            more.hidden = !cursor; more.textContent = t("Earlier steps", "较早步骤");
+          } catch { if (entry.isConnected) more.textContent = t("Could not load earlier steps. Retry.", "未能读取较早步骤，请重试。"); }
+          finally { more.disabled = false; }
+        });
+        entry.append(more);
+      }
+    }
+    node.append(entry);
+  }
+}
+
 function loginUrl(value) {
   try {
     const url = new URL(value);
@@ -180,12 +276,15 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
   started = true;
   const panels = document.querySelector('#platform-panels'), notice = document.querySelector('#platform-notice'), updated = document.querySelector('#platform-updated'), refreshButton = document.querySelector('#platform-refresh');
   const experience = document.querySelector('#platform-experience'), observationNode = document.querySelector('#platform-observations'), windowSelect = document.querySelector('#platform-window');
+  const traceSection = document.querySelector('#platform-trace'), traceNode = document.querySelector('#platform-traces'), traceSource = document.querySelector('#platform-trace-source'), traceNewer = document.querySelector('#platform-trace-newer'), traceOlder = document.querySelector('#platform-trace-older');
+  if (!traceSource.querySelector('option[value="runtime"]')) { const option = element('option', '', traceSources.runtime); option.value = 'runtime'; option.dataset.en = 'Runtime observations'; option.dataset.zh = '运行观察'; traceSource.append(option); }
   const groups = { permissions: document.querySelector('#platform-permissions'), connections: document.querySelector('#platform-connections'), storage: document.querySelector('#platform-storage') };
-  let epoch = 0, observationEpoch = 0, controller, observationController, reading = false, sessionEnded = false, accessAllowed = false;
+  let epoch = 0, observationEpoch = 0, traceEpoch = 0, controller, observationController, traceController, reading = false, sessionEnded = false, accessAllowed = false;
+  let traceCursors = [null], traceIndex = 0, traceNext = null;
   function clear() {
-    observationEpoch++;
+    observationEpoch++; traceEpoch++;
     for (const node of Object.values(groups)) { clearNode(node); delete node.dataset.freshUntil; }
-    observationController?.abort(); panels.hidden = true; experience.hidden = true; clearNode(observationNode); experience.open = false; updated.textContent = '';
+    observationController?.abort(); traceController?.abort(); panels.hidden = true; experience.hidden = true; traceSection.hidden = true; clearNode(observationNode); clearNode(traceNode); traceCursors = [null]; traceIndex = 0; traceNext = null; traceNewer.disabled = true; traceOlder.disabled = true; updated.textContent = '';
   }
   function message(text, url) {
     notice.replaceChildren(element('span', '', text)); notice.hidden = false;
@@ -214,6 +313,28 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
       renderObservations(observationNode, body);
     } catch { if (epoch === currentEpoch && observationEpoch === currentObservation) renderObservations(observationNode, null); }
   }
+  async function traceRequest(parameters, active, currentEpoch) {
+    const response = await request(`/api/platform/traces?${new URLSearchParams(parameters)}`, active);
+    let body; try { body = await response.json(); } catch {}
+    if (epoch !== currentEpoch || !accessAllowed) throw new Error('Trace session changed.');
+    if ([401, 403].includes(response.status)) { restricted(response.status, body); throw new Error('Trace session rejected.'); }
+    if (!response.ok || body?.schemaVersion !== 1) throw new Error('Traces unavailable.');
+    return body;
+  }
+  async function traces(currentEpoch) {
+    const currentTrace = ++traceEpoch;
+    traceController?.abort(); traceController = new AbortController();
+    traceNewer.disabled = true; traceOlder.disabled = true;
+    clearNode(traceNode); traceNode.append(element('p', 'overview-status', t("Loading business traces…", "正在读取业务留痕…")));
+    try {
+      const parameters = { source: traceSource.value, limit: '25', ...(traceCursors[traceIndex] && { before: String(traceCursors[traceIndex]) }) };
+      const body = await traceRequest(parameters, traceController, currentEpoch);
+      if (traceEpoch !== currentTrace) return;
+      traceNext = body.nextCursor;
+      renderTraces(traceNode, body, (id, before) => traceRequest({ traceId: id, before: String(before), limit: '25' }, traceController, currentEpoch));
+      traceNewer.disabled = traceIndex === 0; traceOlder.disabled = !traceNext;
+    } catch { if (epoch === currentEpoch && traceEpoch === currentTrace) renderTraces(traceNode, null); }
+  }
   async function refresh() {
     if (!accessAllowed || sessionEnded || document.visibilityState === 'hidden') return;
     const identity = getIdentity();
@@ -228,8 +349,8 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
       if (!response.ok || body?.schemaVersion !== 1 || !body.sections) throw new Error('Platform status unavailable.');
       panels.hidden = false;
       permissions(groups.permissions, body.sections.permissions); connections(groups.connections, body.sections.connections); storage(groups.storage, body.sections.storage);
-      notice.hidden = true; experience.hidden = false; updated.textContent = t("Read at {0}", "读取于 {0}", time(body.generatedAt));
-      if (experience.open) void observations(currentEpoch);
+      notice.hidden = true; experience.hidden = false; traceSection.hidden = false; updated.textContent = t("Read at {0}", "读取于 {0}", time(body.generatedAt));
+      void observations(currentEpoch); void traces(currentEpoch);
     } catch { if (epoch === currentEpoch) { clear(); message(t("Could not read status. Refresh to retry.", "暂时无法读取状态，请稍后刷新。")); } }
     finally { if (epoch === currentEpoch) { reading = false; refreshButton.disabled = false; root.setAttribute('aria-busy', 'false'); } }
   }
@@ -245,8 +366,10 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
     if (accessAllowed) { sessionEnded = false; message(t("Loading status…", "正在读取状态…")); void refresh(); }
   }
   refreshButton.addEventListener('click', refresh);
-  experience.addEventListener('toggle', () => { if (experience.open && !panels.hidden) void observations(epoch); else { observationEpoch++; observationController?.abort(); clearNode(observationNode); } });
-  windowSelect.addEventListener('change', () => { if (experience.open && !panels.hidden) void observations(epoch); });
+  windowSelect.addEventListener('change', () => { if (!panels.hidden) void observations(epoch); });
+  traceSource.addEventListener('change', () => { traceCursors = [null]; traceIndex = 0; if (!panels.hidden) void traces(epoch); });
+  traceOlder.addEventListener('click', () => { if (traceNext && !panels.hidden) { traceCursors = traceCursors.slice(0, traceIndex + 1); traceCursors.push(traceNext); traceIndex++; void traces(epoch); } });
+  traceNewer.addEventListener('click', () => { if (traceIndex > 0 && !panels.hidden) { traceIndex--; void traces(epoch); } });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { epoch++; observationEpoch++; controller?.abort(); clear(); message(t("Loading status…", "正在读取状态…")); }
     else void refresh();

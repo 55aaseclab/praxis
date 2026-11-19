@@ -1,80 +1,99 @@
-.desktop-board.show-attention > :is(#apps-section, #projects-section, #desktop-empty) {
-  display: none !important;
+.desktop-board.show-attention > :is(#apps-section, #projects-section, #desktop-empty) { display: none !important; }
+#attention-program { width: 100%; max-width: 740px; margin: 0 auto; min-width: 0; }
+.attention-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.desktop-body .attention-heading h1 { margin: 0; color: var(--muted); font-size: 17px; font-weight: 600; }
+.attention-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 14px; }
+#attention-program button, .attention-list-dialog button, .attention-toast button { font: inherit; min-width: 44px; min-height: 44px; border: 0; border-radius: 9px; padding: 10px 14px; background: transparent; color: inherit; cursor: pointer; }
+#attention-program button:disabled, .attention-list-dialog button:disabled, .attention-toast button:disabled { cursor: default; opacity: .4; }
+#attention-program button:hover:not(:disabled), .attention-list-dialog button:hover:not(:disabled), .attention-toast button:hover:not(:disabled) { background: var(--soft, #edf0f4); }
+#attention-program svg, .attention-list-dialog svg { display: block; width: 20px; height: 20px; flex: none; }
+#attention-program a:focus-visible, #attention-program button:focus-visible, #attention-program summary:focus-visible, #attention-program article:focus-visible, .attention-list-dialog button:focus-visible, .attention-toast button:focus-visible { outline: 3px solid var(--blue, #1672d4); outline-offset: 3px; }
+.attention-deck { position: relative; box-sizing: border-box; width: 100%; background: #fff; border: 1px solid #d8e0dc; border-radius: 15px; padding: 32px 36px; overflow-wrap: anywhere; touch-action: pan-y; }
+.attention-card-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.attention-source { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 550; color: #3f514b; min-width: 0; }
+.attention-source img { width: 25px; height: 25px; border-radius: 7px; flex: none; }
+.attention-version { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.attention-deck .attention-reason { font-size: 14px; color: var(--muted); margin: 0 0 10px; line-height: 1.6; }
+.desktop-body .attention-deck h2 { font: 600 clamp(25px, 3vw, 31px) / 1.24 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; letter-spacing: -.025em; margin: 0 0 16px; padding: 0; max-width: 21ch; color: #26372f; }
+.attention-deck .attention-preview { font-size: 17px; line-height: 1.7; margin: 0; color: #3f4745; max-width: 61ch; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.attention-deck .attention-date { font-size: 14px; margin: 18px 0 0; color: #525c57; }
+.attention-evidence { margin-top: 23px; border-top: 1px solid #e9ecea; padding-top: 9px; }
+.attention-evidence summary { list-style: none; display: flex; align-items: center; gap: 8px; width: fit-content; min-height: 44px; cursor: pointer; font-size: 14px; color: #21594d; }
+.attention-evidence summary::-webkit-details-marker { display: none; }
+#attention-program .attention-evidence summary svg { width: 15px; height: 15px; transition: transform .14s; }
+.attention-evidence[open] summary svg { transform: rotate(90deg); }
+.attention-source-note { border-left: 2px solid #d4dfd8; padding: 1px 0 1px 15px; margin: 10px 0 16px; font-size: 14px; color: #4d5852; }
+.attention-source-note p { margin: 3px 0 7px; line-height: 1.65; }
+.attention-source-note strong, .attention-source-note a { font-weight: 550; color: #354a40; }
+.attention-source-note a { display: inline-block; min-height: 44px; padding: 10px 0; }
+.attention-source-note .attention-locator { color: var(--muted); font-size: 12px; }
+.attention-actions { display: flex; align-items: center; gap: 10px; margin-top: 24px; }
+.attention-primary, #attention-program button.attention-primary { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 10px 18px; border: 1px solid #b9cfc5; border-radius: 9px; background: #edf4f0; color: #214e3e; font-weight: 550; font-size: 14px; text-decoration: none; }
+.attention-primary:hover { background: #e5eee8; }
+#attention-program button.attention-secondary { font-size: 14px; color: var(--muted); border: 1px solid transparent; }
+.attention-menu-wrap { position: relative; }
+.attention-overflow { margin-left: auto; }
+.attention-popup { position: absolute; bottom: calc(100% + 7px); left: 0; z-index: 5; min-width: 200px; max-width: calc(100vw - 92px); padding: 5px; background: #fff; border: 1px solid var(--line); border-radius: 11px; box-shadow: 0 7px 24px #26342e12; }
+.attention-overflow .attention-popup { left: auto; right: 0; min-width: 188px; }
+#attention-program .attention-popup button { display: block; width: 100%; text-align: left; font-size: 14px; border-radius: 6px; }
+.card-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 0 2px; }
+#attention-program .card-controls button { display: flex; align-items: center; gap: 7px; font-size: 14px; color: #58615d; }
+.attention-position { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.attention-notice { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; font-size: 14px; line-height: 1.6; margin: 0 0 18px; color: #59665e; padding: 0 3px; }
+#attention-program .attention-notice button { flex: none; padding: 0 8px; margin-top: -8px; color: #21594d; font-size: 14px; }
+.attention-empty { padding: 36px; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.desktop-body .attention-empty h2 { font-size: 24px; font-weight: 550; line-height: 1.3; margin: 0 0 10px; padding: 0; color: var(--ink); letter-spacing: -.015em; }
+.attention-empty p { color: var(--muted); margin: 0 0 18px; max-width: 45ch; }
+.attention-empty button + button { margin-left: 8px; }
+.attention-skeleton { display: grid; gap: 15px; padding: 16px 0 8px; min-height: 230px; }
+.attention-skeleton span { display: block; height: 12px; background: #edf0ed; border-radius: 4px; width: 86%; }
+.attention-skeleton span:first-child { height: 27px; width: 68%; margin: 18px 0 12px; }
+.attention-skeleton span:last-child { width: 50%; }
+.attention-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.attention-list-dialog { width: min(540px, calc(100% - 32px)); max-height: calc(100dvh - 48px); overflow: auto; border: 1px solid var(--line, #dde1e7); border-radius: 15px; padding: 24px; color: var(--ink, #252529); background: #fff; box-shadow: 0 16px 64px #17251b20; }
+.attention-list-dialog::backdrop { background: #24312b35; }
+.attention-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -5px -7px 16px 0; }
+.attention-dialog-heading h2 { font-size: 21px; font-weight: 550; margin: 0; letter-spacing: -.02em; }
+.attention-list-dialog .attention-dialog-heading > button { padding: 12px; }
+.attention-list { list-style: none; padding: 0; margin: 0; }
+.attention-list li + li { border-top: 1px solid #edf0ed; }
+.attention-list-dialog .attention-list-choice { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 15px 8px; min-height: 76px; text-align: left; border-radius: 7px; }
+.attention-list-choice strong { font-size: 16px; font-weight: 550; line-height: 1.45; }
+.attention-list-choice span { color: var(--muted); font-size: 13px; }
+.attention-list-choice[aria-current=true] { background: #edf4f0; }
+.attention-list-group { font-size: 14px; font-weight: 550; margin: 23px 0 8px; color: var(--muted); }
+.attention-list-note { color: var(--muted); font-size: 13px; line-height: 1.65; }
+.attention-deferred-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; padding: 10px 4px; }
+.attention-deferred-row > span { min-width: 0; overflow-wrap: anywhere; }
+.attention-deferred-row small { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; }
+.attention-list-dialog .attention-deferred-row button { flex: none; color: #21594d; font-size: 13px; }
+.attention-toast { position: fixed; z-index: 30; left: 50%; bottom: 104px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100% - 32px); padding: 5px 7px 5px 16px; background: #fff; border: 1px solid #c9d7ce; border-radius: 11px; box-shadow: 0 5px 24px #26342e10; font-size: 14px; }
+.attention-toast > span { min-width: 0; overflow-wrap: anywhere; }
+.attention-toast button { color: #21594d; font-size: 14px; padding: 8px 10px; flex: none; }
+.workbench-view-switch { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 12px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; cursor: pointer; }
+.workbench-view-switch:hover { color: var(--ink); background: var(--soft); }
+.workbench-view-switch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.workbench-view-switch svg { width: 20px; height: 20px; flex-shrink: 0; }
+@media(max-width:760px) {
+  .attention-heading { margin-bottom: 13px; }
+  .attention-deck { padding: 23px 23px 24px; border-radius: 13px; }
+  .attention-card-top { margin-bottom: 19px; }
+  .desktop-body .attention-deck h2 { font-size: 27px; line-height: 1.27; margin-bottom: 14px; }
+  .attention-deck .attention-reason { font-size: 13px; }
+  .attention-deck .attention-preview { font-size: 16px; line-height: 1.7; }
+  .attention-deck .attention-date { font-size: 13px; }
+  .attention-evidence { margin-top: 20px; }
+  .attention-actions { margin-top: 19px; gap: 4px; }
+  .attention-primary, #attention-program button.attention-primary { padding: 10px 13px; }
+  #attention-program button.attention-secondary { padding: 10px 12px; }
+  .attention-version { font-size: 11px; }
+  .card-controls { gap: 4px; margin-top: 12px; }
+  #attention-program .card-controls button { padding: 9px 7px; font-size: 13px; }
+  .attention-position { font-size: 12px; }
+  .attention-empty { padding: 25px; }
+  .desktop-body .attention-empty h2 { font-size: 22px; }
+  .attention-list-dialog { padding: 22px; }
+  .attention-toast { bottom: 94px; font-size: 13px; padding-left: 12px; gap: 5px; }
+  .attention-toast button { font-size: 13px; }
 }
-#attention-program {
-  max-width: 100%;
-  width: 100%;
-}
-.card-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.card-controls button,
-.attention-deck > button {
-  font: inherit;
-  min-height: 44px;
-  border: 1px solid #cbd3d8;
-  border-radius: 8px;
-  background: #fff;
-  color: #273c45;
-  padding: 7px 16px;
-  cursor: pointer;
-}
-.attention-deck {
-  box-sizing: border-box;
-  touch-action: pan-y;
-  margin: 0 auto;
-  padding: clamp(18px, 4vw, 44px);
-  max-width: 680px;
-  background: #fff;
-  border: 1px solid #d8e0dc;
-  border-radius: 14px;
-  overflow-wrap: anywhere;
-}
-.desktop-body .attention-deck h2 {
-  margin: 8px 0;
-  padding: 0;
-  font: 600 clamp(20px, 3vw, 30px) / 1.4 system-ui;
-  color: #233b35;
-}
-.attention-deck small {
-  color: #46655b;
-}
-.attention-deck a {
-  display: inline-block;
-  padding: 12px 0;
-  color: #21594d;
-}
-.card-controls {
-  margin-top: 12px;
-  justify-content: space-between;
-}
-
-.workbench-view-switch {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 12px;
-  border: 0;
-  border-radius: 9px;
-  color: var(--muted);
-  background: transparent;
-  cursor: pointer;
-}
-.workbench-view-switch:hover {
-  color: var(--ink);
-  background: var(--soft);
-}
-.workbench-view-switch:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-}
-.workbench-view-switch svg {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
+@media(prefers-reduced-motion:reduce) { #attention-program *, .attention-list-dialog * { scroll-behavior: auto !important; transition: none !important; } }

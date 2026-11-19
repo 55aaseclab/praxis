@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.113 · [简体中文](PRD.md)
+Version: 0.1.114 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -32,6 +32,14 @@ The requirements below describe the current platform contract.
 The public checkout supplies the complete built-in Docker Compose stack. A fresh clone starts the native services for all fourteen apps, the authenticated workbench and scoped business interface. First-start initialization creates a private owner account, workspace, service keys and persistent stores. Existing identities, configuration and records survive restarts and retries. Verify every native entry, protected resource, write/read-back flow and restart from an isolated clean installation. Preserve the original stack-management and recovery workflows during migration.
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
+
+## App cards, live data inventory and business traces
+
+Implement the approved [card design](design/workbench-cards.en.md) and its prototype, including result/question previews, expandable source evidence, one native primary entry, a finite queue and list, private Later/Hide this version with Undo, and Home returning to the selected card and position. Keep both workbench views top-aligned, language in Settings and the existing bottom-bar icon switch. Browsing does not acknowledge, accept or complete a business item; personal presentation state never changes a source deadline or becomes a colleague-visible read receipt.
+
+All thirteen non-runtime built-ins supply app-owned, authorized, versioned card projections and current data-inventory metadata. Polaris is the runtime and supplies no workbench cards. Its data inventory remains included. The platform discovers providers from the installed app catalog, merges their responses and updates Settings when apps or their data locations change. App content, source versions, record references and native entry paths come from each app; do not fabricate cards or silently omit an app integration. Browser-local and derived sources report their actual execution and ownership boundaries. Empty, unavailable, partial and unauthorized responses remain distinguishable.
+
+Add a Trace section to Settings → Overview for the business operation lifecycle: authorized invocation, app outcome/commit, source/output versions, recorded workflow or human-decision links when available, and readback or failure. Use bounded structured metadata and authorized references; credentials, raw request bodies and private browsing/deferral histories are excluded. Describe missing historical coverage honestly. Usage and experience clues are always expanded in Overview, with no details/summary collapse control.
 
 ## Application publication
 
@@ -135,6 +143,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.106 | 2026-11-19 | Document how agent-native apps compare with harnesses and existing app connectors |
 | v0.1.107 | 2026-11-19 | Add owner-only Letters and Profiles readers with public code and private runtime sources |
 | v0.1.113 | 2026-11-19 | Rename the platform backend service and commands to core with installation compatibility |
+| v0.1.114 | 2026-11-19 | Deliver app-owned cards, live data inventory, private card preferences and Overview business traces with expanded experience clues |
 
 ### Letters and Profiles
 

@@ -31,7 +31,9 @@ export function createAppTransport(appId, { onChange = () => {}, onRevoked = () 
     if (!['administrator', 'native'].includes(session.authorizationMode) && !session.delegated) { navigation('authorization-required'); return { authorized: false, contexts: [] }; }
     const catalog = await api('/api/business/catalog');
     contexts = catalog.spaces.map(value => ({ ...value, apps: value.apps.filter(app => app.id === appId) })).filter(value => value.apps.length);
-    context = contexts[0] || null;
+    const requested = new URLSearchParams(location.search).get('space');
+    context = requested ? contexts.find(value => value.id === requested) || null : contexts[0] || null;
+    if (requested && !context) throw Object.assign(new Error(t('The selected scope is unavailable.', '所选范围不可访问。')), { status: 403, code: 'FORBIDDEN' });
     return { authorized: true, contexts };
   }
   function selectContext(id) {

@@ -57,9 +57,11 @@ async function fixture(t, configuredSpaces = ['space-a', 'space-b']) {
       response.write('started\n');
       const timer = setInterval(() => response.write('tick\n'), 10);
       response.on('close', () => clearInterval(timer));
-    } else if (request.url === '/') {
+    } else if (['/', '/index.html'].includes(new URL(request.url, origin).pathname)) {
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       response.end('<!doctype html><html><head><title>TingProof</title></head><body><h1>Native TingProof editor</h1></body></html>');
+    } else if (new URL(request.url, origin).pathname.startsWith('/assets/')) {
+      response.writeHead(200, { 'Content-Type': request.url.includes('.css') ? 'text/css' : 'text/javascript' }); response.end('/* Synthetic public build asset */');
     } else {
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end('{"projects":[]}');
@@ -76,7 +78,7 @@ async function fixture(t, configuredSpaces = ['space-a', 'space-b']) {
   await once(upstream, 'listening');
   const gateway = createWebGateway({
     requireTingproofNativeScope: true, canonicalUrl: origin, coreUrl: 'http://127.0.0.1:' + core.address().port,
-    appTargets: { tingproof: 'http://127.0.0.1:' + upstream.address().port }, revalidateMs: 20,
+    appTargets: { tingproof: 'http://127.0.0.1:' + upstream.address().port, polaris: 'http://127.0.0.1:' + upstream.address().port }, revalidateMs: 20,
   });
   const web = createServer(async (request, response) => {
     if (!await gateway.handle(request, response)) response.writeHead(404).end();
@@ -204,4 +206,31 @@ test('native TingProof upgrades require full authority and recheck it while conn
   f.auth.revokeResource(f.grants['space-b']);
   await Promise.race([disconnected, new Promise((_, reject) => setTimeout(() => reject(Error('Native upgrade stayed connected after revocation.')), 2000))]);
   allowed.socket.destroy();
+});
+
+
+test('scoped assignment shell and pure public assets require only app entry, never grant whole-project access', async t => {
+  const f = await fixture(t);
+  for (const user of ['assignment-only', 'app-only', 'reader']) {
+    for (const path of ['/apps/tingproof/?space=space-a&assignment=assignment-a', '/apps/tingproof/index.html?assignment=assignment-a&space=space-a', '/apps/tingproof/assets/index-test.js', '/apps/tingproof/assets/index-test.css']) {
+      const opened = await f.request(path, user); assert.equal(opened.status, 200, user + ' ' + path);
+      if (path.includes('assignment=')) { assert.match(opened.body, /Native TingProof editor/); assert.doesNotMatch(opened.body, /projects/); }
+      assert.equal((await f.request(path, user, { method: 'HEAD' })).status, 200, user + ' HEAD ' + path);
+    }
+    for (const path of ['/apps/tingproof/', '/apps/tingproof/api/projects', '/apps/tingproof/api/projects/private-project/segments', '/apps/tingproof/api/projects?space=space-a&assignment=assignment-a', '/apps/tingproof/?space=space-a&assignment=assignment-a&project=private-project', '/apps/tingproof/?space=space-a&assignment=assignment-a&assignment=other']) assert.equal((await f.request(path, user)).status, 403, user + ' ' + path);
+    assert.equal((await f.request('/apps/tingproof/?space=space-a&assignment=assignment-a', user, { method: 'POST', headers: { Origin: origin } })).status, 403);
+  }
+  assert.equal((await f.request('/apps/tingproof/?space=space-a&assignment=guessed', null)).status, 401);
+  assert.equal((await f.request('/apps/tingproof/assets/index-test.js', null)).status, 401);
+  assert.ok(f.requests.every(request => !request.path.startsWith('/api/projects')));
+  assert.equal((await f.request('/api/business/invoke?assignment=guessed', 'app-only')).status, 404);
+  f.auth.setWebAccess({ userId: 'assignment-only', apps: [], workbench: true, prds: false });
+  assert.equal((await f.request('/apps/tingproof/?space=space-a&assignment=assignment-a', 'assignment-only')).status, 403);
+  assert.equal((await f.request('/apps/tingproof/assets/index-test.js', 'assignment-only')).status, 403);
+});
+
+test('the native Polaris proxy never exposes its internal Core trace endpoint', async t => {
+  const f = await fixture(t);
+  for (const path of ['/apps/polaris/api/praxis/traces', '/apps/polaris/api/praxis/traces?limit=10', '/apps/polaris/api/praxis/traces/child', '/apps/polaris/%61pi/praxis/traces', '/apps/polaris/api/praxis/tra%63es']) assert.equal((await f.request(path, 'platform-admin')).status, 404);
+  assert.equal(f.requests.length, 0);
 });

@@ -1,9 +1,10 @@
-import { randomBytes, randomUUID } from 'node:crypto';
-import { access, chown, chmod, copyFile, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { access, chown, chmod, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { resolve, isAbsolute, dirname } from 'node:path';
 import { AuthStore } from '../src/business/auth.mjs';
 import { readApps } from '../src/apps.mjs';
+import { AppProviderRegistry } from '../src/business/app-providers.mjs';
 
 const WORKSPACE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -13,6 +14,88 @@ const adapters = {
 };
 const apps = ['reminder', 'knowledge', 'travel', 'projects', 'memo', 'tingproof', 'slides', 'finance', 'intelligence', 'polaris', 'letters', 'profiles', 'web', 'slides-decks', 'slides-state', 'slides-exports'];
 
+// These are bootstrap layout declarations, never observed host/container mounts.
+// Include only data-location variables explicitly owned by installed providers.
+export function builtinProviderDefaults({ providers, runtime, spaceMaps = {}, workingDirectories = {}, appTargets = {} }) {
+  const result = { finance: { url: 'http://127.0.0.1:4329' }, intelligence: { url: 'http://127.0.0.1:4330' }, polaris: { url: 'http://127.0.0.1:18787' } };
+  for (const app of ['finance', 'intelligence', 'polaris']) {
+    const configuredPort = app === 'intelligence' ? runtime[app]?.INTELLIGENCE_PORT ?? runtime[app]?.PORT : runtime[app]?.PORT;
+    if (configuredPort !== undefined) {
+      if (!/^[1-9][0-9]{0,4}$/.test(String(configuredPort)) || Number(configuredPort) > 65535) throw new Error('A configured native application port is invalid.');
+      result[app].url = 'http://127.0.0.1:' + configuredPort;
+    }
+    if (appTargets[app] !== undefined) {
+      const target = new URL(appTargets[app]);
+      if (target.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname) || target.username || target.password || target.pathname !== '/' || target.search || target.hash) throw new Error('A saved native application target is invalid.');
+      result[app].url = target.origin;
+    }
+  }
+  for (const provider of providers) {
+    if (provider.error || !provider.descriptor) continue;
+    const { app, descriptor } = provider, adapterId = descriptor.adapterAppId || app.id;
+    const configured = runtime[adapterId];
+    if (!configured) continue;
+    const environment = {}, pathMaps = {};
+    for (const source of descriptor.dataSources) {
+      const location = source.location || {}, name = location.env;
+      if (!name) continue;
+      if (!/^[A-Z][A-Z0-9_]{0,119}$/.test(name) || /(?:^|_)(?:KEY|PASSWORD|PASSWD|SECRET|TOKEN|CREDENTIALS?)(?:_|$)/i.test(name)) throw new Error('An app provider declared an unsafe data-location variable.');
+      const value = configured[name];
+      if (typeof value === 'string' && isAbsolute(value) && resolve(value) === value && !/[\x00-\x1f\x7f]/.test(value)) environment[name] = value;
+      const map = spaceMaps[adapterId]?.spaces;
+      if (location.map === 'spaces' && map && !Array.isArray(map) && typeof map === 'object') {
+        const entries = Object.entries(map);
+        if (entries.some(([, path]) => typeof path !== 'string' || !isAbsolute(path) || resolve(path) !== path || /[\x00-\x1f\x7f]/.test(path))) throw new Error('An app data-path mapping is invalid.');
+        pathMaps[name] = Object.fromEntries(entries);
+      }
+    }
+    if (!Object.keys(environment).length && !Object.keys(pathMaps).length && !workingDirectories[adapterId]) continue;
+    result[app.id] = { ...result[app.id], runtime: { status: 'ready', bindingSource: 'installation-layout', environment,
+      ...(workingDirectories[adapterId] ? { workingDirectory: workingDirectories[adapterId] } : {}),
+      ...(Object.keys(pathMaps).length ? { pathMaps } : {}) } };
+  }
+  return result;
+}
+
+const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+export function mergeMissingProviderConfiguration(config, defaults) {
+  if (!plain(config) || !plain(defaults)) throw new Error('Invalid provider configuration.');
+  const fill = (existing, proposed) => {
+    if (!plain(existing) || !plain(proposed)) return existing;
+    const output = { ...existing };
+    for (const [key, value] of Object.entries(proposed)) {
+      const selected = Object.hasOwn(existing, key) ? fill(existing[key], value) : structuredClone(value);
+      Object.defineProperty(output, key, { value: selected, enumerable: true, configurable: true, writable: true });
+    }
+    return output;
+  };
+  return { ...config, appProviders: Object.hasOwn(config, 'appProviders') ? fill(config.appProviders, defaults) : structuredClone(defaults) };
+}
+async function readPrivateConfiguration(file) {
+  if (!isAbsolute(file) || resolve(file) !== file || await realpath(dirname(file)) !== dirname(file)) throw new Error('A private configuration path is unsafe.');
+  const info = await lstat(file);
+  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.mode & 0o077 || info.size > 2 * 1024 * 1024) throw new Error('A private configuration file is unsafe.');
+  const bytes = await readFile(file); let value;
+  try { value = JSON.parse(bytes.toString('utf8')); } catch { throw new Error('A private configuration file is invalid.'); }
+  if (!plain(value)) throw new Error('A private configuration file is invalid.');
+  return { bytes, value };
+}
+export async function upgradeBuiltinProviderConfiguration(file, defaults) {
+  const { bytes, value } = await readPrivateConfiguration(file);
+  const updated = mergeMissingProviderConfiguration(value, defaults);
+  if (JSON.stringify(updated) === JSON.stringify(value)) return { changed: false, backupFile: null };
+  const backupFile = file + '.before-providers-' + createHash('sha256').update(bytes).digest('hex').slice(0, 16) + '.json';
+  try { await writeFile(backupFile, bytes, { flag: 'wx', mode: 0o600 }); }
+  catch (error) { if (error.code !== 'EEXIST') throw error; const backup = await readPrivateConfiguration(backupFile); if (!backup.bytes.equals(bytes)) throw new Error('A provider configuration backup differs.'); }
+  const temporary = resolve(dirname(file), '.provider-config-' + randomUUID() + '.tmp'); let handle;
+  try {
+    handle = await open(temporary, 'wx', 0o600); await handle.writeFile(JSON.stringify(updated, null, 2) + '\n'); await handle.sync(); await handle.close(); handle = null;
+    if (!(await readFile(file)).equals(bytes)) throw new Error('Configuration changed during provider upgrade.');
+    await rename(temporary, file);
+  } finally { await handle?.close(); await rm(temporary, { force: true }); }
+  return { changed: true, backupFile };
+}
+
 async function exists(file) {
   try { await access(file); return true; }
   catch (error) { if (error.code === 'ENOENT') return false; throw error; }
@@ -21,7 +104,7 @@ async function privateJson(file, value) {
   if (await exists(file)) {
     const info = await lstat(file);
     if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.mode & 0o077) throw new Error('A private runtime file is unsafe.');
-    return JSON.parse(await readFile(file, 'utf8'));
+    try { return JSON.parse(await readFile(file, 'utf8')); } catch { throw new Error('A private runtime file contains invalid JSON.'); }
   }
   await writeFile(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
   return value;
@@ -114,7 +197,6 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
     }])),
   };
   for (const app of Object.keys(adapters)) await mirrorKey(app, complete);
-  await privateJson('/config/core.json', config);
   await privateJson('/app-config/web/installation.json', installation);
   const runtime = {
     reminder: { REMINDER_MANAGED: '1', REMINDER_BUSINESS_KEY_FILE: '/config/key', REMINDER_BUSINESS_SPACES_FILE: '/config/spaces.json', REMINDER_BUSINESS_UI_URL: origin + '/business/reminder/' },
@@ -135,15 +217,24 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
     travel: { version: 1, webSpace: spaceId, spaces: { [spaceId]: [] } },
     slides: { version: 1, spaces: { [spaceId]: '/data/slides/slides.json' } },
   };
+  const configuredRuntime = {}, configuredMaps = {}, workingDirectories = {};
   for (const [app, env] of Object.entries(runtime)) {
-    await privateJson('/app-config/' + app + '/runtime.json', env);
-    if (maps[app]) await privateJson('/app-config/' + app + '/spaces.json', maps[app]);
+    configuredRuntime[app] = await privateJson('/app-config/' + app + '/runtime.json', env);
+    workingDirectories[app] = '/app';
+    if (maps[app]) configuredMaps[app] = await privateJson('/app-config/' + app + '/spaces.json', maps[app]);
   }
   for (const app of ['letters', 'profiles']) {
     const directory = '/data/' + app + '/documents';
     if (complete && !await exists(directory)) throw new Error('A private document directory is missing. Restore its original data.');
     await mkdir(directory, { recursive: true, mode: 0o700 });
+    configuredRuntime[app] = { ['PRAXIS_' + app.toUpperCase() + '_DIR']: directory };
+    workingDirectories[app] = '/workspace';
   }
+  const providers = await new AppProviderRegistry({ root: WORKSPACE_ROOT }).providers();
+  const existingCore = await exists('/config/core.json') ? (await readPrivateConfiguration('/config/core.json')).value : null;
+  config.appProviders = builtinProviderDefaults({ providers, runtime: configuredRuntime, spaceMaps: configuredMaps, workingDirectories, appTargets: existingCore?.webGateway?.appTargets || {} });
+  if (existingCore) await upgradeBuiltinProviderConfiguration('/config/core.json', config.appProviders);
+  else await privateJson('/config/core.json', config);
   for (const file of ['/data/intelligence/data.json', '/data/polaris/observations.json']) {
     if (complete && !await exists(file)) throw new Error('Application data is missing. Restore its original snapshot.');
   }

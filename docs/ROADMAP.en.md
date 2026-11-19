@@ -1,8 +1,16 @@
 # Praxis roadmap
 
-Version: 0.1.113
+Version: 0.1.114
 
 [简体中文](ROADMAP.md)
+
+## App integration delivery
+
+1. Publish the app-owned read-only card and data-inventory provider contract; integrate all thirteen non-runtime apps and the Polaris inventory.
+2. Implement the approved card UI and durable owner-only presentation preferences, then verify each app with synthetic records, exact source links, resource denial, refresh, and desktop/phone navigation.
+3. Replace the manually maintained data-location list with catalog-driven provider aggregation and explicit per-app availability.
+4. Add the Overview Trace lifecycle view and always-expanded usage/experience clues. Verify structured recording, authorization, privacy exclusions and actual empty/history coverage.
+5. Publish child app revisions to main, pin the tested combination, deploy affected services with recoverable data and verify the running installation.
 
 ## Unified app publication
 
@@ -198,6 +206,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.106 | 2026-11-19 | Document how agent-native apps compare with harnesses and existing app connectors |
 | v0.1.107 | 2026-11-19 | Add owner-only Letters and Profiles readers with public code and private runtime sources |
 | v0.1.113 | 2026-11-19 | Rename the platform backend service and commands to core with installation compatibility |
+| v0.1.114 | 2026-11-19 | Deliver app-owned cards, live data inventory, private card preferences and Overview business traces with expanded experience clues |
 
 ### Public applications with private collections
 

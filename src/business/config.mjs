@@ -33,6 +33,18 @@ export async function loadBusinessConfig(file = process.env.PRAXIS_CORE_CONFIG |
     else if (app.modelCaches !== undefined) throw businessError(500, 'INVALID_ADAPTER');
     await readSigningKey(app.keyFile);
   }
+  for (const file of [config.appProviderRuntimeFile, config.providerRoot]) if (file !== undefined && (typeof file !== 'string' || !isAbsolute(file) || resolve(file) !== file || /[\0\r\n]/.test(file))) throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG');
+  if (config.appProviders !== undefined) {
+    if (!config.appProviders || typeof config.appProviders !== 'object' || Array.isArray(config.appProviders) || Object.keys(config.appProviders).length > 128) throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG');
+    for (const [id, provider] of Object.entries(config.appProviders)) {
+      if (!/^[a-z][a-z0-9-]{0,79}$/.test(id) || provider !== null && (typeof provider !== 'object' || Array.isArray(provider))) throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG');
+      if (provider === null) continue;
+      if (provider.url !== undefined && provider.url !== null) {
+        let url; try { url = new URL(provider.url); } catch { throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG'); }
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/' || url.protocol === 'http:' && !['127.0.0.1','localhost','[::1]'].includes(url.hostname)) throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG');
+      }
+    }
+  }
   try { validateConsoleConfig(config.console); } catch { throw businessError(500, 'INVALID_CONSOLE_CONFIG'); }
   validateWebGatewayConfig(config.webGateway);
   return { ...config, issuer: issuer.origin };

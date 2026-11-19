@@ -1,92 +1,100 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { runInNewContext } from 'node:vm';
+import { localizedText, nativeHref, providerReadHref, validateCard, validateCardEnvelope, validatePreferences, personalCardState, laterTime, readBrowserProviders } from '../public/app-providers.js';
+import { mergeBrowserInventory, validateDataManagement } from '../public/admin-data.js';
 
-test('dock switches between a clean app view and attention, clearing revoked and late items', async () => {
-  const events = new Map();
-  const document = { hidden: false, activeElement: null };
-  function node(tag) {
-    return {
-      tag, children: [], dataset: {}, attributes: {}, textContent: '', hidden: false,
-      setAttribute(name, value) { this.attributes[name] = value; },
-      toggleAttribute(name, enabled) {
-        if (enabled) this.attributes[name] = '';
-        else delete this.attributes[name];
-      },
-      addEventListener(name, handler) { this[name] = handler; },
-      append(...children) {
-        for (const child of children) child.parentElement = this;
-        this.children.push(...children);
-      },
-      replaceChildren(...children) { this.children = []; this.append(...children); },
-      contains(target) { return this === target || this.children.some(child => child.contains(target)); },
-      focus() { document.activeElement = this; },
-    };
+const origin = 'https://workbench.example.test';
+const card = (overrides = {}) => ({ id: 'reminder:sample:record-a', appId: 'reminder', spaceId: 'sample', resourceId: 'record-a', revision: '7', kind: 'reminder', title: 'Keep this original title', preview: 'Source-authored <script>text</script>', reason: { en: 'A reminder you set.', zh: '你设置的提醒。' }, source: { name: 'Reminder' }, primaryAction: { label: { en: 'Open reminder', zh: '打开提醒' }, href: '/business/reminder/?space=sample&item=record-a' }, evidence: [{ label: 'Original note', excerpt: 'Keep the author’s language.', href: '/business/reminder/?space=sample&item=record-a', revision: '7' }], ...overrides });
+const envelope = items => ({ schemaVersion: 1, items, sources: [{ appId: 'reminder', status: 'ready' }], partial: false, generatedAt: '2026-11-19T12:00:00.000Z' });
+const reply = value => ({ ok: true, json: async () => value });
+
+test('card projections preserve authored content while localizing only declared labels', () => {
+  const checked = validateCardEnvelope(envelope([card()]), origin).items[0];
+  assert.equal(checked.title, 'Keep this original title');
+  assert.equal(checked.preview, 'Source-authored <script>text</script>');
+  assert.equal(localizedText(checked.reason, 'zh'), '你设置的提醒。');
+  assert.equal(localizedText(checked.evidence[0].excerpt, 'zh'), 'Keep the author’s language.');
+  assert.throws(() => validateCardEnvelope(envelope([card(), card()]), origin), /Duplicate/);
+});
+
+test('native actions stay in their app while evidence supports safe original sources', () => {
+  for (const href of ['https://other.example.test/apps/reminder/', '/apps/projects/', '/api/business/admin/users', 'javascript:alert(1)', '//other.example.test/apps/reminder/', '/apps/reminder/../../admin/']) {
+    assert.throws(() => nativeHref(href, 'reminder', origin), undefined, href);
   }
-  const board = node('main'), attention = node('div'), dock = node('button');
-  const classes = new Set();
-  board.classList = { toggle(name, enabled) { enabled ? classes.add(name) : classes.delete(name); } };
-  board.append(attention);
-  const appsIcon = node('svg'), attentionIcon = node('svg');
-  appsIcon.dataset.viewIcon = 'apps'; attentionIcon.dataset.viewIcon = 'attention';
-  dock.append(appsIcon, attentionIcon);
-  dock.querySelectorAll = selector => selector === '[data-view-icon]' ? dock.children : [];
-  document.getElementById = id => ({ 'attention-program': attention, 'workbench-view-switch': dock })[id];
-  document.createElement = node;
-  document.addEventListener = (name, handler) => events.set(name, handler);
-  let identity = { username: 'synthetic-member', csrfToken: 'synthetic-session', workbench: true, apps: ['reminder'] };
-  const today = new Date();
-  const date = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
-  const item = { appId: 'reminder', spaceId: 'synthetic-space', resourceId: 'synthetic-reminder', title: 'Synthetic due item', date };
-  let respond = async () => ({ items: [item], partial: false });
-  const source = (await readFile(new URL('../public/attention.js', import.meta.url), 'utf8')).replace(/^import .+;\n/gm, '');
-  runInNewContext(source, {
-    document, getIdentity: () => identity, identityReady: Promise.resolve(),
-    t: english => english, URLSearchParams, AbortController, setTimeout, clearTimeout,
-    setInterval() {},
-    window: { addEventListener() {} },
-    fetch: async () => ({ ok: true, json: respond }),
-  });
-  await new Promise(setImmediate);
-  const text = element => element.textContent + element.children.map(text).join('');
-  assert.equal(dock.hidden, false);
-  assert.equal(dock.dataset.view, 'apps');
-  assert.equal(dock.attributes['aria-label'], 'Show For you');
-  assert.equal(Object.hasOwn(attentionIcon.attributes, 'hidden'), false);
-  assert.equal(Object.hasOwn(appsIcon.attributes, 'hidden'), true);
-  assert.equal(attention.hidden, true);
-  assert.equal(text(attention), '');
+  for (const href of ['/api/business/admin/users', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,example', '//other.example.test/apps/reminder/', '/apps/reminder/a/%2e%2e/', '/apps/reminder/../../admin/']) {
+    assert.throws(() => validateCard(card({ evidence: [{ label: 'Source', href }] }), origin), undefined, href);
+  }
+  for (const href of ['https://other.example.test/source', '/apps/projects/']) assert.equal(validateCard(card({ evidence: [{ label: 'Source', href }] }), origin).evidence[0].href, href);
+  assert.equal(nativeHref('/apps/slides/#deck=example', 'lattice-slides', origin), '/apps/slides/#deck=example');
+  assert.throws(() => validateCard(card({ appId: 'polaris' }), origin));
+});
 
-  dock.click();
-  assert.equal(dock.dataset.view, 'attention');
-  assert.equal(dock.attributes['aria-label'], 'Show apps');
-  assert.equal(Object.hasOwn(appsIcon.attributes, 'hidden'), false);
-  assert.equal(Object.hasOwn(attentionIcon.attributes, 'hidden'), true);
-  assert.equal(attention.hidden, false);
-  assert.equal(classes.has('show-attention'), true);
-  assert.match(text(attention), /Due today.*Synthetic due item/);
+test('personal Later survives source updates, Hide applies to one version, and neither edits the business date', () => {
+  const item = card({ date: '2026-11-20' });
+  const now = Date.parse('2026-11-19T12:00:00Z');
+  const later = validatePreferences({ revision: 2, items: [{ cardId: item.id, cardRevision: '6', state: 'later', until: '2026-11-20T09:00:00Z' }] });
+  assert.equal(personalCardState(item, later, now), 'later');
+  assert.equal(personalCardState(item, later, Date.parse('2026-11-20T10:00:00Z')), 'visible');
+  const hidden = validatePreferences({ revision: 3, items: [{ cardId: item.id, cardRevision: '7', state: 'hidden' }] });
+  assert.equal(personalCardState(item, hidden, now), 'hidden');
+  assert.equal(personalCardState({ ...item, revision: '8' }, hidden, now), 'visible');
+  assert.equal(item.date, '2026-11-20');
+  assert.throws(() => validatePreferences({ revision: '3', items: [] }));
+  assert.throws(() => validatePreferences({ revision: -1, items: [] }));
+  assert.throws(() => validatePreferences({ revision: 4, items: [{ cardId: item.id, cardRevision: '7', state: 'later', until: 'invalid' }] }));
+});
 
-  dock.click();
-  assert.equal(attention.hidden, true);
-  assert.equal(classes.has('show-attention'), false);
-  assert.equal(text(attention), '');
+test('personal review times use explicit local slots without changing a source deadline', () => {
+  const morning = new Date(2026, 10, 19, 10, 0);
+  assert.equal(new Date(laterTime('today', morning)).getHours(), 18);
+  const late = new Date(laterTime('today', new Date(2026, 10, 19, 20, 0)));
+  assert.equal(late.getDate(), 19); assert.equal(late.getHours(), 23);
+  const tomorrow = new Date(laterTime('tomorrow', morning));
+  assert.equal(tomorrow.getDate(), 20); assert.equal(tomorrow.getHours(), 9);
+});
 
-  let releaseResponse;
-  respond = () => new Promise(resolve => { releaseResponse = resolve; });
-  const refreshing = events.get('praxis-identity-change')();
-  await new Promise(setImmediate);
-  dock.click();
-  assert.match(text(attention), /Synthetic due item/);
-  identity = null;
-  await events.get('praxis-identity-change')();
-  assert.equal(dock.hidden, true);
-  assert.equal(attention.hidden, true);
-  assert.equal(text(attention), '');
-  releaseResponse({ items: [{ ...item, title: 'Late stale item' }], partial: false });
-  await refreshing;
-  assert.equal(dock.hidden, true);
-  assert.equal(attention.hidden, true);
-  assert.equal(text(attention), '');
-  assert.equal(classes.has('show-attention'), false);
+test('browser callbacks receive no session secrets and read only their own native route', async () => {
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push({ url, init });
+    if (url === '/api/workbench/providers') return reply({ schemaVersion: 1, providers: [{ appId: 'memo', moduleUrl: '/app-providers/memo.mjs' }] });
+    return { ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ records: [] }) };
+  };
+  const result = await readBrowserProviders({ kind: 'cards', origin, identity: { userId: 'synthetic-user', username: 'sample', csrfToken: 'do-not-pass', secret: 'do-not-pass' }, fetchImpl, importModule: async url => {
+    assert.equal(url, origin + '/app-providers/memo.mjs');
+    return {
+      describe: () => ({ version: 1, appId: 'memo', cards: { supported: true, execution: 'browser' }, dataSources: [] }),
+      getCards: async context => {
+        assert.deepEqual(context.identity, { userId: 'synthetic-user', username: 'sample' });
+        await assert.rejects(context.read('/apps/projects/api/project'));
+        await assert.rejects(context.read('https://other.example.test/'));
+        await context.read('/api/records');
+        return { status: 'empty', items: [] };
+      },
+    };
+  } });
+  assert.equal(result[0].status, 'empty');
+  assert.equal(requests[1].url, origin + '/apps/memo/api/records');
+  assert.equal(requests[1].init.method, 'GET'); assert.equal(requests[1].init.redirect, 'error');
+  assert.equal(requests[1].init.headers, undefined);
+  assert.throws(() => providerReadHref('//other.example.test/', 'memo', origin));
+});
+
+test('unreviewed modules are refused and one broken provider cannot hide other app results', async () => {
+  await assert.rejects(readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: [{ appId: 'memo', moduleUrl: 'https://other.example.test/code.mjs' }] }), importModule: () => assert.fail('Must not import remote code') }));
+  const result = await readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: ['memo', 'calendar'].map(appId => ({ appId, moduleUrl: `/app-providers/${appId}.mjs` })) }), importModule: async url => {
+    const appId = url.includes('/memo.') ? 'memo' : 'calendar';
+    return { describe: () => ({ version: 1, appId, cards: { supported: true, execution: 'browser' } }), getCards: () => appId === 'memo' ? Promise.reject(new Error('Private implementation detail')) : { status: 'ready', items: [card({ id: 'calendar:sample:date', appId: 'calendar', kind: 'result', primaryAction: { label: 'Open date', href: '/apps/calendar/' }, evidence: [] })] } };
+  } });
+  assert.equal(result[0].status, 'unavailable'); assert.ok(!JSON.stringify(result[0]).includes('Private implementation detail'));
+  assert.equal(result[1].items[0].appId, 'calendar');
+});
+
+test('data location sources remain factual and browser failures do not retain stale paths', () => {
+  const value = { schemaVersion: 1, generatedAt: '2026-11-19T12:00:00.000Z', apps: [{ id: 'reminder', name: 'Reminder', locations: [{ label: 'Task store', kind: 'json', hostPath: '/synthetic/data/tasks.json' }] }, { id: 'memo', name: 'Memo', locations: [{ label: 'Old browser key', kind: 'browser', storageKey: 'sample.old' }] }] };
+  const merged = mergeBrowserInventory(value, [{ appId: 'memo', status: 'unavailable', items: [] }]);
+  assert.equal(merged.apps[0].locations[0].hostPath, '/synthetic/data/tasks.json');
+  assert.deepEqual(merged.apps[1].locations, []); assert.equal(merged.apps[1].status, 'unavailable');
+  validateDataManagement({ ...value, apps: [{ id: 'calendar', name: 'Calendar', locations: [{ label: 'Calendar projection', kind: 'derived' }, { label: 'Homeserver', kind: 'external', description: 'Owned by the connected service.' }] }] });
+  assert.equal(value.apps[1].locations[0].storageKey, 'sample.old');
 });

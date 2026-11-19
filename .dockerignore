@@ -12,6 +12,9 @@
 !config/apps.json
 !scripts/*.mjs
 !docs/PRD*.md
+!docs/APP-STANDARD.md
+!docs/APP-PROVIDERS.md
+!third_party/*/praxis-provider.mjs
 !skills/*/SKILL.md
 !third_party/letters/PRD.md
 !third_party/profiles/PRD.md

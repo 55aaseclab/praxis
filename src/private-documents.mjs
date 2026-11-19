@@ -10,6 +10,8 @@ const excludedFile = /^(?:readme(?:\.[a-z-]+)?|agents|claude|skill|contributing|
 const validName = name => !name.startsWith('.') && !/[\\\u0000-\u001f\u007f]/u.test(name);
 const folderFlags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_DIRECTORY;
 const fileFlags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+const previewTypes = new Set(['md', 'txt', 'tex', 'bib']);
+const previewBytes = 2048, previewCharacters = 280;
 const vanished = error => ['ENOENT', 'ENOTDIR', 'ELOOP', 'ESTALE'].includes(error.code);
 const fdPath = handle => '/proc/self/fd/' + handle.fd;
 const headers = {
@@ -71,9 +73,9 @@ async function openDocument(entry, root) {
   let file;
   try {
     file = await open(entry.child, fileFlags);
-    const stat = await file.stat();
-    if (stat.isFile() && stat.nlink === 1 && await readlink(fdPath(file)) === join(root, entry.relative)) {
-      return { file, size: stat.size };
+    const stat = await file.stat({ bigint: true });
+    if (stat.isFile() && stat.nlink === 1n && Number.isSafeInteger(Number(stat.size)) && await readlink(fdPath(file)) === join(root, entry.relative)) {
+      return { file, size: Number(stat.size), stat };
     }
   } catch (error) {
     if (!vanished(error) && error.code !== 'ENXIO') {
@@ -83,6 +85,30 @@ async function openDocument(entry, root) {
   }
   await file?.close();
   return null;
+}
+
+function documentRevision(id, stat) {
+  return createHash('sha256').update([id, stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].map(String).join('\0')).digest('hex');
+}
+function plainPreview(bytes, type) {
+  let text = new TextDecoder().decode(bytes).replace(/^\uFEFF/, '').replace(/\uFFFD$/, '');
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text)) return '';
+  text = text.replace(/<(?:script|style)\b[^>]*>[\s\S]*?<\/(?:script|style)\s*>/gi, ' ').replace(/<!--[^]*?-->/g, ' ').replace(/<[^>]*>/g, ' ');
+  if (type === 'md') text = text.replace(/```[^]*?```/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/^\s{0,3}(?:#{1,6}|>|[-*+])\s+/gm, '').replace(/[*_`]/g, '');
+  if (type === 'tex' || type === 'bib') text = text.replace(/\r?\n\s*%[^\r\n]*/g, ' ').replace(/\\(?:documentclass|usepackage|input|include|bibliography|bibliographystyle)(?:\[[^\]]*\])?\{[^}]*\}/g, ' ').replace(/\\(?:begin|end)\{[^}]*\}/g, ' ').replace(/\\[A-Za-z]+(?:\[[^\]]*\])?\{([^{}]*)\}/g, '$1').replace(/\\[A-Za-z]+/g, ' ').replace(/[{}]/g, '');
+  return Array.from(text.replace(/\s+/gu, ' ').trim()).slice(0, previewCharacters).join('');
+}
+async function catalogMetadata(entry, opened, root) {
+  const revision = documentRevision(entry.metadata.id, opened.stat);
+  let preview = '';
+  if (previewTypes.has(entry.metadata.type) && opened.size) {
+    const bytes = Buffer.alloc(Math.min(previewBytes, opened.size));
+    const result = await opened.file.read(bytes, 0, bytes.length, 0);
+    preview = plainPreview(bytes.subarray(0, result.bytesRead), entry.metadata.type);
+  }
+  const after = await opened.file.stat({ bigint: true });
+  if (!after.isFile() || after.nlink !== 1n || documentRevision(entry.metadata.id, after) !== revision || await readlink(fdPath(opened.file)) !== join(root, entry.relative)) return null;
+  return { ...entry.metadata, revision, updatedAt: new Date(Number(after.mtimeNs / 1000000n)).toISOString(), ...(preview && { preview }) };
 }
 
 function byteRange(value, total) {
@@ -132,8 +158,9 @@ export function createPrivateDocumentHandler(privateRoot) {
     if (!match) return json(request, response, 404, { code: 'NOT_FOUND' });
     let folder;
     try {
+      await reauthorize();
       folder = await openRoot(root);
-      const items = [];
+      const items = []; let partial = false;
       for await (const entry of documents(folder, root)) {
         if (match[1] && match[1] !== entry.metadata.id) continue;
         const opened = await openDocument(entry, root);
@@ -147,7 +174,8 @@ export function createPrivateDocumentHandler(privateRoot) {
             await serve(request, response, entry, opened);
             return;
           }
-          items.push(entry.metadata);
+          const metadata = await catalogMetadata(entry, opened, root);
+          if (metadata) items.push(metadata); else partial = true;
         } finally {
           await opened.file.close();
         }
@@ -155,7 +183,7 @@ export function createPrivateDocumentHandler(privateRoot) {
       if (match[1]) return json(request, response, 404, { code: 'NOT_FOUND' });
       items.sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
       await reauthorize();
-      return json(request, response, 200, { items });
+      return json(request, response, 200, { items, ...(partial && { partial: true }) });
     } catch (error) {
       if (response.headersSent || response.destroyed) return response.destroy();
       if (error.status) throw error;

@@ -6,6 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createPrivateDocumentHandler } from '../src/private-documents.mjs';
+import { validateCard } from '../public/app-providers.js';
+import * as lettersProvider from '../third_party/letters/praxis-provider.mjs';
+import * as profilesProvider from '../third_party/profiles/praxis-provider.mjs';
 
 async function fixture(t, { authorize, configured = true } = {}) {
   const area = await mkdtemp(join(tmpdir(), 'private-doc-store-'));
@@ -54,7 +57,10 @@ test('list returns only supported private documents with opaque identifiers and 
   ]);
   for (const item of items) {
     assert.match(item.id, /^[a-f0-9]{64}$/);
-    assert.deepEqual(Object.keys(item).sort(), ['group', 'id', 'name', 'type']);
+    assert.match(item.revision, /^[a-f0-9]{64}$/);
+    assert.ok(Number.isFinite(Date.parse(item.updatedAt)));
+    assert.ok(item.preview.length <= 280);
+    assert.deepEqual(Object.keys(item).sort(), ['group', 'id', 'name', 'preview', 'revision', 'type', 'updatedAt']);
   }
   assert.equal(JSON.stringify(items).includes(area), false);
   const doc = await get('/' + items[1].id);
@@ -123,4 +129,57 @@ test('unconfigured source fails closed and a second permission check fences the 
   const list = await get(), detail = await get('/' + doc.id);
   assert.equal(list.status, 403); assert.equal(detail.status, 403);
   assert.equal((await detail.text()).includes('CONFIDENTIAL_FIXTURE'), false);
+});
+
+
+test('catalog versions use open-file metadata and only bounded plain text receives a preview', async t => {
+  const { root, get } = await fixture(t);
+  const text = '# Synthetic heading\nA **short** [source](https://example.test) excerpt. <script>SCRIPT_NOT_PREVIEW</script>\n' + 'x'.repeat(4096) + 'TAIL_NOT_PREVIEW';
+  await writeFile(join(root, 'Versioned.md'), text);
+  await writeFile(join(root, 'Metadata.pdf'), '%PDF-BINARY_NOT_PREVIEW');
+  await writeFile(join(root, 'Metadata.docx'), 'OFFICE_NOT_PREVIEW');
+  await writeFile(join(root, 'Empty.txt'), '');
+  await writeFile(join(root, 'credentials.txt'), 'SECRET_CONTROL_NOT_PREVIEW');
+  let catalog = await (await get()).json();
+  const document = catalog.items.find(item => item.name === 'Versioned.md');
+  assert.match(document.revision, /^[a-f0-9]{64}$/); assert.ok(Number.isFinite(Date.parse(document.updatedAt)));
+  assert.ok(document.preview.startsWith('Synthetic heading A short source excerpt.')); assert.ok(Array.from(document.preview).length <= 280);
+  assert.doesNotMatch(JSON.stringify(catalog), /SCRIPT_NOT_PREVIEW|TAIL_NOT_PREVIEW|BINARY_NOT_PREVIEW|OFFICE_NOT_PREVIEW|SECRET_CONTROL_NOT_PREVIEW/);
+  for (const item of catalog.items.filter(item => ['pdf', 'docx'].includes(item.type))) { assert.equal(item.preview, undefined); assert.match(item.revision, /^[a-f0-9]{64}$/); }
+  assert.equal(catalog.items.find(item => item.name === 'Empty.txt').preview, undefined);
+  assert.equal((await (await get()).json()).items.find(item => item.id === document.id).revision, document.revision);
+  assert.equal(await (await get('/' + document.id)).text(), text);
+  await writeFile(join(root, 'Versioned.md'), '# Updated synthetic original.');
+  catalog = await (await get()).json();
+  const changed = catalog.items.find(item => item.id === document.id);
+  assert.notEqual(changed.revision, document.revision); assert.equal(changed.preview, 'Updated synthetic original.');
+});
+
+test('a final owner reauthorization failure suppresses catalog filenames and newly derived text previews', async t => {
+  let checks = 0;
+  const { root, get } = await fixture(t, { authorize: () => { if (++checks === 2) throw Object.assign(new Error('Revoked'), { status: 403 }); } });
+  await writeFile(join(root, 'Private preview.md'), 'SYNTHETIC_PREVIEW_MUST_NOT_ESCAPE');
+  const response = await get(); assert.equal(response.status, 403);
+  assert.doesNotMatch(await response.text(), /Private preview|SYNTHETIC_PREVIEW_MUST_NOT_ESCAPE|revision|items/);
+});
+
+
+test('native catalogs feed real Letters and Profiles cards that satisfy the strict browser DTO', async t => {
+  let allowed = true;
+  const { root, get } = await fixture(t, { authorize: () => { if (!allowed) throw Object.assign(new Error('Denied'), { status: 403 }); } });
+  const original = '# Synthetic source\nRead the actual authorized document.';
+  await writeFile(join(root, 'Correspondence.md'), original); await writeFile(join(root, 'Metadata only.pdf'), '%PDF-SYNTHETIC_BINARY_NOT_A_SUMMARY');
+  for (const provider of [lettersProvider, profilesProvider]) {
+    let reads = 0;
+    const context = { identity: { userId: 'synthetic-owner' }, read: async path => { reads++; assert.equal(path, 'api/documents'); const response = await get(); if (!response.ok) throw new Error('Denied'); return response.json(); } };
+    const result = await provider.getCards(context); assert.equal(result.status, 'ready'); assert.equal(result.items.length, 2); assert.equal(reads, 1);
+    const cards = result.items.map(card => validateCard(card, 'https://workbench.example.test'));
+    const text = cards.find(card => card.title === 'Correspondence.md'), binary = cards.find(card => card.title === 'Metadata only.pdf');
+    assert.match(text.revision, /^[a-f0-9]{64}$/); assert.match(text.primaryAction.href, new RegExp('^/apps/' + provider.describe().appId + '/#document=[a-f0-9]{64}$'));
+    assert.equal(text.evidence[0].href, text.primaryAction.href); assert.equal(binary.preview, undefined);
+    assert.equal(await (await get('/' + text.resourceId)).text(), original);
+    allowed = false;
+    const denied = await provider.getCards(context); assert.equal(denied.status, 'unavailable'); assert.deepEqual(denied.items, []); assert.doesNotMatch(JSON.stringify(denied), /Correspondence|Synthetic source/);
+    allowed = true;
+  }
 });

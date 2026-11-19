@@ -4,6 +4,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { SESSION_COOKIE } from './auth.mjs';
 import { validateStorageProjection } from '../storage/status.mjs';
 import { readDataInventory } from './data-inventory.mjs';
+import { runtimeTraceReport } from './runtime-traces.mjs';
 
 const MAX_BYTES = 128 * 1024, MAX_STORAGE_BYTES = 64 * 1024, FRESH_MS = 90000;
 const APPS = Object.freeze([
@@ -65,7 +66,7 @@ export function requireConsoleAdmin(request, { auth, config }) {
   return { ...auth.requirePlatformAdminSession(token), platformAdmin: true };
 }
 
-export function createConsoleHandler({ auth, config, events, observations, fetchImpl = fetch, clock = () => Date.now(), readInventory = readDataInventory }) {
+export function createConsoleHandler({ auth, config, events, observations, fetchImpl = fetch, clock = () => Date.now(), readInventory = readDataInventory, getRuntimeTraces }) {
   const cache = new Map(), pending = new Map();
   const requireAdmin = request => requireConsoleAdmin(request, { auth, config });
   async function probe(app) {
@@ -118,12 +119,59 @@ export function createConsoleHandler({ auth, config, events, observations, fetch
     if (Buffer.byteLength(body) > MAX_BYTES) { status = 503; body = '{"code":"CONSOLE_UNAVAILABLE"}'; }
     response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers }); response.end(body);
   }
+  function traceReferences(report, request) {
+    const token = sessionCredential(request);
+    const authorize = reference => {
+      if (!reference?.appId || !reference.spaceId || !config.apps[reference.appId]?.spaces?.includes(reference.spaceId)) return null;
+      try {
+        auth.authorize(token, { appId: reference.appId, spaceId: reference.spaceId, resourceId: reference.resourceId, action: 'read' }, { auditDenied: false });
+        const slug = reference.appId === 'lattice-slides' ? 'slides' : reference.appId;
+        if (!/^[a-z][a-z0-9-]*$/.test(slug)) return null;
+        return { appId: reference.appId, spaceId: reference.spaceId, ...(reference.resourceId !== undefined && { resourceId: reference.resourceId }), ...(reference.revision !== undefined && { revision: reference.revision }), href: `/apps/${slug}/` };
+      } catch { return null; }
+    };
+    const sources = references => (references || []).map(reference => authorize(reference)).filter(Boolean);
+    const metadata = (value, permitted) => ({
+      ...(value.sources !== undefined && { sources: sources(value.sources), sourceCount: value.sources.length }),
+      ...(value.workflow !== undefined && { workflowRecorded: true, workflow: permitted ? value.workflow : null }),
+      ...(value.humanDecision !== undefined && { humanDecisionRecorded: true, humanDecision: permitted ? value.humanDecision : null }),
+    });
+    return { ...report, items: report.items.map(item => {
+      const { spaceId, resourceId, revision, workflow, humanDecision, sources: sourceValues, steps, ...value } = item;
+      const reference = authorize({ appId: item.appId, spaceId, resourceId, revision });
+      return { ...value, reference, ...(spaceId && { spaceRef: events.tracePseudonym(spaceId) }), ...(resourceId && { resourceRef: events.tracePseudonym(resourceId) }),
+        ...metadata(item, Boolean(reference)),
+        ...(steps && { steps: steps.map(step => {
+          const { resourceId: stepResource, revision: stepRevision, workflow: stepWorkflow, humanDecision: stepDecision, sources: stepSources, ...safeStep } = step;
+          const stepReference = authorize({ appId: item.appId, spaceId, resourceId: stepResource ?? resourceId, revision: stepRevision });
+          return { ...safeStep, reference: stepReference, ...(stepRevision !== undefined && { revisionRecorded: true }), ...metadata(step, Boolean(stepReference)) };
+        }) }),
+      };
+    }) };
+  }
   return async (request, response) => {
     const url = new URL(request.url, config.issuer);
-    if (!['/api/business/console/status', '/api/business/console/observations', '/api/business/console/data'].includes(url.pathname)) return false;
+    if (!['/api/business/console/status', '/api/business/console/observations', '/api/business/console/data', '/api/business/console/traces'].includes(url.pathname)) return false;
     try {
       const session = requireAdmin(request);
       if (request.method !== 'GET') { reply(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET' }); return true; }
+      if (url.pathname.endsWith('/traces')) {
+        const allowed = ['source', 'before', 'limit', 'traceId'];
+        const source = url.searchParams.get('source') || 'lifecycle', before = url.searchParams.get('before'), limit = url.searchParams.get('limit'), traceId = url.searchParams.get('traceId');
+        if ([...url.searchParams.keys()].some(key => !allowed.includes(key) || url.searchParams.getAll(key).length !== 1) || !['lifecycle', 'audit', 'outbox', 'runtime'].includes(source)
+          || before !== null && (!/^[1-9][0-9]{0,15}$/.test(before) || !Number.isSafeInteger(Number(before)))
+          || limit !== null && (!/^[1-9][0-9]?$/.test(limit) || Number(limit) > 50)
+          || traceId !== null && (source !== 'lifecycle' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(traceId))) {
+          reply(response, 400, { code: 'INVALID_TRACE_QUERY' }); return true;
+        }
+        if (source === 'runtime') {
+          const report = typeof getRuntimeTraces === 'function' ? await getRuntimeTraces({ token: sessionCredential(request), ...(before !== null && { before: Number(before) }), ...(limit !== null && { limit: Number(limit) }) }) : runtimeTraceReport('unavailable', clock());
+          requireAdmin(request); reply(response, 200, { ...report, coverage: { ...(events?.traceCoverage?.() || {}), ...report.coverage } }); return true;
+        }
+        const report = events.tracePage({ source, ...(before !== null && { before: Number(before) }), ...(limit !== null && { limit: Number(limit) }), ...(traceId !== null && { traceId }) });
+        const visible = traceReferences(report, request);
+        requireAdmin(request); reply(response, 200, visible); return true;
+      }
       if (url.pathname.endsWith('/data')) {
         if (url.search) { reply(response, 400, { code: 'INVALID_REQUEST' }); return true; }
         const inventory = await readInventory(config.console?.dataInventoryFile);
