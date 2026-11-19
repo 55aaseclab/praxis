@@ -24,6 +24,7 @@ Start with the [platform manual](PLATFORM.en.md) for user journeys and the [app 
 | Polaris / 研究工作区 | [Workspace and data](POLARIS.en.md) | [工作区与数据](POLARIS.md) |
 | Polaris viewer / 观察查看器 | [Read-only service](POLARIS-VIEWER.md#english) | [只读服务](POLARIS-VIEWER.md#简体中文) |
 | Interaction design / 交互设计 | [Workbench](UI-UX.md#english) · [Design guide](../skills/praxis-operator/references/ui-style-guide.en.md) | [工作台](UI-UX.md#简体中文) · [设计指南](../skills/praxis-operator/references/ui-style-guide.md) |
+| Card design proposal / 卡片设计草案 | [Reader-controlled cards](design/workbench-cards.en.md) | [由使用者掌握节奏](design/workbench-cards.md) |
 | Brand / 品牌 | [Logo](LOGO.md) | [徽标](LOGO.md) |
 | Verification / 验收 | [Current procedures](VERIFICATION.en.md) | [验收方案及历史台账](VERIFICATION.md) |
 | UI/UX audit / 交互审计 | [19 November 2026](UI-UX-AUDIT-2026-11-19.en.md) | [2026-11-19](UI-UX-AUDIT-2026-11-19.md) |
