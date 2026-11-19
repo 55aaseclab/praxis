@@ -10,7 +10,10 @@ Praxis builds and polishes its built-in apps so people can read, watch or listen
 
 You can try the [hosted workbench](https://polaris.jianxiaoyitech.com/) before setting up your own instance.
 
-![Real Codex session in Paseo beside the Praxis workbench with synthetic demo records](docs/images/workbench-en.png)
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-en.png">
+  <img src="docs/images/workbench-en.gif" alt="Real Paseo input beside Praxis switching from Apps to a synthetic Reminder card">
+</picture>
 
 ## Quickstart
 

@@ -10,7 +10,10 @@ Praxis 打磨内置应用，让人可以直接读、看、听结果，并据此�
 
 部署前可以试用[在线工作台](https://polaris.jianxiaoyitech.com/)。
 
-![左侧为真实 Codex 会话的 Paseo 截图，右侧为使用合成示例数据的 Praxis 工作台](docs/images/workbench-zh.png)
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-zh.png">
+  <img src="docs/images/workbench-zh.gif" alt="真实 Paseo 输入框与 Praxis 工作台：从应用视图切换到一条合成提醒卡片">
+</picture>
 
 ## 快速开始
 
