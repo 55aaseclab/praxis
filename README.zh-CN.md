@@ -1,4 +1,4 @@
-# <img src="public/praxis.svg" width="38" height="38" alt=""> Praxis 工作台
+# <img src="public/praxis.svg" width="38" height="38" align="absmiddle" alt=""> Praxis 工作台
 
 [English](README.md) · [本机运行](#本机运行) · [试用 MCP](#试用-mcp)
 

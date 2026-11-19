@@ -1,4 +1,4 @@
-# <img src="public/praxis.svg" width="38" height="38" alt=""> Praxis
+# <img src="public/praxis.svg" width="38" height="38" align="absmiddle" alt=""> Praxis
 
 [简体中文](README.zh-CN.md) · [Quickstart](#quickstart) · [Try MCP](#try-mcp)
 
