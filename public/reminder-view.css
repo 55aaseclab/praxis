@@ -100,5 +100,3 @@ html.reminder-app{color-scheme:light dark}
 .reminder-app .context-picker{display:grid;gap:5px;margin:0 0 12px;font-size:12px;color:var(--muted)}
 .reminder-app .context-picker select{font-size:13px}
 .reminder-app .card[data-view="routine"] .dot{background:#30b85a}.reminder-app .card[data-view="today"] .dot{background:#0a84ff}.reminder-app .card[data-view="scheduled"] .dot{background:#ed5148}.reminder-app .card[data-view="all"] .dot{background:#62626a}.reminder-app .card[data-view="flagged"] .dot{background:#e69019}.reminder-app .card[data-view="completed"] .dot{background:#8e8e93}
-
-.locale-choice { border: 0; background: transparent; color: inherit; padding: 6px 10px; min-height: 44px; font: inherit; cursor: pointer; }

@@ -31,7 +31,7 @@ function introduction(origin, t) {
     workbenchUrl: origin + '/', loginUrl: origin + '/auth/login',
     publicGuidance: { url: origin + PUBLIC_GUIDANCE_MCP_PATH, authentication: 'none', purpose: t("Fixed public product information and setup guidance", "固定产品介绍和使用指南") },
     businessConnection: { url: origin + '/mcp', authentication: 'OAuth 2.0', purpose: t("Business operations after the user approves the scope", "用户确认授权范围后的业务操作") },
-    access: t("Administrators configure a user’s access. The user delegates a subset to an external agent. Effective delegation follows current permissions, and the user can revoke it in Manage.", "管理员先配置用户可访问的范围；用户再将自己已有权限的子集委托给外部智能体。委托随当前权限收紧，用户可在管理页撤销。"),
+    access: t("Administrators configure a user’s access. The user delegates a subset to an external agent. Effective delegation follows current permissions, and the user can revoke it in Settings → Agent delegations.", "管理员先配置用户可访问的范围；用户再将自己已有权限的子集委托给外部智能体。委托随当前权限收紧，用户可在「设置 → 智能体委托」中撤销。"),
     limits: [t("The public guide returns no account, space, application resource or business record.", "公共指南不提供用户、空间、应用资源或业务记录。"), t("Check the external client’s support for custom remote MCP and verify its connection directly. Public discovery alone does not establish a mobile integration.", "第三方智能体是否支持自定义远程 MCP，需查看该客户端并实际验证；本指南不代表手机 App 已接通。")],
   };
 }
@@ -48,7 +48,7 @@ function guidance(platform, origin, t) {
     workflow: [
       { step: 1, text: t("Sign in to the workbench and open an app or project you have permission to use.", "在浏览器登录工作台，打开已经获准访问的应用或项目。"), url: origin + '/' },
       { step: 2, text: t("If your external agent supports custom remote MCP, add the protected business endpoint and choose the delegation scope when signing in and confirming OAuth in your browser.", "如果外部智能体支持自定义远程 MCP，添加受保护业务入口，并在 Praxis 的浏览器登录与 OAuth 确认中选择授权范围。"), url: origin + '/mcp' },
-      { step: 3, text: t("Use the agent with authorized data and check the results in the app. Revoke its delegation in Manage when needed.", "通过智能体操作获准数据，在应用中查看结果；需要收回委托时进入同一管理页。"), url: origin + '/admin/' },
+      { step: 3, text: t("Use the agent with authorized data and check the results in the app. Revoke its delegation in Settings → Agent delegations when needed.", "通过智能体操作获准数据，在应用中查看结果；需要收回委托时，打开「设置 → 智能体委托」。"), url: origin + '/admin/' },
     ],
     homeScreen: homeScreen(platform, origin, t),
     connectionNote: t("The anonymous /mcp/guide endpoint serves fixed guidance. Business operations use /mcp and require sign-in and explicit delegation.", "无需认证的 /mcp/guide 只提供本指南。业务操作连接 /mcp，并需要用户登录和明确授权；不能把公共指南连接视为已经获得业务权限。"),

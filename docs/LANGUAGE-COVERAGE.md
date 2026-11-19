@@ -2,7 +2,7 @@
 
 English · [简体中文](#语言覆盖范围) · Reviewed 2026-11-19
 
-The supported interface languages are English (default) and Simplified Chinese. A saved explicit preference wins. Maintainers update English first and ship the corresponding Chinese text in the same change. The app standard describes the contract for official and locally developed apps. [App standard](APP-STANDARD.md)
+The supported interface languages are English (default) and Simplified Chinese. In the standalone or signed-in workbench, open **Settings → General → Language**. The choice is saved in this browser and also applies to the PRD reader. Maintainers update English first and ship the corresponding Chinese text in the same change. The app standard describes the contract for official and locally developed apps. [App standard](APP-STANDARD.md)
 
 The [developer and operator documentation index](README.md) lists paired procedures for the audited first-party apps and identifies the scope of their historical editions.
 
@@ -28,7 +28,7 @@ The [developer and operator documentation index](README.md) lists paired procedu
 
 # 语言覆盖范围
 
-界面支持英语（默认）和简体中文，优先采用用户上次明确选择的语言。维护时先更新英文，同一改动交付中文。官方应用与本地开发应用的要求见[应用标准](APP-STANDARD.md)。
+界面支持英语（默认）和简体中文，可在独立或已登录的工作台打开**设置 → 通用 → 语言**。选择保存在当前浏览器中，需求阅读器也使用这一偏好。维护时先更新英文，同一改动交付中文。官方应用与本地开发应用的要求见[应用标准](APP-STANDARD.md)。
 
 ## 已核对的范围
 

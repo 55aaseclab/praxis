@@ -7,6 +7,8 @@ import test from 'node:test';
 import { createPraxisServer, WORKSPACE_ROOT } from '../src/server.mjs';
 import { readApps } from '../src/apps.mjs';
 import { gatewayApps } from '../src/web-gateway.mjs';
+import { createBusinessServer } from '../src/business/server.mjs';
+import { SESSION_COOKIE } from '../src/business/auth.mjs';
 
 async function start(t, options = {}) {
   const server = createPraxisServer({
@@ -92,4 +94,63 @@ test('the shipped directory preserves managed grants, owner readers and the Proj
   const owner = list({ apps: registered.map(app => app.id), platformAdmin: true, documentOwner: true });
   assert.equal(owner.length, 14);
   assert.equal(owner.find(app => app.id === 'lattice-slides').url, origin + '/apps/slides/');
+});
+
+test('standalone Settings owns the language preference and PRDs follow its cookie', async t => {
+  const request = await start(t);
+  const home = await (await request('/')).text();
+  const settingsLink = home.match(/<a [^>]*href="\/admin\/"[^>]*>Settings<\/a>/);
+  assert.ok(settingsLink, 'The local workbench links to Settings.');
+  assert.doesNotMatch(settingsLink[0], /\bhidden\b/);
+  assert.doesNotMatch(home, /data-language-switch/);
+
+  const response = await request('/admin/');
+  assert.equal(response.status, 200);
+  const settings = await response.text();
+  assert.match(settings, /Language/);
+  assert.match(settings, /English/);
+  assert.match(settings, /简体中文/);
+  assert.doesNotMatch(settings, /<script[^>]+src="\/admin\.js"/);
+
+  for (const [cookie, htmlLang] of [['en', 'en'], ['zh', 'zh-CN']]) {
+    const reader = await request('/prds/praxis/', { headers: { Cookie: 'praxis_locale=' + cookie } });
+    assert.equal(reader.status, 200);
+    const page = await reader.text();
+    assert.ok(page.includes('<html lang="' + htmlLang + '">'));
+    assert.doesNotMatch(page, /<a [^>]*href="\?lang=(?:en|zh)"/);
+  }
+});
+
+test('managed Settings admits an ordinary member and keeps admin APIs protected', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'praxis-settings-'));
+  const config = {
+    issuer: 'https://workbench.example.test', allowedHosts: [], apps: {}, observationsFile: null,
+    database: join(root, 'auth.db'), eventsDatabase: join(root, 'events.db'),
+  };
+  const server = createBusinessServer({ config });
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    await server.business.shutdown();
+    server.business.auth.close();
+    server.business.events.close();
+    await rm(root, { recursive: true, force: true });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const host = '127.0.0.1:' + server.address().port;
+  config.allowedHosts.push(host);
+  const settingsUrl = 'http://' + host + '/admin/';
+  const signedOut = await fetch(settingsUrl, { redirect: 'manual' });
+  assert.equal(signedOut.status, 303);
+  assert.equal(new URL(signedOut.headers.get('location'), settingsUrl).pathname, '/auth/login');
+
+  const member = { username: 'settings-reader', password: 'Synthetic-only-settings-password' };
+  server.business.auth.createUser({ id: 'reader', ...member });
+  const headers = { Cookie: SESSION_COOKIE + '=' + server.business.auth.login(member).sessionToken };
+  const response = await fetch(settingsUrl, { headers });
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Language/);
+  const users = await fetch(new URL('/api/business/admin/users', settingsUrl), { headers });
+  assert.equal(users.status, 403);
 });

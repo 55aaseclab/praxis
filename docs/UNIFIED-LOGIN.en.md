@@ -14,7 +14,7 @@ The browser reuses its same-origin secure session until the user signs out or th
 
 The existing identity database persists users. `auth_web_access` stores app IDs, PRD access and expiry. Every valid native browser session can enter the shell. App and PRD requests recheck entry permissions. Expired access removes content without prematurely ending the session. A missing policy gives an empty workbench; a corrupt one fails closed. Family or company space administrators do not automatically become platform administrators. Global status requires explicit platform administrator status.
 
-A website entry grant and a business action/resource grant cover different capabilities. A business Bearer credential cannot open a legacy whole-app page. Legacy Basic authentication cannot establish a Praxis identity. The business service independently authenticates login, OAuth and API requests. Use Management for routine account and entry changes. [Business identity and authorization](BUSINESS-AUTH.en.md)
+A website entry grant and a business action/resource grant cover different capabilities. A business Bearer credential cannot open a legacy whole-app page. Legacy Basic authentication cannot establish a Praxis identity. The business service independently authenticates login, OAuth and API requests. Use Settings for routine account and entry changes. [Business identity and authorization](BUSINESS-AUTH.en.md)
 
 ## Runtime boundaries
 

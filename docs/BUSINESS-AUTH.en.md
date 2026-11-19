@@ -76,7 +76,7 @@ Membership management, sharing and delegated management are individually authori
 
 ## 5. Workbench sign-in and delegation
 
-A website login starts an eight-hour native session. The browser uses the person's current app and resource permissions. `authorizationMode` is `native` for ordinary users and `administrator` for platform administrators. The account menu contains account information and sign-out. All signed-in users can enter Management at `/admin/`. Ordinary accounts see their own access and agent delegations. Administrators also see global status, user management and entry policies.
+A website login starts an eight-hour native session. The browser uses the person's current app and resource permissions. `authorizationMode` is `native` for ordinary users and `administrator` for platform administrators. The account menu contains account information and sign-out. All signed-in users can open Settings at `/admin/`. Ordinary accounts see their own access and agent delegations. Administrators also see global status, user management and entry policies.
 
 An external client starts the OAuth grant. Consent identifies the client and offers only currently permitted, implemented operations. The existence of a grant does not establish that the client connected or used a tool. In standalone mode, `/auth/delegate` still offers explicit first-party delegation when applicable. An empty capability set yields an empty state rather than a submittable empty scope.
 

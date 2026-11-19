@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/reminder-view.css">
   <script type="module" src="/reminder.js"></script>
 </head>
-<body class="reminder-app">
+<body data-praxis-i18n class="reminder-app">
   <div class="shell">
     <aside class="sidebar" aria-label="Reminder navigation" data-zh-label="提醒事项导航">
       <div class="brand">Reminder<span><span data-zh="个人提醒">Personal reminders</span></span></div>
@@ -24,7 +24,6 @@
     </aside>
     <main id="main" aria-busy="true">
       <header class="toolbar">
-        <button type="button" class="locale-choice" data-language-switch lang="zh-CN">简体中文</button>
         <nav class="page-tabs" aria-label="Pages" data-zh-label="页面">
           <button type="button" data-page="tasks" aria-current="page"><span data-zh="任务">Tasks</span></button>
           <button type="button" data-page="stats"><span data-zh="统计">Statistics</span></button>

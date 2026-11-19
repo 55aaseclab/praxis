@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.107 · [简体中文](PRD.md)
+Version: 0.1.108 · [简体中文](PRD.md)
 
 People should be able to ask an agent for work and open the resulting document, schedule or other app record. Each app defines the meaning, storage and presentation of its records. The workbench handles discovery and navigation. External clients choose their own agent harness.
 
@@ -11,7 +11,7 @@ People should be able to ask an agent for work and open the resulting document, 
 | Delegate a bounded operation | A native account authorizes a client for specific actions and resources. Tool discovery and the server both check grants. Revocation takes effect on subsequent access. |
 | Keep personal materials private | Readers validate the owner's session before returning document names or contents. Original files and generated data belong in private storage. |
 | Add a local app | An operator can supply a bilingual manifest for a loopback service, then launch that app on their own machine. |
-| Work in either language | English is the default. Shipped interface changes carry corresponding Simplified Chinese copy. User-authored material keeps its original language. |
+| Work in either language | Open **Settings → General → Language** on the workbench to choose English (default) or Simplified Chinese. The choice applies immediately and persists in this browser for the workbench and its PRD reader. Standalone users and signed-in members can change it without administrator privileges. User-authored material keeps its original language. |
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
 

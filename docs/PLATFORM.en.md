@@ -12,7 +12,7 @@ Each signed-in user gets a workbench. Administrators see default application ent
 
 The Apps view shows the launcher. For you brings permitted tasks and project work into a card view with links to their sources. The optional Paseo panel uses a host the user pairs. New local-only apps follow the development manifest contract. [Paseo](PASEO.md) · [App standard](APP-STANDARD.md)
 
-Apps and projects open in the current tab. Browser Back returns to the previous view. The workbench account menu offers account information and sign-out. Management lets a user review their access and delegations. Administrators also manage accounts, grants, connections and system status. When an entry expires, the workbench withdraws the icon, associated PRD and access. The server checks direct URLs too. Managed private app pages have a Home button at bottom left that returns to the workbench in the same tab. Allow room for it on phones. Standalone apps and public shares retain their own navigation.
+Apps and projects open in the current tab. Browser Back returns to the previous view. The workbench account menu offers account information and sign-out. Open **Settings → General → Language** to choose English or Simplified Chinese for this browser. In a managed installation, signed-in users can also review their access and delegations in Settings. Administrators also manage accounts, grants, connections and system status. When an entry expires, the workbench withdraws the icon, associated PRD and access. The server checks direct URLs too. Managed private app pages have a Home button at bottom left that returns to the workbench in the same tab. Allow room for it on phones. Standalone apps and public shares retain their own navigation.
 
 | App | Managed entry | Service port | Source |
 | --- | --- | ---: | --- |
@@ -72,7 +72,7 @@ Each app has an active working data set, consistent snapshots and independent en
 | --- | --- | --- |
 | Business HTTP service | `src/business/server.mjs` | Managed app views, API, MCP and identity endpoints |
 | Identity and delegation | `src/business/auth.mjs` | User, space and resource scope, authentication, OAuth, revocation and policy locking |
-| Management | `${issuer}/admin/`, `src/business/admin.mjs` | Account administration, website grants and revoking delegations |
+| Settings | `${issuer}/admin/`, `src/business/admin.mjs` | Account administration, website grants and revoking delegations |
 | App bridge | `src/business/bridge.mjs` | Fixed signed app operations |
 | Events and replica queue | `src/business/events.mjs` | Committed app events, scoped subscriptions and durable replication work |
 | Maintenance CLI | `scripts/business-admin.mjs` | Initial configuration, memberships, grants and private credentials |
@@ -87,7 +87,7 @@ npm run business:admin -- status --config /absolute/private/business.json
 
 Use an explicit HTTPS origin as the production OAuth issuer. Loopback HTTP is available for local development and isolated tests. A bind address such as `0.0.0.0` describes a listener. The workbench is at `${issuer}/`. The managed endpoints `/business/reminder/` and `/business/tingproof/` return app-specific HTML. Shared `app-transport.js` provides authentication, calls and events. The MCP endpoint is `${issuer}/mcp`. Verify public routing separately from local process startup.
 
-Anyone with a valid website account can open Management for their own access and agent delegations. Platform administrators can also administer users and global status. Browser actions use the person's existing permissions. External agents use explicit OAuth delegation within the current app and resource boundaries. [Identity guide](BUSINESS-AUTH.en.md)
+Anyone with a valid website account can open Settings for their own access and agent delegations. Platform administrators can also administer users and global status. Browser actions use the person's existing permissions. External agents use explicit OAuth delegation within the current app and resource boundaries. [Identity guide](BUSINESS-AUTH.en.md)
 
 ## 2. Private configuration and credentials
 
@@ -124,7 +124,7 @@ The operator fixes each adapter's host and `/api/business` path. Use a separate 
 
 ## 3. Website management and bootstrap
 
-Sign in and open Management or `${issuer}/admin/`. The Users view manages accounts, status, password resets and platform administrator status. Entry policies grant individual apps, PRDs and expiration. A newly created user can sign in to an empty workbench. Administrators get default website entries. App resource checks still control access to private records. Review and revoke agent delegations from Management.
+Sign in and open Settings or `${issuer}/admin/`. The Users view manages accounts, status, password resets and platform administrator status. Entry policies grant individual apps, PRDs and expiration. A newly created user can sign in to an empty workbench. Administrators get default website entries. App resource checks still control access to private records. Review and revoke agent delegations in **Settings → Agent delegations**.
 
 Only administrator browser sessions can access `/api/business/admin/*`. The account endpoints at `/api/business/account/*` take their user identity from the current browser session. Both sets require same-origin CSRF checks for writes. Password resets invalidate old sessions and delegations. The last active administrator must retain administrative access.
 
@@ -193,7 +193,7 @@ For public onboarding, send requests to `POST ${issuer}/mcp/guide`. The read-onl
 
 Public tool results default to English. Send the HTTP header `Accept-Language: zh-CN` for Simplified Chinese. The same schemas and fixed URLs apply. Skills advertised through MCP resources contain English first and the corresponding Chinese instructions in the same document.
 
-The Management MCP section shows registered capabilities, adapter configuration and recent usage for administrators. A registration or past call is separate from a current health check.
+The MCP section in Settings shows registered capabilities, adapter configuration and recent usage for administrators. A registration or past call is separate from a current health check.
 
 The protected service at `POST ${issuer}/mcp` uses the official SDK's stateless Streamable HTTP JSON transport. Each call presents a Bearer credential bound to a user, client and scope. Tool discovery filters by current authority and execution checks authority again. Record the actual protocol version from `initialize`. Examples include permitted Reminder listing, creation, completion, execution records and statistics, and TingProof task reading, assignment or correction submission. Consult live discovery for names and arguments. Business clients get no shell, direct files, SQL, deployment access or arbitrary network commands.
 

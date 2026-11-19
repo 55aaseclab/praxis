@@ -3,7 +3,7 @@ const language = locale() === 'en' ? 'en' : 'zh-CN';
 const base = '/api/business/admin', accountBase = '/api/business/account';
 const appNames = { reminder: 'Reminder', travel: 'Travel', knowledge: 'Knowledge', memo: 'Memo', 'lattice-slides': 'Slides', tingproof: t("TingProof", "听校"), projects: 'Projects', finance: 'Finance', intelligence: 'Intelligence', 'matrix-reader': 'Matrix Reader', calendar: 'Calendar' };
 const actionNames = { read: t("Read", "读取"), create: t("Create", "新增"), update: t("Update", "修改"), complete: t("Complete", "完成"), delete: t("Delete", "删除"), submit: t("Submit corrections", "提交校正"), assign: t("Assign tasks", "分配任务"), manage_members: t("Manage members", "管理成员"), manage_sharing: t("Manage sharing", "管理共享"), manage_delegation: t("Manage delegations", "管理委托") };
-const titles = { overview: t("Overview", "状态概览"), data: t("Data management", "数据管理"), mcp: 'MCP', users: t("Users", "用户"), access: t("App access", "入口权限"), grants: t("Agent delegations", "智能体委托") };
+const titles = { general: t('General', '通用'), overview: t("Overview", "状态概览"), data: t("Data management", "数据管理"), mcp: 'MCP', users: t("Users", "用户"), access: t("App access", "入口权限"), grants: t("Agent delegations", "智能体委托") };
 const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入内容。"), READ_TIMEOUT: t("Read timed out. Try again.", "读取超时，请重试。"), WRITE_TIMEOUT: t("Request timed out. Refresh to check whether it was saved.", "请求超时，尚未确认是否保存。请先刷新核对结果。"), INVALID_REQUEST: t("Check the form fields.", "请检查输入内容。"), NOT_FOUND: t("This record no longer exists. Refresh to continue.", "这条记录已不存在，请刷新。"), CONFLICT: t("Account already exists or its state changed. Check and try again.", "账号已存在或状态已变化，请检查后重试。"), LAST_ADMIN_REQUIRED: t("Keep at least one active platform administrator.", "至少需要保留一名启用的平台管理员。"), POLICY_BUSY: t("Authorization is being updated. Try again shortly.", "授权正在更新，请稍后重试。"), CSRF_REJECTED: t("Session changed. Sign in again.", "登录状态已变化，请重新登录。"), UNAVAILABLE: t("Service unavailable. Try again later.", "服务暂时不可用，请稍后重试。"), DATA_INVENTORY_UNAVAILABLE: t("Could not load data locations. Refresh to retry.", "暂时无法读取数据位置，请稍后刷新。"), ADMIN_DEFAULT_ACCESS: t("Platform administrators have access to all app entries.", "平台管理员默认拥有全部入口，无需单独授权。") };
 const content = document.querySelector('#content'), notice = document.querySelector('#notice');
 let session = null, users = [], nextCursor = null, selectedId = null, view = null, epoch = 0, ended = false, writing = false, createOpen = false;
@@ -60,7 +60,7 @@ function setSession(value) {
     users = []; nextCursor = null; selectedId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
   }
   session = value; clearTimeout(expiryTimer); clearTimeout(accessTimer);
-  if (!view || !value.platformAdmin && !['access', 'grants'].includes(view)) view = value.platformAdmin ? 'overview' : 'access';
+  if (!view || !value.platformAdmin && !['general', 'access', 'grants'].includes(view)) view = 'general';
   for (const node of document.querySelectorAll('[data-admin-only]')) node.hidden = !value.platformAdmin;
   for (const node of document.querySelectorAll('[data-shared-view]')) node.hidden = false;
   expiryTimer = setTimeout(() => terminal(401), Math.max(1, Math.min(value.expiresAt - Date.now(), 2147483647)));
@@ -79,12 +79,13 @@ function terminal(status, text) {
   ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; nextCursor = null; selectedId = null;
   for (const controller of controllers) controller.abort();
   overview?.clear(); document.querySelector('#overview-controls').hidden = true;
+  document.querySelector('#general-view').hidden = true;
   content.replaceChildren(); content.setAttribute('aria-busy', 'false');
   document.querySelector('#account-name').textContent = '';
   document.querySelector('#create-user').hidden = true;
   for (const node of document.querySelectorAll('[data-admin-only],[data-shared-view]')) node.hidden = true;
   for (const node of document.querySelectorAll('#navigation button, #refresh')) node.disabled = true;
-  message(text || (status === 401 ? t("Your session expired. Sign in again.", "登录已失效，请重新登录。") : t("You do not have access to management.", "当前账号没有管理界面的查看权限。")), 'error');
+  message(text || (status === 401 ? t("Your session expired. Sign in again.", "登录已失效，请重新登录。") : t("You do not have access to Settings.", "当前账号无权访问设置。")), 'error');
   const link = el('a', '', status === 401 ? t("Sign in", "登录") : t("Back to workbench", "回到工作台")); link.href = status === 401 ? '/auth/login?return_to=%2Fadmin%2F' : '/'; notice.append(link);
 }
 async function api(path, { method = 'GET', body } = {}) {
@@ -262,14 +263,16 @@ function renderGrants(user, value, own = false) {
 }
 async function render() {
   if (ended || !session) return;
-  if (!session.platformAdmin && !['access', 'grants'].includes(view)) view = 'access';
+  if (!session.platformAdmin && !['general', 'access', 'grants'].includes(view)) view = 'general';
   overview?.clear();
   document.querySelector('#overview-controls').hidden = view !== 'overview' || ended;
-  document.querySelector('#refresh').hidden = view === 'overview';
-  content.hidden = view === 'overview';
+  document.querySelector('#refresh').hidden = view === 'overview' || view === 'general';
+  document.querySelector('#general-view').hidden = view !== 'general';
+  content.hidden = view === 'overview' || view === 'general';
   const current = ++epoch; content.replaceChildren(); content.setAttribute('aria-busy', 'true');
   document.querySelector('#heading').textContent = titles[view]; document.querySelector('#create-user').hidden = view !== 'users' || ended || !session.platformAdmin;
   for (const node of document.querySelectorAll('[data-view]')) { if (node.dataset.view === view) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current'); }
+  if (view === 'general') { content.setAttribute('aria-busy', 'false'); return; }
   if (view === 'overview') {
     try { const controller = await ensureOverview(); if (!ended && current === epoch && session?.platformAdmin && view === 'overview') controller?.updateAccess(); }
     catch { if (!ended && current === epoch) message(t("Could not read the overview. Refresh to retry.", "暂时无法读取状态概览，请稍后刷新。"), 'error'); }
@@ -326,7 +329,7 @@ async function boot() {
     const metadata = await api(`${accountBase}/session`); if (ended || current !== epoch) return;
     if (!setSession(metadata)) return; current = epoch;
     document.querySelector('#account-name').textContent = session.user.username;
-    if (session.platformAdmin && !['overview', 'mcp', 'data'].includes(view)) {
+    if (session.platformAdmin && ['users', 'access', 'grants'].includes(view)) {
       const result = await api('/users?limit=50'); if (ended || current !== epoch) return;
       users = result.users; nextCursor = result.nextCursor; usersLoaded = true; if (!selected()) selectedId = null;
     }
@@ -339,7 +342,7 @@ async function boot() {
     }
   }
 }
-for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => { if (booting || writing || ended || !session || ['overview', 'users', 'mcp', 'data'].includes(node.dataset.view) && !session.platformAdmin) return; view = node.dataset.view; createOpen = false; message(); if (session.platformAdmin && !['overview', 'mcp', 'data'].includes(view) && !usersLoaded) void boot(); else void render(); });
+for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => { if (booting || writing || ended || !session || ['overview', 'users', 'mcp', 'data'].includes(node.dataset.view) && !session.platformAdmin) return; view = node.dataset.view; createOpen = false; message(); if (session.platformAdmin && ['users', 'access', 'grants'].includes(view) && !usersLoaded) void boot(); else void render(); });
 document.querySelector('#create-user').addEventListener('click', () => { if (booting || writing || ended || !session?.platformAdmin) return; createOpen = !createOpen; renderUsers(); content.querySelector('input')?.focus(); });
 document.querySelector('#refresh').addEventListener('click', () => void boot());
 content.addEventListener('input', event => {
@@ -362,3 +365,5 @@ document.addEventListener('visibilitychange', () => void resumeView());
 addEventListener('pageshow', event => { if (event.persisted && !ended) void boot(); });
 setInterval(async () => { if (ended || writing || document.visibilityState === 'hidden') return; const current = epoch; try { const value = await api(`${accountBase}/session`); if (!ended && current === epoch) { const wasAdmin = session?.platformAdmin, wasUser = session?.user.id; if (setSession(value)) { if (wasAdmin !== session.platformAdmin || wasUser !== session.user.id) void boot(); else if (!session.platformAdmin && view === 'access') void render(); } } } catch (error) { report(error); } }, 30000);
 void boot();
+
+document.querySelector('[data-language-preference]').addEventListener('change', () => location.reload());

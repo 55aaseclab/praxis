@@ -109,9 +109,6 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
         const locale = choice === 'en' || choice === 'zh' ? choice
           : /(?:^|;\s*)praxis_locale=zh(?:;|$)/.test(request.headers.cookie || '') ? 'zh' : 'en';
         const options = { systemNavigation: Boolean(navigation), locale };
-        if (choice === 'en' || choice === 'zh') {
-          response.setHeader('Set-Cookie', `praxis_locale=${choice}; Path=/; SameSite=Lax; Max-Age=31536000${gateway?.origin.startsWith('https:') ? '; Secure' : ''}`);
-        }
         const sendPrd = async (status, html) => send(request, response, status, navigation ? await injectSystemNavigation(Buffer.from(html), { headers: { 'content-type': 'text/html; charset=utf-8' }, canonicalOrigin: gateway.origin, ...navigation }) : html);
         if (path === '/prds/') return await sendPrd(200, catalogPage(await listPrds({ root, locale }), options));
         const match = path.match(/^\/prds\/([a-z\d-]+)\/$/);
@@ -123,7 +120,8 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
         }
         return await sendPrd(200, documentPage(document, rendered, await listPrds({ root, locale }), options));
       }
-      const file = path === '/' ? 'index.html' : path.slice(1);
+      const localSettings = !gateway && ['/admin', '/admin/'].includes(path);
+      const file = localSettings ? 'settings.html' : path === '/' ? 'index.html' : path.slice(1);
       const allowedRoot = await realpath(publicDir);
       let actual;
       try { actual = await realpath(resolve(allowedRoot, file)); } catch { return send(request, response, 404, 'Not found.', 'text/plain; charset=utf-8'); }
@@ -138,7 +136,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
         return response.end();
       }
       let content = await readFile(actual);
-      if (file === 'index.html' && !gateway) content = content.toString().replace('data-website-auth="managed"', 'data-website-auth="unmanaged"').replace(/<div id="account"[^>]*><\/div>/, '').replace('data-private-nav data-prd-nav hidden', 'data-private-nav data-prd-nav');
+      if (file === 'index.html' && !gateway) content = content.toString().replace('data-website-auth="managed"', 'data-website-auth="unmanaged"').replace(/<div id="account"[^>]*><\/div>/, '').replace('data-private-nav data-admin-nav hidden', 'data-private-nav data-admin-nav').replace('data-private-nav data-prd-nav hidden', 'data-private-nav data-prd-nav');
       return send(request, response, 200, content, type, headers || {});
     } catch (error) {
       console.error('Praxis request failed.');

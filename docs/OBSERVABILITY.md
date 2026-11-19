@@ -30,7 +30,7 @@ HTTP 传输、MCP 协议、业务动作和适配请求分组报告，不把同�
 {"event_name":"page_load","duration_ms":123}
 ```
 
-`event_name` 仅接受 `page_load`、`registry_load`、`app_open`、`page_error`；可选字段只有 `duration_ms` 和采集端枚举中的 `app_id`。浏览器耗时上限十分钟，上传最多等待两秒，超时或中断不保留部分正文。任何额外字段、非法枚举、跨源或超限均拒绝；返回码为204、400、403或429。不提供原始日志读取HTTP/MCP接口。F33的受保护概览仅向显式获准浏览器身份提供聚合报告，详见[工作台状态概览](PLATFORM-STATUS.md)。
+`event_name` 仅接受 `page_load`、`registry_load`、`app_open`、`page_error`；可选字段只有 `duration_ms` 和采集端枚举中的 `app_id`。浏览器耗时上限十分钟，上传最多等待两秒，超时或中断不保留部分正文。任何额外字段、非法枚举、跨源或超限均拒绝；返回码为204、400、403或429。不提供原始日志读取HTTP/MCP接口。「设置 → 状态概览」仅向显式获准浏览器身份提供聚合报告，详见[工作台状态概览](PLATFORM-STATUS.md)。
 
 ## 聚合报告与验证
 

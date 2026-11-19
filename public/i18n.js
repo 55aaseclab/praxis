@@ -20,16 +20,15 @@ export function setLocale(next) {
   window.dispatchEvent(new CustomEvent(eventName, { detail: next }));
 }
 
-let button;
+let preference;
 export function mountLanguageControls() {
-  if (button) return;
-  button = document.querySelector('[data-language-switch]');
-  if (!button && !document.body?.hasAttribute('data-praxis-i18n')) return;
-  button?.addEventListener('click', () => setLocale(t('zh', 'en')));
+  if (preference) return;
+  preference = document.querySelector('[data-language-preference]');
+  preference?.addEventListener('change', () => setLocale(preference.value));
   renderWorkbenchLanguage();
 }
 function renderWorkbenchLanguage() {
-  if (!button && !document.body?.hasAttribute('data-praxis-i18n')) return;
+  if (!document.body?.hasAttribute('data-praxis-i18n')) return;
   document.documentElement.lang = t('en', 'zh-CN');
   for (const node of document.querySelectorAll('[data-zh]')) {
     node.dataset.en ??= node.textContent;
@@ -39,15 +38,16 @@ function renderWorkbenchLanguage() {
     node.dataset.enLabel ??= node.getAttribute('aria-label');
     node.setAttribute('aria-label', t(node.dataset.enLabel, node.dataset.zhLabel));
   }
-  if (!button) return;
-  button.lang = t('zh-CN', 'en');
-  button.textContent = t('简体中文', 'English');
+  if (preference) preference.value = current;
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener(eventName, event => {
     current = event.detail === 'en' || event.detail === 'zh' ? event.detail : readLocale();
     renderWorkbenchLanguage();
+  });
+  window.addEventListener('pageshow', event => {
+    if (event.persisted && readLocale() !== current) window.dispatchEvent(new CustomEvent(eventName, { detail: readLocale() }));
   });
   window.addEventListener('storage', event => {
     if (event.key === key || event.key === null) window.dispatchEvent(new CustomEvent(eventName, { detail: readLocale() }));

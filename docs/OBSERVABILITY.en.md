@@ -28,7 +28,7 @@ The workbench accepts `POST /api/observations`, JSON up to 1,024 bytes, and at m
 {"event_name":"page_load","duration_ms":123}
 ```
 
-Accepted names are `page_load`, `registry_load`, `app_open` and `page_error`. Optional fields are `duration_ms` and an app ID in the current allowlist. Durations are capped at ten minutes. Wait up to two seconds for a submission. Drop incomplete bodies. Return 204, 400, 403 or 429 according to validation and limits. Reports exposed in Management are aggregates restricted to authorized browser identities. [Management status](PLATFORM-STATUS.en.md)
+Accepted names are `page_load`, `registry_load`, `app_open` and `page_error`. Optional fields are `duration_ms` and an app ID in the current allowlist. Durations are capped at ten minutes. Wait up to two seconds for a submission. Drop incomplete bodies. Return 204, 400, 403 or 429 according to validation and limits. Reports in **Settings → Overview** are aggregates restricted to authorized browser identities. [Status overview](PLATFORM-STATUS.en.md)
 
 ## Aggregate reports
 

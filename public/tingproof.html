@@ -7,13 +7,12 @@
   <link rel="stylesheet" href="/tingproof.css">
   <script type="module" src="/tingproof.js"></script>
 </head>
-<body>
+<body data-praxis-i18n>
   <div class="shell">
     <aside class="sidebar" aria-label="TingProof navigation" data-zh-label="听校导航">
       <div class="brand">TingProof<span data-zh="听校">Proofreading</span></div>
       <label id="context-picker" class="context-picker" for="space" hidden><span data-zh="任务范围">Task scope</span><select id="space" aria-label="Task scope" data-zh-label="任务范围"></select></label>
       <nav id="navigation" aria-label="Task views" data-zh-label="听校视图"><button type="button" class="nav-entry" aria-current="page"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 14v-3a8 8 0 0 1 16 0v3M4 11h3v8H4zM17 11h3v8h-3z"/></svg></span><span data-zh="听校任务">Proofreading tasks</span></button></nav>
-      <button type="button" data-language-switch>简体中文</button>
     </aside>
     <main id="main" aria-busy="true">
       <div class="pane-heading"><h1 id="heading" data-zh="听校任务">Proofreading tasks</h1><span id="connection" role="status"></span></div>

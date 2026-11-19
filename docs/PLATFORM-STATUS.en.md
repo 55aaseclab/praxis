@@ -1,14 +1,14 @@
-# Management status overview
+# Status overview in Settings
 
 English · [简体中文](PLATFORM-STATUS.md)
 
-Administrators see permission coverage, connections and storage state in Management. Other accounts neither fetch nor display global status. Each group shows when it was checked and distinguishes unknown, unavailable, stale and in-progress results. Refresh manually or every 30 seconds. Viewing status runs no backup, synchronization or permission mutation. [Platform manual](PLATFORM.en.md)
+Administrators see permission coverage, connections and storage state in **Settings → Overview**. Other accounts neither fetch nor display global status. Each group shows when it was checked and distinguishes unknown, unavailable, stale and in-progress results. Refresh manually or every 30 seconds. Viewing status runs no backup, synchronization or permission mutation. [Platform manual](PLATFORM.en.md)
 
 Local Chart.js renders counts, coverage and aggregated durations alongside accessible numeric tables. Tables show connection and replica state, time, scope and definitions. Unknown and stale values remain distinct from zero. Draw a historical trend only when history was collected. Dispose of charts on refresh, navigation and invalidation. If the chart library fails, the tables remain available. All chart assets are same-origin.
 
 ## Access and configuration
 
-From the workbench open Management at `/admin/`. An administrator gets the status overview, expandable usage observations, user administration, entry policies and agent delegations. An ordinary user sees only their own account-management features. The current `canViewPlatform` reflects a platform administrator role and each read-only API rechecks it. Disabled or expired sessions, external clients and business Bearer credentials are refused. Clear details on logout or loss of authority. Do not persist the overview in browser storage.
+Settings (`/admin/`) opens the General section. Administrators can select Overview to see status and expand usage observations. Users, app access and agent delegations have separate sections. Ordinary members can choose their language and review their own access and delegations. The current `canViewPlatform` reflects a platform administrator role and each read-only API rechecks it. Disabled or expired sessions, external clients and business Bearer credentials are refused. Clear details on logout or loss of authority. Do not persist the overview in browser storage.
 
 Use the canonical HTTPS workbench. Plain HTTP on another origin cannot use its secure browser cookie. A synthetic browser test does not establish real phone connectivity when the external chain is unavailable.
 
@@ -23,7 +23,7 @@ Optional private business configuration:
 }
 ```
 
-Use a separate 700 directory outside Git and 600 JSON files. The stack validates the configuration. The business service mounts redacted output read-only. The web process has no storage configuration, raw data, keys or Docker socket mount. The status publisher reads existing configuration, repository outcomes and worker heartbeats and writes a fixed projection without network access. Updating Management does not require restarting a running backup.
+Use a separate 700 directory outside Git and 600 JSON files. The stack validates the configuration. The business service mounts redacted output read-only. The web process has no storage configuration, raw data, keys or Docker socket mount. The status publisher reads existing configuration, repository outcomes and worker heartbeats and writes a fixed projection without network access. Updating the Settings page does not require restarting a running backup.
 
 A fixed local proxy maps `/api/platform/status` to `/api/business/console/status`, and `/api/platform/observations?window=day|week` to the corresponding aggregate. It forwards the approved native session cookie only, rejects caller Authorization and cross-origin requests, accepts no target URL, follows no redirects and bounds time and response size. Responses are uncached.
 
