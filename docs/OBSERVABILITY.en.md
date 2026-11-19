@@ -20,6 +20,12 @@ Report HTTP transport, MCP protocol, business calls and adapter calls as separat
 
 Health checks, catalog discovery, internal collection and SSE system events do not appear as user failures, capability candidates or slow business calls. For SSE record connection setup time. Count a disconnected ordinary request as a single cancellation. The slow-page threshold is three seconds and the slow business/adapter threshold is one second. Report sample size, outcomes and p50/p95. Denial, concurrency conflict and unavailability carry different meanings.
 
+## Business traces for workflow review (design goal)
+
+The diagnostic observation store described above is short-lived and reports aggregate service behavior. Workflow review needs a business record governed by the owning project's access and retention rules. Record a minimal event for every MCP request received by the server. For business calls, capture the tool, safe outcome, duration and retry relationship, and correlate the call with the project and Polaris run wherever the server can establish that relationship. Protocol requests and denied attempts can be represented by safe categories without revealing any protected object. An absent link or an action outside the captured systems is a coverage gap.
+
+Link the business trace to workflow and output versions, source references, human decisions and recorded acceptance or rework. Keep source content in the owning app and check access when resolving its references. Use allowlisted fields for trace events and keep raw request and response bodies and credentials out of them. Support review of business actions and decisions within the project. [Product requirements](PRD.en.md)
+
 ## Browser ingress
 
 The workbench accepts `POST /api/observations`, JSON up to 1,024 bytes, and at most 120 entries per service instance per minute. Origin must match the request Host. If present, Sec-Fetch-Site must be `same-origin`. Browser observations are unverified client reports.
