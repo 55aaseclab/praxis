@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { renderIconPng } from './render-logo-png.mjs';
 
 const root = new URL('../', import.meta.url);
-const ink = '#173F32';
+const ink = '#000000';
 const paper = '#FFFFFF';
 const depth = 3;
 const radians = Math.PI / 180;
