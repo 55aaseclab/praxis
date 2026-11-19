@@ -1,0 +1,60 @@
+.desktop-board.show-attention > :is(#apps-section, #projects-section, #desktop-empty) {
+  display: none !important;
+}
+#attention-program {
+  max-width: 100%;
+  width: 100%;
+}
+.program-switch,
+.card-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.program-switch button,
+.card-controls button,
+.attention-deck > button {
+  font: inherit;
+  min-height: 44px;
+  border: 1px solid #cbd3d8;
+  border-radius: 8px;
+  background: #fff;
+  color: #273c45;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+.program-switch button[aria-pressed='true'] {
+  background: #264c44;
+  color: white;
+}
+.attention-deck {
+  box-sizing: border-box;
+  touch-action: pan-y;
+  margin: 20px auto 0;
+  padding: clamp(18px, 4vw, 44px);
+  max-width: 680px;
+  background: #fff;
+  border: 1px solid #d8e0dc;
+  border-radius: 14px;
+  overflow-wrap: anywhere;
+}
+.desktop-body .attention-deck h2 {
+  margin: 8px 0;
+  padding: 0;
+  font: 600 clamp(20px, 3vw, 30px) / 1.4 system-ui;
+  color: #233b35;
+}
+.attention-deck small {
+  color: #46655b;
+}
+.attention-deck a {
+  display: inline-block;
+  padding: 12px 0;
+  color: #21594d;
+}
+.card-controls {
+  margin-top: 12px;
+  justify-content: space-between;
+}
+
+.attention-preview { display: block; max-width: 100%; min-height: 44px; margin-top: 8px; padding: 6px 10px; text-align: start; font: inherit; overflow-wrap: anywhere; color: #264c44; background: transparent; border: 0; text-decoration: underline; cursor: pointer; }

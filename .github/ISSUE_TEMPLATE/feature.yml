@@ -1,0 +1,16 @@
+name: Feature proposal / 功能建议
+description: Describe a user task and a success condition. / 描述用户任务和成功条件。
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: Who needs to do what? / 谁需要完成什么任务？
+      description: Describe the current workflow and where it breaks down. / 描述当前流程和遇到的困难。
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: One example and the result you would expect / 一个例子及预期结果
+    validations:
+      required: true

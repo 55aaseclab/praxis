@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-zh="管理 · Praxis">Management · Praxis</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231672d4'/%3E%3Ctext x='9' y='24' font-family='sans-serif' font-size='24' fill='white'%3EP%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/admin.css">
+  <script type="module" src="/admin.js"></script>
+</head>
+<body data-praxis-i18n>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Management navigation" data-zh-label="管理导航">
+      <div class="brand">Praxis<span data-zh="管理">Management</span></div>
+      <nav id="navigation" aria-label="Management sections" data-zh-label="管理分类">
+        <button class="nav-entry" type="button" data-view="overview" data-admin-only hidden><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 10h18M10 10v11M7 6h.01M11 6h.01"/></svg></span><span data-zh="状态概览">Overview</span></button>
+        <button class="nav-entry" type="button" data-view="data" data-admin-only hidden><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span><span data-zh="数据管理">Data management</span></button>
+        <button class="nav-entry" type="button" data-view="mcp" data-admin-only hidden><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a3.5 3.5 0 0 1 3.5 3.5v4M14 17.5h-4A3.5 3.5 0 0 1 6.5 14v-4"/></svg></span><span>MCP</span></button>
+        <button class="nav-entry" type="button" data-view="users" data-admin-only hidden><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="7" r="3"/><path d="M3 20v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5v2"/></svg></span><span data-zh="用户">Users</span></button>
+        <button class="nav-entry" type="button" data-view="access" data-shared-view hidden><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="m14 18 2.5 2.5L22 15"/></svg></span><span data-zh="入口权限">App access</span></button>
+        <button class="nav-entry" type="button" data-view="grants" data-shared-view hidden><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m9 15 6-6m-8 4-2 2a4.2 4.2 0 0 0 6 6l3-3m-4-12 3-3a4.2 4.2 0 0 1 6 6l-2 2"/></svg></span><span data-zh="智能体委托">Agent delegations</span></button>
+      </nav>
+      <div class="account"><span id="account-name"></span></div>
+    </aside>
+    <main aria-labelledby="heading">
+      <div class="pane-heading"><h1 id="heading" data-zh="管理">Management</h1><div class="heading-actions"><div id="overview-controls" class="overview-controls" hidden><span id="platform-updated"></span><button id="platform-refresh" type="button" data-zh="刷新">Refresh</button></div><button id="refresh" class="quiet-button" type="button" data-zh="刷新">Refresh</button><button id="create-user" class="primary" type="button" hidden data-zh="新增用户">New user</button></div></div>
+      <p id="notice" class="notice" role="status" aria-live="polite" data-zh="正在读取…">Loading…</p>
+      <div id="content" aria-busy="true" hidden></div>
+      <section id="overview-view" class="platform-overview" aria-labelledby="heading" hidden>
+      <div id="platform-notice" class="overview-notice" role="status" data-zh="正在读取状态…">Loading status…</div>
+      <div id="platform-panels" class="overview-panels" hidden>
+        <article id="platform-permissions" class="overview-group" aria-label="Permissions" data-zh-label="权限控制"></article>
+        <article id="platform-connections" class="overview-group" aria-label="Connections" data-zh-label="连接情况"></article>
+        <article id="platform-storage" class="overview-group" aria-label="Business storage" data-zh-label="业务数据存储"></article>
+      </div>
+      <details id="platform-experience" class="overview-experience" hidden><summary>使用与体验线索</summary><div class="experience-heading"><label>查看范围 <select id="platform-window"><option value="day">近一天</option><option value="week">近七天</option></select></label></div><div id="platform-observations" aria-live="polite"></div></details>
+    </section>
+
+      <noscript><p class="empty">请启用 JavaScript 查看管理界面。</p></noscript>
+    </main>
+  </div>
+</body>
+</html>

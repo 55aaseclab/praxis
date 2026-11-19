@@ -1,0 +1,34 @@
+[
+  {
+    "id": "letters",
+    "kind": "app",
+    "name": "Letters",
+    "description": "Private academic correspondence",
+    "icon": "/letters-icon.svg",
+    "path": "/",
+    "source": "third_party/letters",
+    "adminOnly": true,
+    "labels": {
+      "zh": {
+        "name": "信件",
+        "description": "私有学术信件与推荐材料"
+      }
+    }
+  },
+  {
+    "id": "profiles",
+    "kind": "app",
+    "name": "Profiles",
+    "description": "Private academic dossiers",
+    "icon": "/profiles-icon.svg",
+    "path": "/",
+    "source": "third_party/profiles",
+    "adminOnly": true,
+    "labels": {
+      "zh": {
+        "name": "个人材料",
+        "description": "私有简历与求职材料"
+      }
+    }
+  }
+]

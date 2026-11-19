@@ -1,0 +1,14 @@
+:host{all:initial;display:block;position:fixed;left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:44px;height:44px;z-index:2147483600;box-sizing:border-box;font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:#252529;color-scheme:light dark;isolation:isolate}
+:host([hidden]){display:none!important}
+:host *{box-sizing:border-box}
+:host [hidden]{display:none!important}
+:host nav{display:block;width:44px;height:44px}
+:host .praxis-home{display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;border:1px solid #d7d7df;border-radius:13px;background:#fafafa;color:#3b536b;text-decoration:none;box-shadow:0 2px 9px #0000000e;touch-action:manipulation}
+:host .praxis-home:hover{background:#f0f0f4}
+:host .praxis-home svg{width:21px;height:21px;display:block}
+:host .praxis-home:focus-visible,:host .praxis-navigation-action:focus-visible{outline:3px solid #1672d4;outline-offset:3px}
+:host .praxis-navigation-status{position:absolute;bottom:52px;left:0;width:min(280px,calc(100vw - 24px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));max-height:max(44px,calc(100dvh - 80px - env(safe-area-inset-bottom,0px) - env(safe-area-inset-top,0px)));overflow:auto;padding:14px 16px;border:1px solid #d7d7df;border-radius:12px;background:#fafafa;box-shadow:0 2px 12px #00000010}
+:host .praxis-navigation-status p{font:inherit;margin:0 0 8px;color:#606069}
+:host .praxis-navigation-action{display:inline-flex;align-items:center;min-height:36px;color:#1672d4;text-decoration:none;font-weight:600}
+@media print{:host{display:none!important}}
+@media(prefers-color-scheme:dark){:host .praxis-home,:host .praxis-navigation-status{background:#242426;color:#e8e8eb;border-color:#48484d}:host .praxis-home:hover{background:#303034}:host .praxis-navigation-status p{color:#bebec5}:host .praxis-navigation-action{color:#68acff}}

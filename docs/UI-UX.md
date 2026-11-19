@@ -1,0 +1,15 @@
+# Workbench interactions / 工作台交互
+
+## English
+
+- The workbench lists accessible apps and projects. Each app should take the person directly to its main task. Give the main pane to the result and put navigation in the sidebar.
+- Distinguish a successful empty collection from loading, lost access and a failed connection. Preserve the selected item and scroll position on a safe retry. When access expires, clear previously displayed protected content.
+- Give each control a visible focus state and an accessible name. Reserve space for the workbench Home button at the bottom left, including the device's safe area. Check the complete trip from a tile into an app and back using a keyboard, desktop and a narrow viewport.
+- Start with English and add Simplified Chinese in the same change. Test long labels, wrapping and announcements. Keep user-authored content in its original language.
+
+## 简体中文
+
+- 首页列出可访问的应用和项目。点开即进入核心任务，主区域展示结果，侧栏提供导航。
+- 明确区分空目录、加载中、失去授权和网络错误。安全重试时保留选择和位置，撤权后清除先前显示的私有内容。
+- 每个控件都有明确的无障碍名称和焦点状态。为左下角首页按钮和设备安全区留出空间。用键盘、桌面和窄屏走通从首页打开应用再返回的流程。
+- 先更新英文，再同步简体中文。检查长标签、换行和状态播报。用户撰写的内容保留原语言。

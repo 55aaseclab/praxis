@@ -1,0 +1,32 @@
+services:
+  storage:
+    profiles: [storage]
+    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/storage:local
+    build:
+      context: .
+      dockerfile: Dockerfile.storage
+      args:
+        PRAXIS_UID: ${PRAXIS_UID:-1000}
+        PRAXIS_GID: ${PRAXIS_GID:-1000}
+    init: true
+    user: "${PRAXIS_UID:-1000}:${PRAXIS_GID:-1000}"
+    working_dir: /opt/praxis
+    command: [node, scripts/storage-worker.mjs, run]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=256m,mode=1777"]
+    environment:
+      PRAXIS_RESTIC_BINARY: /usr/local/bin/restic
+      PRAXIS_RCLONE_BINARY: /usr/local/bin/rclone
+    healthcheck:
+      test: [CMD, node, scripts/storage-worker.mjs, health]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

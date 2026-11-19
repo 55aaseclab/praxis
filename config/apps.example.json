@@ -1,0 +1,196 @@
+[
+  {
+    "id": "reminder",
+    "kind": "app",
+    "name": "Reminder",
+    "description": "Reminders and tasks",
+    "icon": "/reminder-icon.svg",
+    "port": 4322,
+    "path": "/",
+    "source": "third_party/reminder",
+    "labels": {
+      "zh": {
+        "name": "Reminder",
+        "description": "提醒与任务"
+      }
+    }
+  },
+  {
+    "id": "knowledge",
+    "kind": "app",
+    "name": "Knowledge",
+    "description": "Notes, books and sources",
+    "icon": "/knowledge-icon.svg",
+    "port": 4324,
+    "path": "/",
+    "source": "third_party/knowledge",
+    "labels": {
+      "zh": {
+        "name": "Knowledge",
+        "description": "笔记与藏书"
+      }
+    }
+  },
+  {
+    "id": "lattice-slides",
+    "kind": "app",
+    "name": "Lattice",
+    "description": "Presentations",
+    "icon": "/slides-icon.svg",
+    "port": 4666,
+    "path": "/",
+    "source": "third_party/lattice",
+    "labels": {
+      "zh": {
+        "name": "Lattice",
+        "description": "演示文稿"
+      }
+    }
+  },
+  {
+    "id": "travel",
+    "kind": "app",
+    "name": "Travel",
+    "description": "Trip plans, places and photos",
+    "icon": "/travel-icon.svg",
+    "port": 4323,
+    "path": "/",
+    "source": "third_party/travel",
+    "labels": {
+      "zh": {
+        "name": "Travel",
+        "description": "旅行计划"
+      }
+    }
+  },
+  {
+    "id": "tingproof",
+    "kind": "app",
+    "name": "TingProof",
+    "description": "Audio proofreading",
+    "icon": "/tingproof-icon.svg",
+    "port": 5173,
+    "path": "/",
+    "source": "third_party/tingproof",
+    "labels": {
+      "zh": {
+        "name": "听校",
+        "description": "音频听校"
+      }
+    }
+  },
+  {
+    "id": "memo",
+    "kind": "app",
+    "name": "Memo",
+    "description": "Checklists and records",
+    "icon": "/memo-icon.svg",
+    "port": 4325,
+    "path": "/",
+    "source": "third_party/memo",
+    "labels": {
+      "zh": {
+        "name": "Memo",
+        "description": "生活清单与凭证"
+      }
+    }
+  },
+  {
+    "id": "finance",
+    "kind": "app",
+    "name": "Finance",
+    "description": "Income, expenses, budgets and assets",
+    "icon": "/finance-icon.svg",
+    "port": 4329,
+    "path": "/",
+    "source": "third_party/finance",
+    "labels": {
+      "zh": {
+        "name": "Finance",
+        "description": "收支、预算与资产目标"
+      }
+    }
+  },
+  {
+    "id": "intelligence",
+    "kind": "app",
+    "name": "Intelligence",
+    "description": "Intelligence sources, entities and changes",
+    "icon": "/intelligence-icon.svg",
+    "port": 4330,
+    "path": "/",
+    "source": "third_party/intelligence",
+    "labels": {
+      "zh": {
+        "name": "Intelligence",
+        "description": "情报材料、对象与变化"
+      }
+    }
+  },
+  {
+    "id": "polaris",
+    "kind": "app",
+    "name": "Polaris",
+    "description": "Research tools and workflows",
+    "icon": "/polaris-icon.svg",
+    "port": 8787,
+    "path": "/",
+    "source": "third_party/polaris",
+    "adminOnly": true,
+    "labels": {
+      "zh": {
+        "name": "Polaris",
+        "description": "研究工具与工作流"
+      }
+    }
+  },
+  {
+    "id": "letters",
+    "kind": "app",
+    "name": "Letters",
+    "description": "Private academic correspondence",
+    "icon": "/letters-icon.svg",
+    "path": "/",
+    "source": "third_party/letters",
+    "adminOnly": true,
+    "labels": {
+      "zh": {
+        "name": "信件",
+        "description": "私有学术信件与推荐材料"
+      }
+    }
+  },
+  {
+    "id": "profiles",
+    "kind": "app",
+    "name": "Profiles",
+    "description": "Private academic dossiers",
+    "icon": "/profiles-icon.svg",
+    "path": "/",
+    "source": "third_party/profiles",
+    "adminOnly": true,
+    "labels": {
+      "zh": {
+        "name": "个人材料",
+        "description": "私有简历与求职材料"
+      }
+    }
+  },
+  {
+    "id": "projects",
+    "kind": "app",
+    "name": "Projects",
+    "description": "Research, engineering and collaboration",
+    "icon": "/projects-icon.svg",
+    "port": 4327,
+    "path": "/",
+    "source": "third_party/projects",
+    "launcher": false,
+    "labels": {
+      "zh": {
+        "name": "Projects",
+        "description": "科研、工程与项目协作"
+      }
+    }
+  }
+]

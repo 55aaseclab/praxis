@@ -1,0 +1,23 @@
+name: Bug report / 缺陷报告
+description: Describe a reproducible failure. / 描述可复现的问题。
+body:
+  - type: textarea
+    id: location
+    attributes:
+      label: App, release and environment / 应用、版本与环境
+      description: Include the app or page, browser and platform version. / 填写应用或页面、浏览器和平台版本。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      description: Use synthetic examples and remove private details. / 请使用合成样例并移除私人信息。
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected and observed behavior / 预期与实际表现
+    validations:
+      required: true

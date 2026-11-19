@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f1f3f6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Praxis">
+  <title>Praxis</title>
+  <link rel="icon" href="/praxis.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/praxis-180.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/install.js"></script>
+  <script type="module" src="/app.js"></script>
+  <script type="module" src="/attention.js"></script>
+  <link rel="stylesheet" href="/attention.css">
+  <script type="module" src="/paseo-workbench.js"></script>
+  <link rel="stylesheet" href="/paseo-workbench.css">
+</head>
+<body class="desktop-body" data-website-auth="managed">
+  <div class="launcher-shell">
+    <main class="desktop" aria-label="Praxis workbench" data-zh-label="Praxis 桌面">
+      <div class="desktop-board">
+        <div id="attention-program" hidden></div>
+        <section id="apps-section" aria-labelledby="apps-heading" hidden><h2 id="apps-heading" data-zh="应用">Apps</h2><div id="apps" class="icon-grid" aria-live="polite"></div></section>
+        <section id="projects-section" aria-labelledby="projects-heading" hidden><h2 id="projects-heading" data-zh="项目">Projects</h2><div id="projects" class="icon-grid"></div><p id="project-status" class="desktop-empty" role="status" hidden></p></section>
+        <p id="desktop-empty" class="desktop-empty" role="status" hidden data-zh="当前账号暂无应用入口，请联系管理员按需授权。">Your account has no apps yet. Contact your administrator to request access.</p>
+        <p id="load-error" class="load-error" hidden><span data-zh="暂时无法读取应用。">Couldn’t load apps.</span> <a href="/" data-zh="重新读取">Retry</a></p>
+        <noscript><p>Enable JavaScript to open the workbench. <span lang="zh-CN">请启用 JavaScript 查看工作台。</span></p></noscript>
+      </div>
+    </main>
+    <div class="launcher-bottom">
+    <aside id="install-hint" class="install-hint" aria-label="Install Praxis" data-zh-label="保存到桌面" hidden>
+      <p id="install-help"></p>
+      <button id="install-app" type="button" hidden data-zh="保存到桌面">Install Praxis</button>
+      <button id="dismiss-install" type="button" aria-label="Dismiss installation tip" data-zh-label="暂时关闭保存到桌面提示">×</button>
+    </aside>
+    <div class="launcher-toolbar system-dock" role="group" aria-label="Praxis navigation" data-zh-label="Praxis 系统导航">
+      <a class="brand" href="/" aria-label="Praxis home" data-zh-label="Praxis 首页"><img src="/praxis.svg" width="24" height="24" alt="">Praxis</a>
+      <div class="launcher-actions">
+        <span id="paseo-workbench" hidden></span>
+        <button type="button" class="header-link" data-language-switch lang="zh-CN">简体中文</button>
+        <nav aria-label="Workbench links" data-zh-label="工作台入口"><a class="header-link" href="/about/" data-zh="关于 Praxis">About Praxis</a><a class="header-link" href="/admin/" data-private-nav data-admin-nav hidden data-zh="管理">Manage</a><a class="header-link" href="/prds/" data-private-nav data-prd-nav hidden data-zh="PRD集合">Product documents</a></nav>
+        <div id="account" class="account" aria-label="Praxis account" data-zh-label="Praxis 账户"></div>
+      </div>
+    </div>
+    </div>
+  </div>
+</body>
+</html>

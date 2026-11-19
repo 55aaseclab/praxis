@@ -1,0 +1,6 @@
+[submodule "letters"]
+	path = third_party/letters
+	url = https://github.com/55aaseclab/letters.git
+[submodule "profiles"]
+	path = third_party/profiles
+	url = https://github.com/55aaseclab/profiles.git

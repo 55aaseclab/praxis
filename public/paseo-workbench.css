@@ -1,0 +1,42 @@
+#paseo-workbench button,
+#paseo-workbench-pane button {
+  font: inherit;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  min-height: 44px;
+}
+#paseo-workbench button { font-size: .8125rem; }
+#paseo-workbench button:focus-visible,
+#paseo-workbench-pane button:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+@media (min-width: 900px) {
+  .desktop-body .launcher-shell:has(> #paseo-workbench-pane) {
+    grid-template-columns: clamp(320px, 32vw, 660px) minmax(0, 1fr);
+  }
+  .launcher-shell:has(> #paseo-workbench-pane) > .desktop { grid-area: 1 / 2; }
+  .launcher-shell:has(> #paseo-workbench-pane) > .launcher-bottom { grid-column: 1 / -1; }
+  #paseo-workbench-pane {
+    grid-area: 1 / 1;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+    border-right: 1px solid var(--line);
+    background: #fff;
+  }
+  #paseo-workbench-pane header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+    font-size: .8125rem;
+  }
+  #paseo-workbench-pane header strong { margin-right: auto; }
+  #paseo-workbench-pane header a { color: var(--blue); }
+  #paseo-workbench-pane iframe { width: 100%; height: 100%; border: 0; }
+}
