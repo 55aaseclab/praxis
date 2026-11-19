@@ -12,6 +12,12 @@ Routine results should be available for review at a time the employee chooses. I
 
 For teams, the goal is to deliver more accepted work with the same people while maintaining quality and timeliness. Measure human minutes per accepted delivery, separating routine handling from verification that requires judgment. Freed capacity can translate into more paid work when customers have demand for it.
 
+## Make room for reflection and improvement
+
+Each completed delivery should leave a business record that people can learn from. From the delivered version, an authorized team member should be able to follow the trace back to the source materials, MCP business actions, Polaris run and workflow version, human decisions, and acceptance or rework when recorded. Later work can start from that record when a customer returns or the team reviews how it worked.
+
+**One-click workflow improvement** is a design goal. A team member starts a review of past runs and gets an evidence-backed proposal for where the workflow could improve. The proposal should show the affected cases, what might change and what remains uncertain. The team can add context, set the proposal aside or test a draft against authorized historical cases in isolation. An authorized workflow owner decides whether to publish a new version after reviewing the comparison. [Business trace boundary](OBSERVABILITY.en.md)
+
 The requirements below describe the current platform contract.
 
 | User need | Observable behavior |
