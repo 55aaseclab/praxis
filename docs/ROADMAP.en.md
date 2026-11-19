@@ -6,8 +6,9 @@
 
 | Goal | Evidence to collect |
 | --- | --- |
-| Routine work done by agents, with results designed for people | In representative built-in apps, observe the flow from an authorized request to a readable, viewable or playable result. Check result quality, access to evidence, and any required manual steps during routine execution. Verify automatic delivery on each supported path as it becomes available. |
-| A repeatable path to build and deploy your own apps | Independent authors use built-in references and the app standard to build apps for different workflows. Track the effort to build, deploy, upgrade and recover each app. In a managed install, verify tool discovery, scoped authorization, execution and readback, and confirm people can use the result in the app. |
+| Protect the attention of the people doing the work | Follow an authorized request through routine execution and automated checks to a result the employee can verify. On supported delivery paths, measure how often employees check for updates, how often they are interrupted and how much time they spend recovering context. Check that exceptions reach someone authorized to act with the evidence and question, and record any missed blockers. |
+| Increase delivery capacity at the same quality and timeliness | Compare human minutes per accepted delivery before and after delegation, separating routine handling from verification that requires judgment. Track acceptance, on-time delivery and rework. Where customer demand exists, observe whether the same team completes more paid work. |
+| Reuse the platform for the next workflow | Have independent authors use built-in examples and the app standard to deploy different workflows. Evaluate Polaris as the workflow engine and compare the effort to build, operate, upgrade and recover the second and third workflows with the first. Verify scoped agent execution and readback in a managed installation. In paid pilots, check whether customers choose to pay to keep additional workflows running. |
 
 Current local app registration and managed release steps are documented in the [app standard](APP-STANDARD.md).
 

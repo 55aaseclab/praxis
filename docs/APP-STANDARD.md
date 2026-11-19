@@ -6,6 +6,8 @@
 
 Use the same model for built-in and independently built apps. Start with the result a person needs to read, watch or listen to. Define the business objects that hold that result and the typed, scoped actions an authorized agent can take to produce it. After intent, materials and authorization are in place, design routine execution for zero mandatory UI clicks. Give people a native view for using the result, checking evidence and making decisions. The built-in apps provide working examples of app-owned objects, operations and result views. [Product requirements](PRD.en.md)
 
+Identify the checks the app or agent can perform automatically and the decisions that need a person. In the review view, show the result, relevant source or version, and the specific question. If the workflow sends reminders, let the employee review routine results at their preferred time and reserve immediate interruptions for blockers covered by a shared work rule. Direct each request to the person authorized to act.
+
 An app can start with the records and workflow its owner needs, using external sources or services where useful. An AI coding agent can help build and maintain the app in a development environment. An agent operating business records uses a separate identity, environment and scoped business grant. Code and host access belong to development and platform administration.
 
 An app owns its source, typed data and standalone entry. A maintained app has a named owner, PRD, roadmap, version, license, icon, English and Simplified Chinese interface, and documented storage/export and recovery behavior. Release the same function through the same renderer for every authorized record. Preserve content in its author's language. Write English controls, errors, accessibility labels and docs first. Ship their Chinese counterparts with the change. Use the saved `praxis.locale` preference (`en` or `zh`); the initial locale is English.
@@ -41,6 +43,8 @@ For inclusion in the maintained distribution, propose the app in an issue with a
 ### 围绕业务工作和结果设计应用
 
 内置应用和自建应用遵循同一种设计思路。先明确人需要读、看或听到什么结果，再定义保存结果的业务对象，以及获授权的 agent 可以执行的类型明确、范围受控的操作。意图、材料与授权就绪后，日常执行以零次必需点击为设计目标。提供原生界面供人使用结果、查证和决策。内置应用是业务对象、操作和结果界面的参考实现。[产品需求](PRD.md)
+
+明确哪些检查可以由应用或 agent 自动完成，哪些决定需要人来做。复核界面应同时展示结果、相关原文或版本，以及待判断的具体问题。如果流程发送提醒，例行结果由员工选择何时查看，只有符合团队约定的阻塞才即时打断。每项复核请求交给有权处理的人。
 
 自建应用可以从自己需要的记录和流程出发，按需使用外部来源或服务。AI 编程智能体可以在开发环境中构建和维护应用。操作业务记录的 agent 使用独立的身份、环境和限定范围的业务授权。源码和宿主机访问权限属于开发与平台管理。
 

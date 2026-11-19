@@ -4,7 +4,13 @@ Version: 0.1.111 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
-**Zero mandatory UI clicks for routine execution** is the design goal once the user’s intent, source material and authorization are in place. People can grant consent, resolve important ambiguities and make consequential decisions. They can also open the result, play media, inspect evidence or correct a record by choice. Source-linked readers and authorized attention cards provide a starting point for delivery. Automatically bringing the result to the right surface across apps and agent clients remains a goal.
+## Protect employees’ attention
+
+**Zero mandatory UI clicks for routine execution** is how Praxis aims to protect the attention of the people doing the work. Once intent, materials and authorization are in place, agents should carry out routine work and checks that can be automated. People should be able to step away while work proceeds, return to results on their own schedule and spend their attention on verification that requires judgment, exceptions and consequential decisions.
+
+Routine results should be available for review at a time the employee chooses. Interrupt someone immediately only when an agreed work rule calls for it, such as a blocker that threatens a delivery deadline. Send the result, the relevant source evidence and the question to the person authorized to act. People can also open results, inspect evidence or correct a record on their own initiative. Track shared progress through business records and keep a person's reading and response history for personal reminders in their own view. Source-linked readers and authorized attention cards provide a starting point. Cross-app delivery and employee-controlled review timing are design goals.
+
+For teams, the goal is to deliver more accepted work with the same people while maintaining quality and timeliness. Measure human minutes per accepted delivery, separating routine handling from verification that requires judgment. Freed capacity can translate into more paid work when customers have demand for it.
 
 The requirements below describe the current platform contract.
 

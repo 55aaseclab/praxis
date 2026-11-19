@@ -6,6 +6,8 @@ English · [简体中文](#竞品分析) · 2026-11-19
 
 **Design target.** Once intent, source material and authorization are in place, routine execution should require zero mandatory UI clicks. Results should reach a surface suited to the work. Consent, material ambiguities and consequential decisions can still call for a person's attention. Playing the audio, checking evidence and making a manual correction remain choices. Source-linked readers, timed review and authorized attention cards are available in specific workflows today. Automatic delivery across apps and harnesses remains a goal. [Product requirements](PRD.en.md)
 
+Zero-click execution protects employees’ attention. Employees should be able to choose when to review routine results. Agents handle routine execution and checks that can be automated. Results link to their sources so employees can verify the work when needed. Exceptions that require human verification or judgment should reach the person authorized to act, with their evidence and the urgency set by the team's shared rules.
+
 The built-in apps are useful products in their own right. They show what a carefully designed result feels like and provide reference implementations for people and organizations building apps around their own work. Praxis aims to shorten that path with AI-assisted development, a common app contract and repeatable deployment. A new app can start with the organization's own records and rules, independent of any existing SaaS integration or migration. Current documentation covers local registration and explicitly configured managed deployment. [App standard](APP-STANDARD.md) · [Managed deployment](MANAGED-DEPLOYMENT.md)
 
 ## What the person gets
@@ -30,15 +32,17 @@ Agent harnesses such as Codex CLI complement Praxis. The harness runs the agent 
 
 ## How to test the distinction
 
-**Using an app.** Compare the approaches on the same task and source material. Record setup and consent separately. After delegation, count required interventions, categorize any that called for human judgment, measure the time to a usable result, and check that references resolve to the right passage or timestamp. Give a second compatible client its own grant and verify that it can read back the same record and revision.
+**Using an app.** Compare the approaches on the same task and source material, with the same quality and turnaround requirements. Record setup and consent separately. Count required interventions and measure both elapsed time to a usable result and total human time spent on execution, review, exceptions and rework. Check whether employees can choose when to review routine results and whether urgent exceptions reach the person responsible with evidence that opens at the right passage or timestamp. Give a second compatible client its own grant and verify that it can read back the same record and revision. When there is real customer demand for paid work, check how much additional work customers accept and pay for under the same quality and turnaround requirements.
 
-**Building an app.** Ask independent developers to use the app standard to build and deploy apps for different kinds of work. Verify that a separately authorized business agent can discover the tools, obtain the intended grant, execute a routine task and read back the committed result. Check that a person can use the result in the app's intended view. Measure the time and effort to build and deploy each app, then repeat the upgrade and recovery steps to check their cost and repeatability. These are proposed tests for the platform. [App standard](APP-STANDARD.md) · [Verification plan](VERIFICATION.en.md)
+**Building an app.** Ask independent developers to use the app standard to build and deploy apps for different kinds of work. Verify that a separately authorized business agent can discover the tools, obtain the intended grant, execute a routine task and read back the committed result. Check that a person can use the result in the app's intended view. Measure the time and effort to build and deploy each app, then repeat the upgrade and recovery steps to check their cost and repeatability. When a team adds its next workflow, record what it can reuse and how much time that saves. These are proposed tests for the platform. [App standard](APP-STANDARD.md) · [Verification plan](VERIFICATION.en.md)
 
 # 竞品分析
 
 **Praxis 是一个应用平台，应用围绕用户委托给智能体的工作来设计。** 用户选择自己习惯的智能体，告诉它想得到什么结果。智能体在授权范围内承担日常操作。每个应用定义自己的业务对象和可委托的操作，校验执行请求，并保存结果，让人可以直接读、看或听。
 
 **设计目标。** 用户表达意图、提供材料并完成授权后，日常执行应做到**零次必需点击**，结果应送达适合这项工作的界面。授权、关键歧义和重要决策仍可以交给本人。播放、查证和手动修正都是用户可以主动选择的操作。现有部分流程已提供原文定位、分段听校和按权限显示的关注卡片。跨应用和智能体运行环境的自动送达仍是目标。[产品需求](PRD.md)
+
+零点击执行旨在保护员工的注意力。员工应能自主安排查看日常结果的时间。智能体负责常规操作和可自动完成的检查，结果附有来源，员工可以按需查证。需要人工核验或判断的例外应连同依据交给有权处理的人，按团队共同约定的规则确定紧急程度。
 
 内置应用本身就能解决实际问题，也展示面向人的结果界面该怎样打磨，供个人和组织按自己的工作方式开发应用时参考。Praxis 希望借助 AI 辅助开发、统一的应用契约和可重复的部署流程，缩短从开发到使用的时间。新应用可以直接从组织自己的业务记录和规则出发，存量 SaaS 的接入和迁移都可以按需选择。现有文档已说明本地登记和显式配置的受管部署流程。[应用标准](APP-STANDARD.md) · [受管部署](MANAGED-DEPLOYMENT.md)
 
@@ -64,6 +68,6 @@ Codex CLI 等智能体运行环境与 Praxis 互补。运行环境负责执行�
 
 ## 怎么验证
 
-**使用应用。** 用同一批材料和同一项任务对照上面几种方式，单独记录初次设置和授权。从委托开始，记录结果可用前人必须介入的次数、其中哪些需要人的判断，以及等到可用结果的时间。核对引用能否定位到正确段落或时间点。再给另一个兼容客户端独立授权，验证它能否回读同一条记录和版本。
+**使用应用。** 用同一批材料和同一项任务对照上面几种方式，采用同样的质量和交付时限要求，单独记录初次设置和授权。统计人必须介入的次数，分别记录从委托到结果可用的耗时，以及执行、复核、处理例外和返工合计占用的人工时间。确认员工能自行安排查看日常结果，紧急例外能送达负责人，依据能定位到正确的段落或时间点。再给另一个兼容客户端独立授权，验证它能否回读同一条记录和版本。有真实付费需求时，核对在同等质量和时限要求下，客户实际验收并付费的交付增加了多少。
 
-**开发应用。** 请独立开发者按应用标准构建并部署不同用途的应用。验证业务智能体能发现工具、取得指定授权、完成一项日常操作并回读已保存的结果。确认用户能在应用为这项工作设计的界面中直接使用结果。记录开发和部署的时间与投入，再重复升级和恢复步骤，观察实际成本及过程能否复现。这些是待验证的平台目标。[应用标准](APP-STANDARD.md) · [验证方案](VERIFICATION.md)
+**开发应用。** 请独立开发者按应用标准构建并部署不同用途的应用。验证业务智能体能发现工具、取得指定授权、完成一项日常操作并回读已保存的结果。确认用户能在应用为这项工作设计的界面中直接使用结果。记录开发和部署的时间与投入，再重复升级和恢复步骤，观察实际成本及过程能否复现。团队引入下一项流程时，记录哪些能力可以复用、省下多少时间。这些是待验证的平台目标。[应用标准](APP-STANDARD.md) · [验证方案](VERIFICATION.md)

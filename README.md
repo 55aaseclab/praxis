@@ -2,7 +2,9 @@
 
 [简体中文](README.zh-CN.md) · [Quickstart](#quickstart) · [Connect to Praxis](#connect-to-praxis) · [Contribute](#contribute)
 
-**Praxis is a self-hosted platform where the AI agent you choose is your interface to your apps.** You ask for an outcome and decide which records and actions to authorize. Your agent does the routine work. In Lattice, for example, ask your agent to turn approved project updates into a meeting deck. With access to the source material and the deck, the agent can update the slides and check the render. You open a presentation ready to review and show. Once intent, materials and authorization are in place, the goal is zero mandatory clicks to execute the work.
+**Praxis is a self-hosted platform where the AI agent you choose is your interface to your apps.** You ask for an outcome and decide which records and actions to authorize. Once intent, materials and access are in place, the design goal is zero mandatory clicks for routine work. That protects the attention of the people doing the work. Your agent handles routine steps and checks, leaving you time for verification that needs your judgment. In Lattice, for example, your agent can update a deck from approved project material and check how it renders. You open a presentation ready to review and show.
+
+For teams, the goal is to deliver more work with the same people while maintaining quality and meeting deadlines. People can spend more of their time on the decisions and checks that make a result fit to deliver. [Product requirements](docs/PRD.en.md)
 
 Praxis builds and polishes its built-in apps so people can read, watch or listen to results and make informed decisions. These apps also show how to build new ones around your own records, operations and workflows. Making it quick for individuals, families and organizations to build and deploy their own apps is part of the product direction. You can start with a new app and its own data, with integrations where they help. Today you can run your app independently and register it in a local workbench. [App standard](docs/APP-STANDARD.md)
 
