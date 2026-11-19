@@ -30,3 +30,24 @@ test('invalid existing configuration fails closed without echoing its content or
  await assert.rejects(upgradeBuiltinProviderConfiguration(file,{finance:{url:'http://127.0.0.1:4329'}}),error=>!error.message.includes('PRIVATE_CONFIG_BODY')&&error.message.includes('configuration file is invalid'));
  assert.equal(hash(await readFile(file)),hash(bytes));
 });
+
+test('private reader defaults bind both providers to the web installation document owner',()=>{
+ const webInstallation={ownerId:'synthetic-document-owner'};
+ const providers=['letters','profiles'].map(id=>({app:{id},descriptor:{dataSources:[{id:'originals',location:{env:'PRAXIS_'+id.toUpperCase()+'_DIR'}}]}}));
+ const defaults=builtinProviderDefaults({providers,runtime:{letters:{PRAXIS_LETTERS_DIR:'/synthetic/letters/documents'},profiles:{PRAXIS_PROFILES_DIR:'/synthetic/profiles/documents'}},ownerId:webInstallation.ownerId});
+ for(const app of ['letters','profiles']){assert.equal(defaults[app].ownerId,webInstallation.ownerId);assert.equal(defaults[app].runtime.bindingSource,'installation-layout');}
+ assert.throws(()=>builtinProviderDefaults({providers:[],runtime:{},ownerId:'invalid/owner'}),/private document owner/);
+ assert.throws(()=>builtinProviderDefaults({providers:[],runtime:{},ownerId:''}),/private document owner/);
+ const absent=builtinProviderDefaults({providers:[],runtime:{}});assert.equal(absent.letters,undefined);assert.equal(absent.profiles,undefined);
+});
+test('private reader owner upgrade adds only missing metadata, preserves overrides and is retry-idempotent',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'praxis-private-owner-upgrade-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const webInstallation={version:1,ownerId:'synthetic-web-owner',workspaceId:'unchanged-workspace'},webFile=join(directory,'web-installation.json');
+ await writeFile(webFile,JSON.stringify(webInstallation),{mode:0o600});const webBytes=await readFile(webFile);
+ const defaults=builtinProviderDefaults({providers:[],runtime:{},ownerId:JSON.parse(webBytes).ownerId});
+ const file=join(directory,'core.json'),config={issuer:'https://praxis.example',database:'/stable/auth.db',apps:{},appProviders:{letters:{ownerId:'explicit-reader-owner',runtime:{environment:{PRAXIS_LETTERS_DIR:'/custom/letters'}}},profiles:{runtime:{environment:{PRAXIS_PROFILES_DIR:'/custom/profiles'}}}}};
+ await writeFile(file,JSON.stringify(config),{mode:0o600});const original=await readFile(file);
+ const upgraded=await upgradeBuiltinProviderConfiguration(file,defaults);assert.equal(upgraded.changed,true);assert.equal(hash(await readFile(upgraded.backupFile)),hash(original));
+ const saved=JSON.parse(await readFile(file,'utf8'));assert.equal(saved.appProviders.letters.ownerId,'explicit-reader-owner');assert.equal(saved.appProviders.profiles.ownerId,webInstallation.ownerId);assert.equal(saved.appProviders.letters.runtime.environment.PRAXIS_LETTERS_DIR,'/custom/letters');assert.equal(saved.appProviders.profiles.runtime.environment.PRAXIS_PROFILES_DIR,'/custom/profiles');assert.deepEqual(saved.apps,config.apps);assert.equal(saved.database,config.database);
+ assert.equal(hash(await readFile(webFile)),hash(webBytes));assert.deepEqual(await upgradeBuiltinProviderConfiguration(file,defaults),{changed:false,backupFile:null});
+});

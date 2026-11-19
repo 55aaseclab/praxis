@@ -12,7 +12,7 @@ import { renderPrdMarkdown } from './prd-renderer.mjs';
 import { catalogPage, documentPage } from './pages.mjs';
 import { ObservationStore, createBrowserIngress, observeResponse } from './observability.mjs';
 import { createPlatformProxy } from './platform-proxy.mjs';
-import { createWebGateway, canonicalRedirect, gatewayApps } from './web-gateway.mjs';
+import { createWebGateway, canonicalRedirect, gatewayApps, canOpenApp } from './web-gateway.mjs';
 import { createPublicMcpHandler } from './public-mcp.mjs';
 import { injectSystemNavigation, navigationContext } from './system-navigation.mjs';
 import { createPrivateDocumentHandler } from './private-documents.mjs';
@@ -107,7 +107,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       if (path === '/health') return send(request, response, 200, '{"status":"ok"}', 'application/json');
       if (path === '/api/workbench/providers' || /^\/app-providers\/[a-z][a-z0-9-]*\.mjs$/.test(path)) {
         if(!['GET','HEAD'].includes(request.method))return send(request,response,405,'Method not allowed.','text/plain',{Allow:'GET, HEAD'});
-        const available=(await appProviders.providers()).filter(value=>!value.error&&value.descriptor.cards.supported&&value.descriptor.cards.execution==='browser'&&(gateway?request.webAccess?.apps.includes(value.app.id):!value.app.adminOnly));
+        const available=(await appProviders.providers()).filter(value=>!value.error&&value.descriptor.cards.supported&&value.descriptor.cards.execution==='browser'&&(gateway?canOpenApp(request.webAccess,value.app.id):!value.app.adminOnly));
         if(path==='/api/workbench/providers'){
           const providers=await Promise.all(available.map(async value=>{
             const bytes=await readFile(resolve(root,value.app.source,'praxis-provider.mjs'));

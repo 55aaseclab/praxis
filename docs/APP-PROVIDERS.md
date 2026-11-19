@@ -59,7 +59,7 @@ Finance and Intelligence use `resourceMode: 'native-view'`, a fixed `nativeResou
 
 Browser modules declare `cards.execution: 'browser'`. The host obtains an account-filtered manifest from `/api/workbench/providers` and imports only the matching reviewed `/app-providers/<appId>.mjs` module. It supplies `identity: {userId, username}` and a GET-only `read(path)` bound to the app's own same-origin native route. The target app still authorizes its records. Provider source is reviewed application code; these interfaces are not a sandbox for untrusted uploads.
 
-Calendar device events are keyed to the native owner. Matrix cards use selected-room excerpts already readable in that browser, bound to the native account, Matrix account and allowed event context. The projection expires after fifteen minutes without a reader refresh. It contains no session token, encryption key or arbitrary SDK database dump. Owner changes, expired context and lost access must not reuse the preceding user's cards. Letters and Profiles retain the configured document-owner and native authorization checks.
+Calendar device events are keyed to the native owner. Matrix cards use selected-room excerpts already readable in that browser, bound to the native account, Matrix account and allowed event context. The projection expires after fifteen minutes without a reader refresh. It contains no session token, encryption key or arbitrary SDK database dump. Owner changes, expired context and lost access must not reuse the preceding user's cards. Letters and Profiles retain the configured document-owner and native authorization checks. Browser-provider discovery uses the same gateway predicate as their native entry. Private core configuration sets `appProviders.letters.ownerId` and `appProviders.profiles.ownerId` to that same owner; Core combines it with the platform-administrator check for source placeholders and personal card preferences. The included initializer supplies this metadata without changing accounts or grants.
 
 ### Card data and native actions
 
@@ -150,7 +150,7 @@ Finance、Intelligence 声明 `resourceMode: 'native-view'`、固定 `nativeReso
 
 浏览器模块声明 `cards.execution: 'browser'`。宿主从 `/api/workbench/providers` 取得按账户筛选的清单，只加载匹配的经审核 `/app-providers/<appId>.mjs`。上下文提供 `identity: {userId, username}` 和限 GET、同源、所属应用路径的 `read(path)`；记录仍由原应用验权。模块属于经审核的应用代码，这些接口不是不可信上传代码的沙箱。
 
-Calendar 设备事件按原生用户分别存储。Matrix 卡片只使用当前浏览器已可读的选定房间片段，绑定原生账户、Matrix 账户及允许的事件上下文；阅读器十五分钟未刷新后投影到期，不含会话令牌、加密密钥或任意 SDK 存储。切换用户、上下文到期或失去权限时不复用上一人的卡片。Letters、Profiles 保留配置的文档所有者与原生身份检查。
+Calendar 设备事件按原生用户分别存储。Matrix 卡片只使用当前浏览器已可读的选定房间片段，绑定原生账户、Matrix 账户及允许的事件上下文；阅读器十五分钟未刷新后投影到期，不含会话令牌、加密密钥或任意 SDK 存储。切换用户、上下文到期或失去权限时不复用上一人的卡片。Letters、Profiles 保留配置的文档所有者与原生身份检查，浏览器供数发现沿用原生入口的网关判定。私有核心配置的 `appProviders.letters.ownerId`、`appProviders.profiles.ownerId` 指向同一所有者，核心同时检查平台管理员身份，决定来源占位与个人卡片偏好的权限。内置初始化器补齐该元数据，不改变账号或授权。
 
 ### 卡片数据与原生操作
 

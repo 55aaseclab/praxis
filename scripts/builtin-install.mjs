@@ -16,8 +16,12 @@ const apps = ['reminder', 'knowledge', 'travel', 'projects', 'memo', 'tingproof'
 
 // These are bootstrap layout declarations, never observed host/container mounts.
 // Include only data-location variables explicitly owned by installed providers.
-export function builtinProviderDefaults({ providers, runtime, spaceMaps = {}, workingDirectories = {}, appTargets = {} }) {
+export function builtinProviderDefaults({ providers, runtime, spaceMaps = {}, workingDirectories = {}, appTargets = {}, ownerId }) {
   const result = { finance: { url: 'http://127.0.0.1:4329' }, intelligence: { url: 'http://127.0.0.1:4330' }, polaris: { url: 'http://127.0.0.1:18787' } };
+  if (ownerId !== undefined) {
+    if (typeof ownerId !== 'string' || !/^[A-Za-z0-9_.:-]{1,200}$/.test(ownerId)) throw new Error('The private document owner is invalid.');
+    for (const app of ['letters', 'profiles']) result[app] = { ownerId };
+  }
   for (const app of ['finance', 'intelligence', 'polaris']) {
     const configuredPort = app === 'intelligence' ? runtime[app]?.INTELLIGENCE_PORT ?? runtime[app]?.PORT : runtime[app]?.PORT;
     if (configuredPort !== undefined) {
@@ -197,7 +201,7 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
     }])),
   };
   for (const app of Object.keys(adapters)) await mirrorKey(app, complete);
-  await privateJson('/app-config/web/installation.json', installation);
+  const webInstallation = await privateJson('/app-config/web/installation.json', installation);
   const runtime = {
     reminder: { REMINDER_MANAGED: '1', REMINDER_BUSINESS_KEY_FILE: '/config/key', REMINDER_BUSINESS_SPACES_FILE: '/config/spaces.json', REMINDER_BUSINESS_UI_URL: origin + '/business/reminder/' },
     knowledge: { KNOWLEDGE_MANAGED: '1', KNOWLEDGE_ADAPTER_KEY_FILE: '/config/key', KNOWLEDGE_BUSINESS_CONFIG: '/config/spaces.json', KNOWLEDGE_DATA_DIR: '/data/knowledge', KNOWLEDGE_INBOX_ROOT: '/data/knowledge/inbox', KNOWLEDGE_BASE_PATH: '/apps/knowledge/' },
@@ -232,7 +236,7 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
   }
   const providers = await new AppProviderRegistry({ root: WORKSPACE_ROOT }).providers();
   const existingCore = await exists('/config/core.json') ? (await readPrivateConfiguration('/config/core.json')).value : null;
-  config.appProviders = builtinProviderDefaults({ providers, runtime: configuredRuntime, spaceMaps: configuredMaps, workingDirectories, appTargets: existingCore?.webGateway?.appTargets || {} });
+  config.appProviders = builtinProviderDefaults({ providers, runtime: configuredRuntime, spaceMaps: configuredMaps, workingDirectories, appTargets: existingCore?.webGateway?.appTargets || {}, ownerId: webInstallation.ownerId });
   if (existingCore) await upgradeBuiltinProviderConfiguration('/config/core.json', config.appProviders);
   else await privateJson('/config/core.json', config);
   for (const file of ['/data/intelligence/data.json', '/data/polaris/observations.json']) {

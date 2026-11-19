@@ -1,6 +1,11 @@
 import { AppProviderRegistry, normalizeProviderCard, validateProviderResult } from './app-providers.mjs';
 import { OPERATIONS } from './bridge.mjs';
 const denied=()=>Object.assign(new Error('App projection access is unavailable.'),{status:403,code:'FORBIDDEN'});
+export function canReadAppCards(access,appId,config={}) {
+  if(!access?.workbench||appId==='polaris')return false;
+  if(['letters','profiles'].includes(appId))return access.platformAdmin===true&&typeof access.userId==='string'&&config.appProviders?.[appId]?.ownerId===access.userId;
+  return access.apps.includes(appId);
+}
 async function boundedJson(response) {
   if(!response.ok)throw new Error('App source unavailable.');
   const chunks=[];let size=0;
@@ -13,7 +18,7 @@ export class AppCards {
     const session=this.auth.requireNativeSession(token),initial=this.auth.getWebAccess(token);
     if(!initial.workbench)throw denied();
     const providers=await this.registry.providers();
-    const results=await Promise.all(providers.filter(provider=>provider.app.id!=='polaris'&&initial.apps.includes(provider.app.id)).map(async provider=>{
+    const results=await Promise.all(providers.filter(provider=>canReadAppCards(initial,provider.app.id,this.config)).map(async provider=>{
       const appId=provider.app.id;
       if(provider.error)return{appId,status:'unavailable',items:[],code:provider.error};
       const {descriptor,module}=provider;
@@ -22,7 +27,7 @@ export class AppCards {
       const adapterId=descriptor.adapterAppId||appId;
       if(descriptor.resourceMode!=='native-view'&&!this.config.apps?.[adapterId])return{appId,status:'unavailable',items:[],code:'APP_SOURCE_NOT_CONFIGURED'};
       const spaces=(this.config.apps?.[adapterId]?.spaces||[]).filter(spaceId=>this.auth.userPermissions(session.user.id,spaceId,adapterId,'read').length>0);
-      const current=()=>{const access=this.auth.getWebAccess(token);if(!access.workbench||!access.apps.includes(appId))throw denied();};
+      const current=()=>{const access=this.auth.getWebAccess(token);if(!canReadAppCards(access,appId,this.config))throw denied();};
       try {
         current();
         const value=validateProviderResult(await module.getCards({
@@ -54,7 +59,7 @@ export class AppCards {
       }catch(error){if(error.status===401)throw error;return {appId,status:error.status===403?'denied':'unavailable',items:[],code:error.status===403?'FORBIDDEN':'APP_SOURCE_UNAVAILABLE'};}
     }));
     const access=this.auth.getWebAccess(token);
-    const allowed=results.filter(value=>access.apps.includes(value.appId));
+    const allowed=results.filter(value=>canReadAppCards(access,value.appId,this.config));
     const items=allowed.flatMap(value=>value.items).filter(card=>{
       const provider=providers.find(value=>value.app.id===card.appId);
       try{if(provider.descriptor.resourceMode!=='native-view')this.auth.authorize(token,{appId:provider.descriptor.adapterAppId||card.appId,spaceId:card.spaceId,resourceId:card.resourceId,action:'read'},{auditDenied:false});return true;}catch{return false;}

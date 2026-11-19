@@ -19,9 +19,9 @@ import { PUBLIC_GUIDANCE_MCP_PATH, PUBLIC_GUIDANCE_TOOLS } from '../public-mcp-r
 import { createSlidesWebHandler } from './slides-web.mjs';
 import { createSlidesJobAuthorizationHandler } from './slides-job-authorization.mjs';
 import { AppProviderRegistry } from './app-providers.mjs';
-import { AppCards } from './app-cards.mjs';
+import { AppCards, canReadAppCards } from './app-cards.mjs';
 import { CardPreferences } from './card-preferences.mjs';
-import { createDataSourceResolver, readProviderRuntime } from './provider-data.mjs';
+import { createDataSourceResolver, readProviderRuntime, mergeProviderRuntime } from './provider-data.mjs';
 import { readDataInventory } from './data-inventory.mjs';
 import { createRuntimeTraceReader } from './runtime-traces.mjs';
 
@@ -50,10 +50,7 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
     const appProviders = { ...(config.appProviders || {}) };
     for (const value of runtime?.apps || []) {
       const previous = appProviders[value.appId] || {}, saved = previous.runtime;
-      const merged = saved?.bindingSource === 'installation-layout'
-        ? { ...value, ...saved, bindings: value.bindings, mounts: value.mounts, observedAt: runtime.generatedAt,
-            environment: { ...(value.environment || {}), ...(saved.environment || {}) }, pathMaps: { ...(value.pathMaps || {}), ...(saved.pathMaps || {}) } }
-        : { ...saved, ...value, pathMaps: { ...(saved?.pathMaps || {}), ...(value.pathMaps || {}) } };
+      const merged = mergeProviderRuntime(saved,value,runtime.generatedAt);
       appProviders[value.appId] = { ...previous, runtime: merged };
     }
     return providers.inventory({ bindings, workspaceRoot: bindings.workspaceRoot, resolveDataSource: createDataSourceResolver({ config: { ...config, appProviders }, root: providers.root }) });
@@ -151,7 +148,7 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
           const current = requireAccountSession(request, { auth });
           auth.requireRequestCsrf(request);
           const access = auth.getWebAccess(token);
-          if (!catalog.some(app => app.id === appId && app.id !== 'polaris') || input.state !== 'visible' && !access.apps.includes(appId)) throw businessError(403, 'FORBIDDEN');
+          if (!catalog.some(app => app.id === appId && app.id !== 'polaris') || input.state !== 'visible' && !canReadAppCards(access,appId,config)) throw businessError(403, 'FORBIDDEN');
           try { const data = cardPreferences.set(current.user.id, input); return { status: 200, data }; }
           catch (error) { if (error.status) return { status: error.status, data: { code: error.code, ...(error.current ? { current: error.current } : {}) } }; throw error; }
         }));

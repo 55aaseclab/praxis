@@ -91,7 +91,7 @@ function tingproofPublicEntry(request, route, search) {
   const parameters = new URLSearchParams(search), valid = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(value);
   return parameters.getAll('assignment').length === 1 && parameters.getAll('space').length === 1 && valid(parameters.get('assignment')) && valid(parameters.get('space')) && [...parameters.keys()].every(key => ['assignment', 'space'].includes(key));
 }
-function canOpenApp(identity, id) {
+export function canOpenApp(identity, id) {
   if (personalApps.has(id)) return identity.documentOwner === true;
   return id === 'polaris' ? identity.platformAdmin === true : identity.apps.includes(id);
 }

@@ -39,6 +39,7 @@ export async function loadBusinessConfig(file = process.env.PRAXIS_CORE_CONFIG |
     for (const [id, provider] of Object.entries(config.appProviders)) {
       if (!/^[a-z][a-z0-9-]{0,79}$/.test(id) || provider !== null && (typeof provider !== 'object' || Array.isArray(provider))) throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG');
       if (provider === null) continue;
+      if (provider.ownerId !== undefined && (typeof provider.ownerId !== 'string' || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(provider.ownerId))) throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG');
       if (provider.url !== undefined && provider.url !== null) {
         let url; try { url = new URL(provider.url); } catch { throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG'); }
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/' || url.protocol === 'http:' && !['127.0.0.1','localhost','[::1]'].includes(url.hostname)) throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG');

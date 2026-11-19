@@ -99,3 +99,11 @@ export async function readProviderRuntime(file) {
     return value;
   }catch{return null;}finally{await handle?.close();}
 }
+
+export function mergeProviderRuntime(saved, observed, generatedAt) {
+  if(saved?.bindingSource==='installation-layout')return {...observed,...saved,
+    bindings:observed.bindings??saved.bindings,mounts:observed.mounts??saved.mounts,observedAt:generatedAt,
+    environment:{...(observed.environment||{}),...(saved.environment||{})},
+    pathMaps:{...(observed.pathMaps||{}),...(saved.pathMaps||{})}};
+  return {...saved,...observed,pathMaps:{...(saved?.pathMaps||{}),...(observed.pathMaps||{})}};
+}

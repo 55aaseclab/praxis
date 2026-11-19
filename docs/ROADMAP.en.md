@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.114
+Version: 0.1.115
 
 [简体中文](ROADMAP.md)
 
@@ -207,6 +207,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.107 | 2026-11-19 | Add owner-only Letters and Profiles readers with public code and private runtime sources |
 | v0.1.113 | 2026-11-19 | Rename the platform backend service and commands to core with installation compatibility |
 | v0.1.114 | 2026-11-19 | Deliver app-owned cards, live data inventory, private card preferences and Overview business traces with expanded experience clues |
+| v0.1.115 | 2026-11-19 | Honor private reader ownership in card discovery and preferences |
 
 ### Public applications with private collections
 
