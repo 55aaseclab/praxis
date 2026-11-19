@@ -5,8 +5,8 @@
 **Praxis is a self-hosted platform where the AI agent you choose is your interface to your apps.** You ask for an outcome and decide which records and actions to authorize. Once intent, materials and access are in place, the design goal is zero mandatory clicks for routine work. That protects the attention of the people doing the work. Your agent handles routine steps and checks, leaving you time for verification that needs your judgment. Praxis also aims to capture the full business process and use Polaris as a general-purpose workflow tool to improve it. You can build custom apps to present the results. You can try the [hosted workbench](https://polaris.jianxiaoyitech.com/) before setting up your own instance.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-en.png?v=2">
-  <img src="docs/images/workbench-en.gif?v=2" alt="Real Paseo conversation beside Praxis showing a synthetic Reminder card after the prompt is sent">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-en.png?v=3">
+  <img src="docs/images/workbench-en.gif?v=3" alt="Four frames: empty Paseo prompt and Praxis Apps, sent prompt, clicking the view switch, then a synthetic Reminder card with the conversation retained">
 </picture>
 
 ## Quickstart

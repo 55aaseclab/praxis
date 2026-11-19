@@ -5,8 +5,8 @@
 **Praxis 是一个可自托管的平台。你选择的 AI 智能体，就是你使用应用的入口。** 你告诉它想要的结果，并决定它能访问哪些记录、执行哪些操作。意图、材料和授权就绪后，日常执行的目标是零次必需点击，让实际做事的人能专注。智能体处理例行步骤和检查，你把时间留给需要自己判断的验证。Praxis 也希望完整记录业务过程，并以 Polaris 作为通用工作流工具来优化流程。你可以定制自己的应用展示结果。部署前可以试用[在线工作台](https://polaris.jianxiaoyitech.com/)。
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-zh.png?v=2">
-  <img src="docs/images/workbench-zh.gif?v=2" alt="真实 Paseo 对话与 Praxis 工作台：发送提醒后显示对应的合成提醒卡片">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/workbench-zh.png?v=3">
+  <img src="docs/images/workbench-zh.gif?v=3" alt="四帧演示：空白 Paseo 输入框与 Apps、发送提示词、鼠标点击切换视图、保留对话并显示合成提醒卡片">
 </picture>
 
 ## 快速开始
