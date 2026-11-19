@@ -31,7 +31,7 @@ Apps and projects open in the current tab. Browser Back returns to the previous 
 | Letters | `/apps/letters/` | Web slot | `third_party/letters` |
 | Profiles | `/apps/profiles/` | Web slot | `third_party/profiles` |
 
-The table gives the managed gateway targets. Standalone Knowledge, Lattice and TingProof use ports 4324, 4666 and 5173, respectively. The production gateway on 14321 forwards to fixed local targets. The managed business service listens on loopback port 4326. App-specific publishing ports, mounts and probes appear in the Docker guide. Knowledge serves notes, books and project reference documents. Legacy Knowledge and Travel URLs use authorized redirects. The Letters and Profiles readers use separate read-only document mounts. Both require the configured owner’s administrator session. The Polaris entry is an administrator-only read-only observation viewer. [Deployment guide](DOCKER.en.md)
+The table gives the managed gateway targets. Standalone Knowledge, Lattice and TingProof use ports 4324, 4666 and 5173, respectively. The production gateway on 14321 forwards to fixed local targets. The managed core backend listens on loopback port 4326. App-specific publishing ports, mounts and probes appear in the Docker guide. Knowledge serves notes, books and project reference documents. Legacy Knowledge and Travel URLs use authorized redirects. The Letters and Profiles readers use separate read-only document mounts. Both require the configured owner’s administrator session. The Polaris entry is an administrator-only read-only observation viewer. [Deployment guide](DOCKER.en.md)
 
 ```mermaid
 flowchart LR
@@ -70,7 +70,7 @@ Each app has an active working data set, consistent snapshots and independent en
 
 | Component | Source or entry | Responsibility |
 | --- | --- | --- |
-| Business HTTP service | `src/business/server.mjs` | Managed app views, API, MCP and identity endpoints |
+| Core backend | `src/business/server.mjs` | Managed app views, API, MCP and identity endpoints |
 | Identity and delegation | `src/business/auth.mjs` | User, space and resource scope, authentication, OAuth, revocation and policy locking |
 | Settings | `${issuer}/admin/`, `src/business/admin.mjs` | Account administration, website grants and revoking delegations |
 | App bridge | `src/business/bridge.mjs` | Fixed signed app operations |
@@ -81,13 +81,15 @@ Each app has an active working data set, consistent snapshots and independent en
 For a controlled development instance:
 
 ```sh
-npm run business -- --config /absolute/private/business.json --host 127.0.0.1 --port 4326
-npm run business:admin -- status --config /absolute/private/business.json
+npm run core -- --config /absolute/private/business.json --host 127.0.0.1 --port 4326
+npm run core:admin -- status --config /absolute/private/business.json
 ```
 
 Use an explicit HTTPS origin as the production OAuth issuer. Loopback HTTP is available for local development and isolated tests. A bind address such as `0.0.0.0` describes a listener. The workbench is at `${issuer}/`. The managed endpoints `/business/reminder/` and `/business/tingproof/` return app-specific HTML. Shared `app-transport.js` provides authentication, calls and events. The MCP endpoint is `${issuer}/mcp`. Verify public routing separately from local process startup.
 
 Anyone with a valid website account can open Settings for their own access and agent delegations. Platform administrators can also administer users and global status. Browser actions use the person's existing permissions. External agents use explicit OAuth delegation within the current app and resource boundaries. [Identity guide](BUSINESS-AUTH.en.md)
+
+The preferred platform backend commands are `core`, `core:admin` and `core:stack`. Older `business` command names remain compatibility aliases. Existing source paths, configuration filenames and `/api/business` routes remain supported.
 
 ## 2. Private configuration and credentials
 
@@ -131,7 +133,7 @@ Only administrator browser sessions can access `/api/business/admin/*`. The acco
 The maintenance CLI bootstraps identity metadata and private configuration without importing Reminder tasks. Map the active data file explicitly:
 
 ```sh
-npm run business:admin -- init \
+npm run core:admin -- init \
   --config /absolute/private/business.json \
   --issuer https://your-existing-domain.example \
   --reminder-data /absolute/active/reminder/checklist.json \

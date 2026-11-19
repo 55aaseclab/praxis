@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.112
+Version: 0.1.113
 
 [简体中文](ROADMAP.md)
 
@@ -180,6 +180,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.105 | 2026-11-19 | Localize public MCP discovery and operational skills; use bilingual app manifests |
 | v0.1.106 | 2026-11-19 | Document how agent-native apps compare with harnesses and existing app connectors |
 | v0.1.107 | 2026-11-19 | Add owner-only Letters and Profiles readers with public code and private runtime sources |
+| v0.1.113 | 2026-11-19 | Rename the platform backend service and commands to core with installation compatibility |
 
 ### Public applications with private collections
 

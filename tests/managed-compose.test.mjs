@@ -26,3 +26,13 @@ test('deployment facade retains new checkout directory when all compose files li
   assert.deepEqual(observed.args.slice(0, 5), ['compose', '--project-directory', workspace, '--project-name', 'synthetic-existing']);
   assert.equal(observed.options.cwd, workspace);
 });
+
+
+test('core group and facade aliases preserve the installed Compose project namespace', () => {
+  for (const [group, service] of [['business', 'business'], ['business', 'core'], ['core', 'core']]) {
+    const config = { version: 1, projects: { [group]: { name: 'unchanged-installed-project', files, services: [service, 'reminder'] } } };
+    const args = composeArgs(config, ['recreate', 'core', 'core']);
+    assert.equal(args.at(-1), service);
+    assert.ok(args.includes('unchanged-installed-project'));
+  }
+});

@@ -28,7 +28,7 @@ export async function registerWorkspace(config, repositoryRoot, { runtime = 'nat
   }
   const platformPaths = ['src', 'scripts', 'tests', 'public', 'docs', 'skills', 'config', 'packaging',
     'Dockerfile', 'Dockerfile.builtins', 'Dockerfile.builtins.dockerignore', 'Dockerfile.storage',
-    'compose.yaml', 'compose.apps.yaml', 'compose.business.yaml', 'compose.storage.yaml',
+    'compose.yaml', 'compose.apps.yaml', 'compose.core.yaml', 'compose.business.yaml', 'compose.storage.yaml',
     'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml', '.dockerignore',
     '.gitignore', '.gitmodules', 'package.json', 'package-lock.json', 'AGENTS.md',
     'README.md', 'README.zh-CN.md', 'CONTRIBUTING.md', 'LICENSE', 'CODE_OF_CONDUCT.md'];

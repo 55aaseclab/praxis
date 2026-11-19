@@ -33,6 +33,8 @@ node scripts/managed-compose.mjs up apps knowledge
 
 ### Web and core
 
+`core` is the platform backend for identity, permissions, API and MCP. The preferred maintenance commands are `npm run core`, `npm run core:admin` and `npm run core:stack`. The older `business` command names remain compatibility aliases. Existing private configuration files, project names and data paths keep their installation-specific names. A managed `core` group also accepts an existing descriptor's `business` group.
+
 Initialize the pinned submodules and build the candidate image. The build compiles Matrix Reader and includes Calendar and both owner-only readers. In an established blue/green deployment, `status` reads the active color, writer and slot health. For a routine image rollout, `deploy` stages the standby pair before transferring the writer lease. `rollback` switches back to the previous slot after a successful rollout.
 
 ```sh
@@ -70,6 +72,8 @@ node scripts/managed-compose.mjs up apps knowledge
 `up` 依据配置和本地镜像启动所选服务。`recreate` 替换容器并等待就绪。`stop` 停止服务。省略服务名会选择该组配置中列出的服务。两个蓝绿路由服务及四个应用槽由蓝绿控制器管理。
 
 ### Web 与核心服务
+
+`core` 是负责身份、权限、API 和 MCP 的平台核心后端。维护命令统一使用 `npm run core`、`npm run core:admin` 和 `npm run core:stack`；旧 `business` 命令名继续作为兼容别名。既有私有配置文件、项目名和数据路径保留各安装原有的名称。受管 `core` 组兼容既有描述文件中的 `business` 组。
 
 初始化固定版本的子模块后，构建候选镜像。构建过程会编译 Matrix 阅读器并打包日历和两个所有者专属阅读器。已有蓝绿安装可用 `status` 查看活动槽、写入者和健康状态。常规镜像升级用 `deploy` 先部署备用槽，再交接写租约。升级成功后可用 `rollback` 切回上一个槽。
 

@@ -13,7 +13,7 @@ async function fixture(t) {
   const prototype = name => ({ Name: '/' + name, Image: 'sha256:original', Config: { Env: ['PRIVATE_TOKEN=SYNTHETIC_SECRET'], Labels: {}, Cmd: ['node', 'old.mjs'] }, HostConfig: {}, Mounts: [] });
   const ops = {
     badCandidate: false, failActivation: false,
-    original: async service => prototype(service),
+    original: async service => prototype(Array.isArray(service) ? service[0] : service),
     buildImage: async value => value || 'sha256:candidate-' + (++image), buildProxy: async () => 'sha256:router',
     stage: async (color, pinned) => { trace.push(['stage', color, pinned]); return { image: pinned, webContainer: `praxis-${color}-web`, coreContainer: `praxis-${color}-core`, leaseOwner: color + '-owner' }; },
     stop: async name => { trace.push(['stop', name]); }, start: async name => { trace.push(['start', name]); },
@@ -141,7 +141,7 @@ test('deployment CLI returns metadata and rejects unknown commands without execu
 test('facade overrides replace inherited application healthchecks and exclude application credentials', async t => {
   const f = await fixture(t); await f.controller.prepare();
   const ops = new DockerDeploymentOps(f.paths, { run: async () => '' });
-  await ops.facades({ core: { Config: { User: '1000:1000' } }, web: { Config: { User: '1000:1000' } } }, 'sha256:router');
+  await ops.facades({ core: { Config: { User: '1000:1000', Labels: { 'com.docker.compose.service': 'core' } } }, web: { Config: { User: '1000:1000', Labels: { 'com.docker.compose.service': 'praxis-public' } } } }, 'sha256:router');
   for (const file of [f.paths.appsOverride, f.paths.businessOverride]) {
     const yaml = await readFile(file, 'utf8');
     const health = JSON.parse(yaml.match(/^    healthcheck: !override (.+)$/m)[1]);
@@ -177,4 +177,31 @@ test('healthy up is idempotent and an interrupted route-to-manifest commit requi
   await assert.rejects(f.controller.rollback(), { code: 'DEPLOYMENT_RECOVERY_REQUIRED' });
   assert.equal(f.trace.length, offset);
   const recovered = await f.controller.up(); assert.equal(recovered.active, 'green'); assert.equal(recovered.healthy, true); assert.equal(recovered.needsRecovery, false);
+});
+
+
+test('facades use the prototype service label for core and legacy installations', async t => {
+  const f = await fixture(t); await f.controller.prepare();
+  const ops = new DockerDeploymentOps(f.paths, { run: async () => '' });
+  for (const service of ['core', 'business']) {
+    const core = { Config: { Labels: { 'com.docker.compose.service': service } } };
+    const web = { Config: { Labels: { 'com.docker.compose.service': 'praxis-public' } } };
+    await ops.facades({ core, web }, 'sha256:router');
+    assert.match(await readFile(f.paths.coreOverride, 'utf8'), new RegExp('^services:\n  ' + service + ':', 'm'));
+    assert.equal(f.paths.coreOverride, f.paths.businessOverride);
+  }
+  await assert.rejects(ops.facades({ core: { Config: { Labels: {} } }, web: { Config: { Labels: { 'com.docker.compose.service': 'praxis-public' } } } }, 'sha256:router'), { code: 'INVALID_FACADE_SERVICE' });
+});
+
+test('core discovery supports one legacy facade and refuses ambiguous writers', async t => {
+  const f = await fixture(t), containers = new Map();
+  const root = process.cwd();
+  const prototype = service => ({ Config: { Labels: { 'com.docker.compose.service': service, 'com.docker.compose.project.working_dir': root } } });
+  const ops = new DockerDeploymentOps(f.paths, { run: async args => args[0] === 'ps' ? [...containers.keys()].filter(id => args.includes('label=com.docker.compose.service=' + id)).join('\n') : JSON.stringify([containers.get(args[1])]) });
+  containers.set('business', prototype('business'));
+  assert.equal((await ops.original(['core', 'business'])).Config.Labels['com.docker.compose.service'], 'business');
+  containers.set('core', prototype('core'));
+  await assert.rejects(ops.original(['core', 'business']), { code: 'ORIGINAL_SERVICE_UNAVAILABLE' });
+  containers.delete('business');
+  assert.equal((await ops.original(['core', 'business'])).Config.Labels['com.docker.compose.service'], 'core');
 });

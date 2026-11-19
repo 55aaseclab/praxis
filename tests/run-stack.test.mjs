@@ -54,7 +54,7 @@ test('aggregate status rejects missing business services and the old eleven-serv
   operations.business = async () => { throw Object.assign(new Error('Unavailable'), { code: 'UNAVAILABLE' }); };
   const result = await main(['status'], operations);
   assert.equal(result.healthy, false);
-  assert.equal(result.groups.business.error, 'UNAVAILABLE');
+  assert.equal(result.groups.core.error, 'UNAVAILABLE');
   assert.equal(result.groups.storage.healthy, true);
 });
 
@@ -144,4 +144,21 @@ test('data locations publish only after a healthy start and use explicit configu
   operations.stack = async args => args[0] === 'status' ? { healthy: false, services: [] } : undefined;
   await assert.rejects(main(['up'], operations), /missing or unhealthy/);
   assert.equal(calls.some(([name]) => name === 'inventory'), false);
+});
+
+
+test('core operation and config are canonical while legacy facade inventories stay valid', async () => {
+  const { calls, operations } = harness();
+  operations.core = async args => {
+    calls.push(['core', args]);
+    return args[0] === 'validate' ? { services: ['core', 'reminder'] } : { healthy: true, expectedServices: ['core', 'reminder'], services: ['core', 'reminder'].map(name => ({ name, state: 'running', health: 'healthy' })) };
+  };
+  const result = await main(['up', '--core-config', '/private/core.json'], operations);
+  assert.equal(result.healthy, true);
+  assert.ok(result.groups.core);
+  assert.equal(result.groups.business, undefined);
+  assert.ok(!calls.some(([name]) => name === 'business'));
+  assert.deepEqual(calls.find(([name]) => name === 'core'), ['core', ['validate', '--config', '/private/core.json']]);
+  operations.core = async () => ({ healthy: true, expectedServices: ['core', 'business', 'reminder'], services: ['core', 'business', 'reminder'].map(name => ({ name })) });
+  assert.equal((await main(['status'], operations)).healthy, false);
 });

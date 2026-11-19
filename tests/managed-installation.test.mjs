@@ -28,3 +28,12 @@ test('restored commands retain explicit installation scope and stop without dele
   await chmod(file, 0o644);
   await assert.rejects(readManagedInstallation(file), /private installation descriptor/);
 });
+
+
+test('installation commands accept core aliases without changing legacy service or data identity', () => {
+  const config = { version: 1, projects: { business: { name: 'unchanged-installed-project', files: ['/synthetic/core.yml'], services: ['business', 'reminder'] } } };
+  const up = installationCommand(config, 'core', 'up', ['core']);
+  assert.equal(up.at(-1), 'business');
+  assert.ok(up.includes('unchanged-installed-project'));
+  assert.ok(!up.includes('--remove-orphans'));
+});

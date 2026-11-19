@@ -16,7 +16,7 @@ const fail = (code, message = code) => Object.assign(new Error(message), { code 
 const pause = ms => new Promise(resolvePromise => setTimeout(resolvePromise, ms));
 export function getDeploymentPaths(root = DEFAULT_DEPLOYMENT_ROOT) {
   root = resolve(root);
-  return { root, manifest: join(root, 'manifest.json'), lock: join(root, 'deployment.lock'), stateDir: join(root, 'state'), state: join(root, 'state/state.json'), socketDir: join(root, 'sockets'), leaseDir: join(root, 'lease'), prototypeDir: join(root, 'prototypes'), envDir: join(root, 'env'), appsOverride: join(root, 'compose.apps.yml'), businessOverride: join(root, 'compose.business.yml') };
+  return { root, manifest: join(root, 'manifest.json'), lock: join(root, 'deployment.lock'), stateDir: join(root, 'state'), state: join(root, 'state/state.json'), socketDir: join(root, 'sockets'), leaseDir: join(root, 'lease'), prototypeDir: join(root, 'prototypes'), envDir: join(root, 'env'), appsOverride: join(root, 'compose.apps.yml'), coreOverride: join(root, 'compose.business.yml'), businessOverride: join(root, 'compose.business.yml') };
 }
 async function optionalJson(file) { try { return JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code === 'ENOENT') return null; throw fail('INVALID_DEPLOYMENT_METADATA'); } }
 async function documentBindings(root) {
@@ -113,7 +113,10 @@ export function unixControl(socketPath, method = 'GET', path = '/status') {
 export class DockerDeploymentOps {
   constructor(paths, { run = docker, timeoutMs = 40000 } = {}) { this.paths = paths; this.run = run; this.timeoutMs = timeoutMs; }
   async original(service) {
-    const ids = (await this.run(['ps', '--all', '--filter', `label=com.docker.compose.service=${service}`, '--format', '{{.ID}}'])).trim().split(/\s+/).filter(Boolean);
+    const ids = new Set();
+    for (const name of Array.isArray(service) ? service : [service]) {
+      for (const id of (await this.run(['ps', '--all', '--filter', `label=com.docker.compose.service=${name}`, '--format', '{{.ID}}'])).trim().split(/\s+/).filter(Boolean)) ids.add(id);
+    }
     const found = [];
     for (const id of ids) { const item = JSON.parse(await this.run(['inspect', id]))[0]; if (resolve(item.Config?.Labels?.['com.docker.compose.project.working_dir'] || '.') === workspace) found.push(item); }
     if (found.length !== 1) throw fail('ORIGINAL_SERVICE_UNAVAILABLE');
@@ -166,7 +169,9 @@ export class DockerDeploymentOps {
   }
   control(channel, method = 'GET', path = '/status') { return unixControl(join(this.paths.socketDir, `${channel}.sock`), method, path); }
   async facades(prototypes, proxyImage) {
-    for (const [service, prototype, file, channel, port, host] of [['praxis-public', prototypes.web, this.paths.appsOverride, 'web', 14321, '0.0.0.0'], ['business', prototypes.core, this.paths.businessOverride, 'core', 4326, '127.0.0.1']]) {
+    for (const [prototype, file, channel, port, host] of [[prototypes.web, this.paths.appsOverride, 'web', 14321, '0.0.0.0'], [prototypes.core, this.paths.coreOverride, 'core', 4326, '127.0.0.1']]) {
+      const service = prototype.Config?.Labels?.['com.docker.compose.service'];
+      if (!(channel === 'core' ? ['core', 'business'].includes(service) : service === 'praxis-public')) throw fail('INVALID_FACADE_SERVICE');
       const command = ['node', 'scripts/serve-deploy-proxy.mjs', '--channel', channel, '--state', '/run/praxis-deploy/state/state.json', '--socket', `/run/praxis-deploy/sockets/${channel}.sock`, '--host', host, '--port', String(port)];
       const mounts = [{ type: 'bind', source: this.paths.stateDir, target: '/run/praxis-deploy/state', read_only: true, bind: { create_host_path: false } }, { type: 'bind', source: this.paths.socketDir, target: '/run/praxis-deploy/sockets', bind: { create_host_path: false } }];
       const healthcheck = { test: ['CMD', 'node', '-e', 'fetch(process.env.HEALTH_URL,{signal:AbortSignal.timeout(5000)}).then(response=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))'], interval: '5s', timeout: '6s', start_period: '5s', retries: 5 };
@@ -231,7 +236,7 @@ export class DeploymentController {
   async init({ image } = {}) {
     return this.locked(async () => {
       if (await isDeploymentEnabled(this.paths.root)) return this.status();
-      const prototypes = { web: await this.ops.original('praxis-public'), core: await this.ops.original('business') };
+      const prototypes = { web: await this.ops.original('praxis-public'), core: await this.ops.original(['core', 'business']) };
       await privateJson(join(this.paths.prototypeDir, 'web.json'), prototypes.web); await privateJson(join(this.paths.prototypeDir, 'core.json'), prototypes.core);
       const pinned = await this.ops.buildImage(image), proxyImage = await this.ops.buildProxy();
       await writeDeploymentState(this.paths.state, { version: 1, generation: 1, active: 'blue', writer: null, paused: true, slots: structuredClone(DEFAULT_SLOTS) });
@@ -242,7 +247,7 @@ export class DeploymentController {
         await this.ops.stop(prototypes.core.Name.replace(/^\//, '')); legacyStopped = true;
         await this.handoff('blue', manifest, { proxies: false });
         await this.ops.facades(prototypes, proxyImage);
-        await this.ops.applyFacade(prototypes.core, this.paths.businessOverride); facadeApplied = true;
+        await this.ops.applyFacade(prototypes.core, this.paths.coreOverride); facadeApplied = true;
         await this.ops.applyFacade(prototypes.web, this.paths.appsOverride);
         await this.acknowledged(await readDeploymentState(this.paths.state));
         manifest.enabled = true; await privateJson(this.paths.manifest, manifest); return this.status();
@@ -347,7 +352,7 @@ export class DeploymentController {
       const current = await this.status(); if (current.healthy) return current;
       for (const slot of Object.values(manifest.slots)) { await this.ops.start(slot.coreContainer); await this.ops.start(slot.webContainer); }
       const prototypes = await this.prototypes();
-      await this.ops.applyFacade(prototypes.core, this.paths.businessOverride);
+      await this.ops.applyFacade(prototypes.core, this.paths.coreOverride);
       await this.ops.applyFacade(prototypes.web, this.paths.appsOverride);
       await this.handoff(manifest.active, manifest); return this.status();
     });

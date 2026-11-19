@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { composeArgs } from './managed-compose.mjs';
+import { composeArgs, installationProject } from './managed-compose.mjs';
 import { docker } from '../src/deployment/controller.mjs';
 
 export const managedDescriptorFile = () => process.env.PRAXIS_MANAGED_COMPOSE_FILE || join(homedir(), '.config/praxis/managed-checkout/managed-compose.json');
@@ -22,8 +22,10 @@ export async function readManagedInstallation(file = managedDescriptorFile()) {
 }
 
 export function installationCommand(config, project, command, requested = []) {
+  project = installationProject(config, project);
   const item = config.projects[project];
   if (!item) throw new Error('Installation project is not registered.');
+  requested = requested.map(name => ['core', 'business'].includes(name) && !item.services.includes(name) && item.services.includes(name === 'core' ? 'business' : 'core') ? (name === 'core' ? 'business' : 'core') : name);
   if (requested.some(name => !item.services.includes(name))) throw new Error('Service is outside this installation project.');
   const services = requested.length ? requested : item.services;
   if (command === 'up') return composeArgs(config, ['up', project, ...services]);

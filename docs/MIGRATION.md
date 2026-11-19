@@ -10,8 +10,8 @@
 | --- | --- |
 | 原生应用镜像与 Compose 服务 | [Dockerfile.builtins](../Dockerfile.builtins) 与 [compose.yaml](../compose.yaml) 构建固定版本的原生应用；静态阅读器随平台镜像提供。 |
 | 应用栈控制 | [stack.mjs](../scripts/stack.mjs) 保留计划、构建、启动、资产构建、激活、状态、日志和 exec 流程。 |
-| 统一服务控制 | [run-stack.mjs](../scripts/run-stack.mjs) 协调已配置的应用、业务、存储和观察服务。 |
-| 业务服务控制 | [business-stack.mjs](../scripts/business-stack.mjs) 保留私有身份、应用密钥和来源映射。 |
+| 统一服务控制 | [run-stack.mjs](../scripts/run-stack.mjs) 协调已配置的应用、核心后端、存储和观察服务。 |
+| 核心后端服务控制 | `npm run core:stack` 使用 [business-stack.mjs](../scripts/business-stack.mjs)，保留私有身份、应用密钥和来源映射。 |
 | 备份登记 | [storage-bootstrap.mjs](../scripts/storage-bootstrap.mjs) 与[登记实现](../src/storage/registry.mjs) 登记既有规范来源。 |
 | 应用数据计划 | [app-data.mjs](../scripts/app-data.mjs) 与[应用路径](../src/storage/app-paths.mjs) 保留显式工作根目录和可恢复交接。 |
 | 运维数据清单 | [data-inventory.mjs](../scripts/data-inventory.mjs) 展示登记的来源绑定和覆盖范围。 |

@@ -12,7 +12,7 @@ Settings (`/admin/`) opens the General section. Administrators can select Overvi
 
 Use the canonical HTTPS workbench. Plain HTTP on another origin cannot use its secure browser cookie. A synthetic browser test does not establish real phone connectivity when the external chain is unavailable.
 
-Optional private business configuration:
+Optional private core configuration:
 
 ```json
 {
@@ -23,7 +23,7 @@ Optional private business configuration:
 }
 ```
 
-Use a separate 700 directory outside Git and 600 JSON files. The stack validates the configuration. The business service mounts redacted output read-only. The web process has no storage configuration, raw data, keys or Docker socket mount. The status publisher reads existing configuration, repository outcomes and worker heartbeats and writes a fixed projection without network access. Updating the Settings page does not require restarting a running backup.
+Use a separate 700 directory outside Git and 600 JSON files. The stack validates the configuration. The core backend mounts redacted output read-only. The web process has no storage configuration, raw data, keys or Docker socket mount. The status publisher reads existing configuration, repository outcomes and worker heartbeats and writes a fixed projection without network access. Updating the Settings page does not require restarting a running backup.
 
 A fixed local proxy maps `/api/platform/status` to `/api/business/console/status`, and `/api/platform/observations?window=day|week` to the corresponding aggregate. It forwards the approved native session cookie only, rejects caller Authorization and cross-origin requests, accepts no target URL, follows no redirects and bounds time and response size. Responses are uncached.
 

@@ -58,11 +58,13 @@ export async function administerBusiness({ command, configFile, specFile, output
     throw new Error('Unknown business administration command.');
   } finally { store.close(); }
 }
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+export async function runCoreAdmin(argv = process.argv.slice(2)) {
   try {
-    const { values, positionals } = parseArgs({ allowPositionals: true, options: { config: { type: 'string', default: process.env.PRAXIS_BUSINESS_CONFIG }, issuer: { type: 'string' }, 'reminder-data': { type: 'string' }, 'state-root': { type: 'string' }, username: { type: 'string' }, spec: { type: 'string' }, out: { type: 'string' } } });
+    const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { config: { type: 'string', default: process.env.PRAXIS_CORE_CONFIG || process.env.PRAXIS_BUSINESS_CONFIG }, issuer: { type: 'string' }, 'reminder-data': { type: 'string' }, 'state-root': { type: 'string' }, username: { type: 'string' }, spec: { type: 'string' }, out: { type: 'string' } } });
     if (!values.config) throw new Error('Pass --config with a private configuration path.');
     const result = positionals[0] === 'init' ? await initializeBusiness({ file: values.config, issuer: values.issuer, reminderData: values['reminder-data'], stateRoot: values['state-root'], username: values.username }) : await administerBusiness({ command: positionals[0], configFile: values.config, specFile: values.spec, outputFile: values.out });
     console.log(JSON.stringify(result));
-  } catch (error) { console.error(`Business administration failed: ${error.code || 'INVALID_INPUT'}`); process.exitCode = 1; }
+  } catch (error) { console.error(`Core administration failed: ${error.code || 'INVALID_INPUT'}`); process.exitCode = 1; }
 }
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) await runCoreAdmin();

@@ -7,8 +7,8 @@ import { pathToFileURL } from 'node:url';
 import { main as stack, SERVICES } from './stack.mjs';
 import { main as bootstrap } from './storage-bootstrap.mjs';
 import { main as worker } from './storage-worker.mjs';
-import { businessStackPlan, runBusinessStack } from './business-stack.mjs';
-import { DEFAULT_BUSINESS_CONFIG } from '../src/business/config.mjs';
+import { businessStackPlan, runBusinessStack, coreInstallation, coreConfigFile } from './business-stack.mjs';
+import { readManagedInstallation } from './managed-installation.mjs';
 import { deploymentOverrides } from '../src/deployment/integration.mjs';
 import { main as polaris, POLARIS_SERVICES } from './polaris-stack.mjs';
 import { main as dataInventory } from './data-inventory.mjs';
@@ -25,16 +25,21 @@ export async function validateWorkingData({ storageConfig, businessConfig, polar
 
 export async function businessOperation(args) {
   const [command, ...options] = args;
-  const configFile = options[0] === '--config' ? options[1] : process.env.PRAXIS_BUSINESS_CONFIG || DEFAULT_BUSINESS_CONFIG;
-  const plan = await businessStackPlan(configFile);
-  if (!plan.override.services.reminder) throw new Error('The unified stack requires explicitly managed Reminder in the business project.');
-  if (command === 'validate') return { services: plan.services };
+  const configFile = await coreConfigFile(options[0] === '--config' ? options[1] : undefined);
+  const installed = coreInstallation(await readManagedInstallation());
+  const deployment = installed ? null : await deploymentOverrides(configFile);
+  const plan = await businessStackPlan(configFile, { serviceName: installed?.serviceName || deployment?.coreService || 'core' });
+  const expectedServices = installed?.item.services || plan.services;
+  if (!plan.override.services.reminder) throw new Error('The unified stack requires explicitly managed Reminder in the core project.');
+  if (command === 'validate') return { services: expectedServices };
   const output = await runBusinessStack(command, { configFile, deferDeploymentFacade: options.includes('--defer-deployment-facade') });
   if (command !== 'status') return output;
   let rows; try { const value = JSON.parse(output || '[]'); rows = Array.isArray(value) ? value : [value]; } catch { rows = String(output).trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
-  const services = plan.services.map(name => { const row = rows.find(value => value.Service === name); return { name, ...(name === 'storage-status' ? {} : { port: { business: 4326, reminder: 4322, projects: 4327, 'slides-business': 4328 }[name] }), state: row?.State || 'absent', health: row?.Health || 'unknown' }; });
-  return { healthy: services.every(service => service.state === 'running' && service.health === 'healthy'), expectedServices: plan.services, services };
+  const services = expectedServices.map(name => { const row = rows.find(value => value.Service === name); return { name, ...(name === 'storage-status' ? {} : { port: { core: 4326, business: 4326, reminder: 4322, projects: 4327, 'slides-business': 4328 }[name] }), state: row?.State || 'absent', health: row?.Health || 'unknown' }; });
+  return { healthy: services.every(service => service.state === 'running' && service.health === 'healthy'), expectedServices, services };
 }
+
+export const coreOperation = businessOperation;
 
 export async function deploymentOperation(args) {
   const [command, , configFile] = args;
@@ -45,11 +50,13 @@ export async function deploymentOperation(args) {
   return main([command, '--state-dir', configuration.root], { print: false });
 }
 
-export async function main(args = process.argv.slice(2), operations = { stack: args => stack(args, { print: () => {} }), bootstrap, worker: args => worker(args, { print: false }), business: businessOperation, deployment: deploymentOperation, polaris: args => polaris(args, { print: false }), inventory: args => dataInventory(args, { print: () => {} }), validateWorkingData, print: console.log }) {
+export async function main(args = process.argv.slice(2), operations = { stack: args => stack(args, { print: () => {} }), bootstrap, worker: args => worker(args, { print: false }), core: businessOperation, deployment: deploymentOperation, polaris: args => polaris(args, { print: false }), inventory: args => dataInventory(args, { print: () => {} }), validateWorkingData, print: console.log }) {
   const [command = 'up', ...options] = args;
-  let polarisConfig, storageConfig, businessConfig = process.env.PRAXIS_BUSINESS_CONFIG || DEFAULT_BUSINESS_CONFIG;
+  const coreOperation = operations.core || operations.business;
+  if (!coreOperation) throw new Error('Core stack operation is required.');
+  let polarisConfig, storageConfig, businessConfig = await coreConfigFile();
   for (let index = 0; index < options.length; index += 2) {
-    if (!['--config', '--business-config', '--polaris-config'].includes(options[index]) || !options[index + 1]) throw new Error('Only --config PATH, --business-config PATH and --polaris-config PATH are accepted');
+    if (!['--config', '--core-config', '--business-config', '--polaris-config'].includes(options[index]) || !options[index + 1]) throw new Error('Only --config PATH, --core-config PATH, --business-config PATH and --polaris-config PATH are accepted');
     if (options[index] === '--config') storageConfig = options[index + 1]; else if (options[index] === '--polaris-config') polarisConfig = options[index + 1]; else businessConfig = options[index + 1];
   }
   const storageOptions = storageConfig ? ['--config', storageConfig] : [];
@@ -61,13 +68,13 @@ export async function main(args = process.argv.slice(2), operations = { stack: a
   let businessInventory;
   async function status() {
     const result = { sourceMode: 'registered', groups: {}, services: [], healthy: true };
-    for (const [name, operation, parameters] of [['apps', operations.stack, ['status', '--json', ...bindingOptions]], ['business', operations.business, ['status', ...businessOptions]], ['storage', operations.worker, ['status', ...storageOptions]]]) {
+    for (const [name, operation, parameters] of [['apps', operations.stack, ['status', '--json', ...bindingOptions]], ['core', coreOperation, ['status', ...businessOptions]], ['storage', operations.worker, ['status', ...storageOptions]]]) {
       try {
         const group = await operation(parameters);
         result.groups[name] = group ?? { healthy: false };
         result.services.push(...(group?.services || []));
-        const expected = name === 'apps' ? Object.keys(SERVICES).filter(service => service !== 'reminder') : name === 'business' ? businessInventory || group?.expectedServices || ['business', 'reminder'] : ['storage'];
-        if (name === 'business' && (!Array.isArray(expected) || ![2, 3, 4, 5].includes(expected.length) || !expected.includes('business') || !expected.includes('reminder') || expected.some(service => !['business', 'reminder', 'projects', 'slides-business', 'storage-status'].includes(service)) || new Set(expected).size !== expected.length)) { result.healthy = false; continue; }
+        const expected = name === 'apps' ? Object.keys(SERVICES).filter(service => service !== 'reminder') : name === 'core' ? businessInventory || group?.expectedServices || [group?.services?.find(service => ['core', 'business'].includes(service.name))?.name || 'core', 'reminder'] : ['storage'];
+        if (name === 'core' && (!Array.isArray(expected) || ![2, 3, 4, 5].includes(expected.length) || expected.filter(service => ['core', 'business'].includes(service)).length !== 1 || !expected.includes('reminder') || expected.some(service => !['core', 'business', 'reminder', 'projects', 'slides-business', 'storage-status'].includes(service)) || new Set(expected).size !== expected.length)) { result.healthy = false; continue; }
         const actual = group?.services?.map(service => service.name).sort() || [];
         if (!group?.healthy || JSON.stringify(actual) !== JSON.stringify(expected.sort())) result.healthy = false;
       } catch (error) { result.groups[name] = { healthy: false, error: error.code || 'UNAVAILABLE' }; result.healthy = false; }
@@ -91,10 +98,10 @@ export async function main(args = process.argv.slice(2), operations = { stack: a
   }
   if (command === 'up') {
     if (operations.validateWorkingData) await operations.validateWorkingData({ storageConfig, businessConfig, polarisConfig });
-    businessInventory = (await operations.business(['validate', ...businessOptions]))?.services;
+    businessInventory = (await coreOperation(['validate', ...businessOptions]))?.services;
     if (operations.polaris) await operations.polaris(['validate', ...polarisOptions]);
     await operations.stack(['up', ...bindingOptions, ...deferred]);
-    await operations.business(['up', ...businessOptions, ...deferred]);
+    await coreOperation(['up', ...businessOptions, ...deferred]);
     if (deploymentEnabled) await operations.deployment(['up', ...businessOptions]);
     if (deploymentEnabled) await operations.stack(['activate', ...bindingOptions]);
     if (operations.polaris) await operations.polaris(['up', ...polarisOptions]);
@@ -106,13 +113,13 @@ export async function main(args = process.argv.slice(2), operations = { stack: a
     return result;
   } else if (command === 'down') {
     const errors = [];
-    for (const [operation, parameters] of [[operations.worker, ['down', ...storageOptions]], ...(operations.polaris ? [[operations.polaris, ['down', ...polarisOptions]]] : []), ...(deploymentEnabled ? [[operations.deployment, ['down', ...businessOptions]]] : []), [operations.business, ['down', ...businessOptions]], [operations.stack, ['down', ...bindingOptions]]]) {
+    for (const [operation, parameters] of [[operations.worker, ['down', ...storageOptions]], ...(operations.polaris ? [[operations.polaris, ['down', ...polarisOptions]]] : []), ...(deploymentEnabled ? [[operations.deployment, ['down', ...businessOptions]]] : []), [coreOperation, ['down', ...businessOptions]], [operations.stack, ['down', ...bindingOptions]]]) {
       try { await operation(parameters); } catch (error) { errors.push(error); }
     }
     if (errors.length) throw errors[0];
   } else if (command === 'status') {
     return status();
-  } else throw new Error('Usage: run-stack.mjs up|down|status [--config PATH] [--business-config PATH] [--polaris-config PATH]');
+  } else throw new Error('Usage: run-stack.mjs up|down|status [--config PATH] [--core-config PATH] [--business-config PATH] [--polaris-config PATH]');
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) main().then(result => { if (result && !result.healthy) process.exitCode = 1; }).catch(error => {
   console.error(`Stack orchestration failed: ${error.code || error.message}`);

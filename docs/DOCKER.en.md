@@ -6,12 +6,12 @@ Use the [managed deployment guide](MANAGED-DEPLOYMENT.md) for current commands. 
 
 ## Topology and sign-in
 
-In a managed installation, a TLS endpoint forwards to the web gateway. The gateway checks website identity, app entry and Travel shares. The public profile defaults to loopback port 14321. The canonical web entry may redirect to HTTPS. Keep raw app and business listeners on loopback. [Unified login](UNIFIED-LOGIN.en.md)
+In a managed installation, a TLS endpoint forwards to the web gateway. The gateway checks website identity, app entry and Travel shares. The public profile defaults to loopback port 14321. The canonical web entry may redirect to HTTPS. Keep raw app and core listeners on loopback. [Unified login](UNIFIED-LOGIN.en.md)
 
 | Service | Maintenance port(s) | Persistent source |
 | --- | --- | --- |
 | Praxis / public web | 4321 / 14321 | Built source image and read-only public URL map |
-| Reminder / business | 4322 / 4326 | Explicit space-to-JSON mapping; identity and event stores |
+| Reminder / core | 4322 / 4326 | Explicit space-to-JSON mapping; identity and event stores |
 | Projects | 4327 | Single app and SQLite source for all projects |
 | Travel | 4323 | Registered private itinerary JSON and app content |
 | Knowledge | 4324 / 14324 | Standalone books plus managed SQLite/runtime with `/apps/knowledge/` base |
@@ -32,10 +32,12 @@ Use Docker Engine, Compose v2+ and Node 22.16+. Select services from the private
 ```sh
 node scripts/managed-compose.mjs check apps
 node scripts/managed-compose.mjs status apps
-node scripts/managed-compose.mjs status business
+node scripts/managed-compose.mjs status core
 node scripts/managed-compose.mjs status storage
 npm run deploy -- status
 ```
+
+The platform backend is named `core`. Managed commands accept an existing descriptor’s `business` group as a compatibility alias; retain its original project name, configuration paths and data bindings.
 
 Inventory the configured project names, source images, ports and dependencies. Keep an existing service active while staging its replacement. Verify writer ownership, directory permissions and nonempty registered data before making a service writable.
 
@@ -52,7 +54,7 @@ These contracts describe the service side of a managed installation. In earlier 
 - **Lattice:** the app and engine live in `third_party/lattice`. Runtime templates and production tools live in `packages/runtime` and `packages/cli`. Use registered canonical paths for native `decks` and `.lattice` and separate business JSON/blob data. Old source history and recovery bundles are separate from live business data. The generic image includes Chromium, FFmpeg, fonts and dependencies; private decks are mounted at runtime. Configure optional `apps.slides.modelCaches` with individual trusted `piper`, `tts` and `asr` directories. Bind them read-only at `/opt/lattice-model-cache/<kind>` and set `LATTICE_PIPER_DIR`, `LATTICE_TTS_CACHE` and `LATTICE_ASR_CACHE`. Verify owner, canonical path and permissions. Do not mount a user's whole home, agent configuration or provider credentials. The CPU image skips unnecessary CUDA package downloads.
 - **Lattice publishing:** the asset build writes viewer/workbench bundles below the mounted `.lattice/runtime/`. Use the owning app’s build process after a deck edit. Schedule replacement of live assets to avoid partial reads. Check the media toolchain and render a synthetic deck when export behavior changes.
 - **Projects:** configure `apps.projects` with `managed:true`, `http://127.0.0.1:4327/api/business`, `dataDir`, `keyFile` and `businessConfigFile`. The version-1 map lists allowed `spaces`. Only the registered 700 directory is writable. The key and mapping are 600 and read-only. All projects use the same service, with resource checks in the managed interface and MCP.
-- **Knowledge:** `knowledge-public` on 14324 serves app routes including `/k/<spaceId>/<libraryId>/<entryId>/`, legacy books and `/library/`. Configure `apps.knowledge` with fixed `http://127.0.0.1:14324/api/business`, `dataDir`, `keyFile`, `businessConfigFile` and `spaces`. The managed runtime initializes its empty database schema. App access, library grants and `legacy-library` permissions are distinct. Start the runtime, then the corresponding business build, then update the worker's exact online-backup mounts. The app also runs independently.
+- **Knowledge:** `knowledge-public` on 14324 serves app routes including `/k/<spaceId>/<libraryId>/<entryId>/`, legacy books and `/library/`. Configure `apps.knowledge` with fixed `http://127.0.0.1:14324/api/business`, `dataDir`, `keyFile`, `businessConfigFile` and `spaces`. The managed runtime initializes its empty database schema. App access, library grants and `legacy-library` permissions are distinct. Start the runtime, then the corresponding core build, then update the worker's exact online-backup mounts. The app also runs independently.
 - **Knowledge attachments:** set `apps.knowledge.attachmentInbox` to a 700 directory. Deliver authorized files at `<spaceId>/<resourceId>/<sha256>` and mount it read-only. Alternatively register specific `apps.knowledge.attachments` entries with `spaceId`, `resourceId`, `sha256` and absolute `file`. The authorized content agent submits hash, original filename and title through MCP and reads back the parse result. Retain the mount until the job completes. Standalone deployments can mount the same hierarchy at `KNOWLEDGE_INBOX_ROOT`.
 - **Finance and Intelligence:** Finance is a synthetic ledger app at `/apps/finance/`. The earlier `finance-data` volume served `/data/finance.json`; the current storage contract uses an explicit working directory. Preserve the frozen source when migrating. Avoid volume deletion. Intelligence serves `/apps/intelligence/`. `intelligencePreview` defaults to true and can be overridden by `PRAXIS_INTELLIGENCE_PREVIEW=0/1`. Preview reads synthetic fixtures. Live mode uses the configured root's `data.json` and fails closed when missing. Management distinguishes the two modes.
 - **Memo:** `apps.memo` uses fixed `http://127.0.0.1:4325/api/business`, `dataDir`, `keyFile` and explicit `spaces`; set `MEMO_DATA_DIR`, `MEMO_BUSINESS_KEY_FILE` and `MEMO_SPACE_IDS`. Device content that has not been imported still requires export or import from the device.
@@ -74,7 +76,7 @@ Management reads a separate projection of backup status, worker heartbeats and d
 
 ## Blue/green release and rollback
 
-Stable web and business/MCP listeners run at 14321 and 4326. Blue uses 24321/24326 and green uses 34321/34326. Login, workbench, management, PRDs and MCP switch together. Stateful app processes, rendering jobs and storage workers retain one writer and their existing sources.
+The stable web listener runs at 14321, and the core backend's API/MCP listener at 4326. Blue uses 24321/24326 and green uses 34321/34326. Login, workbench, management, PRDs and MCP switch together. Stateful app processes, rendering jobs and storage workers retain one writer and their existing sources.
 
 ```sh
 npm run deploy -- init

@@ -190,9 +190,9 @@ services:
         volume:
           nocopy: true
 
-  business:
+  core:
     <<: [*runtime, *platform]
-    command: [node, src/business/server.mjs, --config, /config/business.json, --host, "127.0.0.1", --port, "4326"]
+    command: [node, src/core/server.mjs, --config, /config/core.json, --host, "127.0.0.1", --port, "4326"]
     environment:
       HEALTH_URL: http://127.0.0.1:4326/health
     ports:
@@ -216,11 +216,11 @@ services:
   praxis:
     <<: [*runtime, *platform]
     command: [node, scripts/serve-builtin-workbench.mjs]
-    network_mode: service:business
+    network_mode: service:core
     environment:
       HEALTH_URL: http://127.0.0.1:4321/health
     depends_on:
-      business:
+      core:
         condition: service_healthy
       reminder:
         condition: service_healthy
@@ -278,12 +278,12 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: reminder
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:4322/health
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -310,12 +310,12 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: knowledge
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:14324/health
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -342,12 +342,12 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: travel
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:4323/health
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -374,12 +374,12 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: projects
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:4327/health
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -406,12 +406,12 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: memo
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:4325/health
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -438,13 +438,13 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: tingproof
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:15173/
       PRAXIS_TINGPROOF_NATIVE: "1"
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -474,13 +474,13 @@ services:
       args: *identity-build-args
       additional_contexts:
         platform: .
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:14666/_business/
     shm_size: 1gb
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -522,12 +522,12 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: finance
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:4329/health
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -554,12 +554,12 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: intelligence
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:4330/health
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -586,12 +586,12 @@ services:
       dockerfile: ../../Dockerfile.builtins
       target: polaris
       args: *identity-build-args
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:18787/health
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher
@@ -620,14 +620,14 @@ services:
       args: *identity-build-args
       additional_contexts:
         platform: .
-    network_mode: service:business
+    network_mode: service:core
     entrypoint: [node, /opt/praxis/launch-builtin.mjs]
     environment:
       HEALTH_URL: http://127.0.0.1:4328/health
     shm_size: 1gb
     command: [node, src/business/server.mjs, --host, "127.0.0.1", --port, "4328"]
     depends_on:
-      business:
+      core:
         condition: service_started
     configs:
       - source: native-launcher

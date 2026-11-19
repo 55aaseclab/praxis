@@ -29,7 +29,7 @@ Compose 会构建并启动全部 14 款内置应用、工作台、各应用原�
 读取本次安装的初始登录信息：
 
 ```sh
-docker compose exec business node scripts/builtin-install.mjs credentials
+docker compose exec core node scripts/builtin-install.mjs credentials
 ```
 
 打开 [Praxis](http://127.0.0.1:4321/) 并登录。浏览器访问和智能体操作均按应用与资源授权，生成的账号信息请私有保存。`docker compose down` 停止服务并保留数据卷。[运行说明](docs/RUNNING.md) · [内置应用](docs/BUILTINS.md) · [受管部署](docs/MANAGED-DEPLOYMENT.md)

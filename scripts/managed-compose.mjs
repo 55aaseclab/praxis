@@ -17,8 +17,17 @@ const commands = {
 const safeName = name => typeof name === 'string' && serviceName.test(name);
 const safePath = path => typeof path === 'string' && isAbsolute(path) && !/[\r\n\0]/.test(path);
 
+export function installationProject(config, project) {
+  if (['core', 'business'].includes(project) && !Object.hasOwn(config?.projects || {}, project)) {
+    const compatible = project === 'core' ? 'business' : 'core';
+    if (Object.hasOwn(config?.projects || {}, compatible)) return compatible;
+  }
+  return project;
+}
+
 export function composeArgs(config, [command, project, ...requested]) {
   if (!Object.hasOwn(commands, command) || !safeName(project)) throw Error('Usage: managed-compose.mjs check|status|up|recreate|stop PROJECT [SERVICE ...]');
+  project = installationProject(config, project);
   if (config?.version !== 1 || !config.projects || !Object.hasOwn(config.projects, project)) throw Error('Unknown installation project.');
   const item = config.projects[project];
   if (!item || typeof item.name !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/.test(item.name) ||
@@ -26,6 +35,7 @@ export function composeArgs(config, [command, project, ...requested]) {
       !Array.isArray(item.services) || !item.services.length || !item.services.every(safeName) ||
       (item.profiles !== undefined && (!Array.isArray(item.profiles) || !item.profiles.every(safeName))) ||
       (item.envFile !== undefined && !safePath(item.envFile))) throw Error('Invalid installation project.');
+  requested = requested.map(name => ['core', 'business'].includes(name) && !item.services.includes(name) && item.services.includes(name === 'core' ? 'business' : 'core') ? (name === 'core' ? 'business' : 'core') : name);
   if (requested.some(name => !item.services.includes(name))) throw Error('Service is outside this installation project.');
   const args = ['compose', '--project-directory', workspace, '--project-name', item.name];
   for (const file of item.files) args.push('--file', file);

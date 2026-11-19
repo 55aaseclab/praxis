@@ -71,6 +71,8 @@
 
 ### 服务与可恢复存储
 
+平台核心后端统一使用 `core` 名称，命令优先使用 `npm run core`、`npm run core:admin` 和 `npm run core:stack`。旧 `business` 命令名和受管组名继续作为兼容别名。保留各安装原有的项目名、源码与配置路径、应用业务 API 及私有数据绑定。
+
 部署、换机或迁移存储时，阅读[Docker 运维手册](../../docs/DOCKER.md)和[存储合同](../../docs/STORAGE.md)。当前 Compose 与蓝绿槽操作使用[受管部署指南](../../docs/MANAGED-DEPLOYMENT.md)中的命令。Docker 引擎不可用时保留现有可运行服务，验证替换环境后再切换。
 
 新应用在构建与部署前填写[首发记录](../../docs/DOCKER.md#新增应用首发)。记录空白或首次使用状态、数据归属、桌面及手机上从应用点击 Home 返回工作台的实际结果，以及上一槽回滚预期。遵循[应用标准](../../docs/APP-STANDARD.md)，先更新英文产品文案和文档，再同步中文。

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { access, chown, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { access, chown, chmod, copyFile, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { AuthStore } from '../src/business/auth.mjs';
@@ -73,8 +73,12 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
     }
     if ((await readdir('/config')).length) throw new Error('Existing private configuration requires recovery.');
   }
+  if (!await exists('/config/core.json') && await exists('/config/business.json')) {
+    await copyFile('/config/business.json', '/config/core.json');
+    await chmod('/config/core.json', 0o600);
+  }
   if (complete) {
-    for (const file of ['/config/installation.json', '/config/owner.json', '/config/business.json']) {
+    for (const file of ['/config/installation.json', '/config/owner.json', '/config/core.json']) {
       if (!await exists(file)) throw new Error('Installation configuration is missing. Restore the private backup.');
     }
   }
@@ -110,7 +114,7 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
     }])),
   };
   for (const app of Object.keys(adapters)) await mirrorKey(app, complete);
-  await privateJson('/config/business.json', config);
+  await privateJson('/config/core.json', config);
   await privateJson('/app-config/web/installation.json', installation);
   const runtime = {
     reminder: { REMINDER_MANAGED: '1', REMINDER_BUSINESS_KEY_FILE: '/config/key', REMINDER_BUSINESS_SPACES_FILE: '/config/spaces.json', REMINDER_BUSINESS_UI_URL: origin + '/business/reminder/' },

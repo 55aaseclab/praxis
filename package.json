@@ -1,6 +1,6 @@
 {
   "name": "praxis",
-  "version": "0.1.112",
+  "version": "0.1.113",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -33,7 +33,10 @@
     "observations": "node scripts/observations.mjs",
     "polaris:stack": "node scripts/polaris-stack.mjs",
     "version:patch": "node scripts/version.mjs patch",
-    "version:check": "node scripts/version.mjs check"
+    "version:check": "node scripts/version.mjs check",
+    "core": "node src/core/server.mjs",
+    "core:admin": "node scripts/core-admin.mjs",
+    "core:stack": "node scripts/core-stack.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "7.2.0",

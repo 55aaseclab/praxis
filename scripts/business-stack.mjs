@@ -7,11 +7,12 @@ import { homedir } from 'node:os';
 import { realpath, lstat, mkdir, readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { loadBusinessConfig, DEFAULT_BUSINESS_CONFIG } from '../src/business/config.mjs';
+import { loadBusinessConfig, DEFAULT_BUSINESS_CONFIG, DEFAULT_CORE_CONFIG } from '../src/business/config.mjs';
 import { writePrivateJson, assertOutsideWorkspace, isWithin, loadConfig } from '../src/storage/config.mjs';
 import { validateStorageStatusDestination } from '../src/storage/status.mjs';
 import { validateObservationsDirectory } from './stack.mjs';
 import { resolveSlidesModelCaches } from '../src/business/slides-model-caches.mjs';
+import { installationProject } from './managed-compose.mjs';
 import { deploymentOverrides } from '../src/deployment/integration.mjs';
 
 const workspace = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
@@ -46,11 +47,18 @@ function distinctDirectories(paths) {
   if (directories.some((left, index) => directories.some((right, other) => index !== other && isWithin(left, right)))) fail('OVERLAPPING_MOUNTS', 'Distinct writable directories must not overlap.');
   return directories;
 }
-export async function businessStackPlan(configFile = DEFAULT_BUSINESS_CONFIG, { port = 4326, projectName = 'praxis-business' } = {}) {
+export async function coreConfigFile(explicit) {
+  if (explicit) return explicit;
+  if (process.env.PRAXIS_CORE_CONFIG || process.env.PRAXIS_BUSINESS_CONFIG) return process.env.PRAXIS_CORE_CONFIG || process.env.PRAXIS_BUSINESS_CONFIG;
+  try { await lstat(DEFAULT_CORE_CONFIG); return DEFAULT_CORE_CONFIG; }
+  catch (error) { if (error.code === 'ENOENT') return DEFAULT_BUSINESS_CONFIG; throw error; }
+}
+export async function businessStackPlan(configFile, { port = 4326, projectName = 'praxis-core', serviceName = 'core' } = {}) {
+  if (!['core', 'business'].includes(serviceName)) fail('INVALID_CORE_SERVICE', 'Core service must be core or legacy business.');
   port = Number(port);
-  if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('INVALID_PORT', 'Business port must be between1024 and65535.');
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('INVALID_PORT', 'Core port must be between 1024 and 65535.');
   if (typeof projectName !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,62}$/.test(projectName)) fail('INVALID_PROJECT', 'Compose project name is invalid.');
-  configFile = resolve(configFile);
+  configFile = resolve(await coreConfigFile(configFile));
   await privatePath(configFile);
   const config = await loadBusinessConfig(configFile);
   if (config.database === config.eventsDatabase) fail('OVERLAPPING_STATE', 'Identity and event databases require different files.');
@@ -74,9 +82,9 @@ export async function businessStackPlan(configFile = DEFAULT_BUSINESS_CONFIG, { 
   const overrideFile = resolve(controlDirectory, 'compose.override.json');
   if (existingControl) { await privatePath(controlDirectory, { directory: true }); await privatePath(overrideFile, { allowMissing: true }); }
   const uid = process.getuid?.() ?? 1000, gid = process.getgid?.() ?? 1000;
-  const override = { services: { business: {
+  const override = { services: { [serviceName]: {
     user: `${uid}:${gid}`, build: { args: { PRAXIS_UID: String(uid), PRAXIS_GID: String(gid) } },
-    command: ['node', 'src/business/server.mjs', '--host', config.webGateway?.enabled === true ? '127.0.0.1' : '0.0.0.0', '--port', String(port)],
+    command: ['node', serviceName === 'core' ? 'src/core/server.mjs' : 'src/business/server.mjs', '--host', config.webGateway?.enabled === true ? '127.0.0.1' : '0.0.0.0', '--port', String(port)],
     environment: { PRAXIS_BUSINESS_CONFIG: configFile, HEALTH_URL: `http://${healthHost}/health` },
     healthcheck: { test: ['CMD', 'node', '-e', BUSINESS_HEALTHCHECK] },
     volumes: [...stateDirectories.map(directory => mount(directory)), ...readOnlyFiles.map(file => mount(file, true))],
@@ -179,8 +187,8 @@ export async function businessStackPlan(configFile = DEFAULT_BUSINESS_CONFIG, { 
     }
     try { await validateObservationsDirectory(observationsDirectory, { uid, protectedPaths }); }
     catch { fail('UNSAFE_OBSERVATIONS_PATH', 'Observations require a separate canonical owner-only metadata directory.'); }
-    override.services.business.volumes.push(mount(observationsDirectory));
-    override.services.business.environment.PRAXIS_OBSERVATIONS_FILE = file;
+    override.services[serviceName].volumes.push(mount(observationsDirectory));
+    override.services[serviceName].environment.PRAXIS_OBSERVATIONS_FILE = file;
   }
   let storageStatusDirectory;
   if (config.console?.storageStatusFile !== undefined) {
@@ -202,7 +210,7 @@ export async function businessStackPlan(configFile = DEFAULT_BUSINESS_CONFIG, { 
     }
     try { storageStatusDirectory = await validateStorageStatusDestination(config.console.storageStatusFile, { protectedPaths }); }
     catch { fail('UNSAFE_STATUS_PATH', 'Storage status requires a separate private sanitized directory.'); }
-    override.services.business.volumes.push(mount(storageStatusDirectory, true));
+    override.services[serviceName].volumes.push(mount(storageStatusDirectory, true));
     if (storage) {
       const metadataTarget = '/run/praxis-storage-metadata', configTarget = '/run/praxis-storage-config.json';
       const masks = [];
@@ -236,9 +244,16 @@ export async function businessStackPlan(configFile = DEFAULT_BUSINESS_CONFIG, { 
     }
     try { dataInventoryDirectory = await validateStorageStatusDestination(config.console.dataInventoryFile, { protectedPaths }); }
     catch { fail('UNSAFE_INVENTORY_PATH', 'Data inventory requires a separate private metadata directory.'); }
-    override.services.business.volumes.push(mount(dataInventoryDirectory, true));
+    override.services[serviceName].volumes.push(mount(dataInventoryDirectory, true));
   }
-  return { config, configFile, port, projectName, uid, gid, ports, stateDirectories, observationsDirectory, storageStatusDirectory, dataInventoryDirectory, services: Object.keys(override.services), controlDirectory, overrideFile, override };
+  return { config, configFile, port, projectName, serviceName, uid, gid, ports, stateDirectories, observationsDirectory, storageStatusDirectory, dataInventoryDirectory, services: Object.keys(override.services), controlDirectory, overrideFile, override };
+}
+export function coreInstallation(config) {
+  if (!config?.projects || (!config.projects.core && !config.projects.business)) return null;
+  const group = installationProject(config, 'core'), item = config.projects[group];
+  const facades = item.services.filter(name => ['core', 'business'].includes(name));
+  if (facades.length !== 1) fail('INVALID_CORE_SERVICE', 'The installed core project requires exactly one core facade.');
+  return { group, item, serviceName: facades[0] };
 }
 export function portInUse(port) {
   return new Promise(resolvePromise => {
@@ -254,7 +269,7 @@ async function executeDocker(command, args, options) {
     const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] }), chunks = [];
     child.stdout.on('data', chunk => chunks.push(chunk)); child.stderr.on('data', chunk => process.stderr.write(chunk));
     child.once('error', reject);
-    child.once('close', code => code === 0 ? resolvePromise(Buffer.concat(chunks).toString('utf8')) : reject(Object.assign(new Error('Business Compose command failed.'), { code: 'COMPOSE_FAILED' })));
+    child.once('close', code => code === 0 ? resolvePromise(Buffer.concat(chunks).toString('utf8')) : reject(Object.assign(new Error('Core Compose command failed.'), { code: 'COMPOSE_FAILED' })));
   });
 }
 function composeRows(value) {
@@ -262,29 +277,36 @@ function composeRows(value) {
   try { const decoded = JSON.parse(value); return Array.isArray(decoded) ? decoded : [decoded]; }
   catch { return value.trim().split('\n').map(line => JSON.parse(line)); }
 }
-export async function runBusinessStack(command, { configFile = process.env.PRAXIS_BUSINESS_CONFIG || DEFAULT_BUSINESS_CONFIG, execute = executeDocker, port = Number(process.env.PRAXIS_BUSINESS_PORT || 4326), projectName = process.env.PRAXIS_BUSINESS_PROJECT || 'praxis-business', portProbe = portInUse, deferDeploymentFacade = false } = {}) {
-  if (!['up', 'down', 'status', 'logs'].includes(command)) fail('INVALID_COMMAND', 'Usage: business-stack.mjs up|down|status|logs [--config PATH] [--port PORT] [--project NAME]');
-  const installed = execute === executeDocker ? await readManagedInstallation() : null;
-  if (installed?.projects.business) {
-    const services = installed.projects.business.services.filter(name => !deferDeploymentFacade || command !== 'up' || name !== 'business');
-    return installationOperation(installed, 'business', command, { services });
+export async function runBusinessStack(command, { configFile, execute = executeDocker, installation, port = Number(process.env.PRAXIS_CORE_PORT || process.env.PRAXIS_BUSINESS_PORT || 4326), projectName = process.env.PRAXIS_CORE_PROJECT || process.env.PRAXIS_BUSINESS_PROJECT, portProbe = portInUse, deferDeploymentFacade = false } = {}) {
+  if (!['up', 'down', 'status', 'logs'].includes(command)) fail('INVALID_COMMAND', 'Usage: core-stack.mjs up|down|status|logs [--config PATH] [--port PORT] [--project NAME]');
+  configFile = await coreConfigFile(configFile);
+  const installed = installation ?? (execute === executeDocker ? await readManagedInstallation() : null);
+  const registered = coreInstallation(installed);
+  if (registered) {
+    const services = registered.item.services.filter(name => !deferDeploymentFacade || command !== 'up' || name !== registered.serviceName);
+    if (!services.length) return '';
+    return installationOperation(installed, registered.group, command, { services, ...(execute === executeDocker ? {} : { execute: args => execute('docker', args, { cwd: workspace }) }) });
   }
-  const plan = await businessStackPlan(configFile, { port, projectName });
+  const deployment = await deploymentOverrides(configFile);
+  const previousFile = resolve(dirname(configFile), 'business-docker/compose.override.json');
+  let previous;
+  if (await lstat(previousFile).catch(error => { if (error.code === 'ENOENT') return null; throw error; })) { await privatePath(previousFile); previous = JSON.parse(await readFile(previousFile, 'utf8')); }
+  const serviceName = deployment?.coreService || (previous?.services?.business && !previous.services.core ? 'business' : 'core');
+  const plan = await businessStackPlan(configFile, { port, projectName: projectName || (serviceName === 'business' ? 'praxis-business' : 'praxis-core'), serviceName });
   if (command === 'up') {
     if (plan.observationsDirectory) await validateObservationsDirectory(plan.observationsDirectory, { uid: plan.uid, create: true });
     if (plan.storageStatusDirectory) await validateStorageStatusDestination(plan.config.console.storageStatusFile, { create: true });
     await mkdir(plan.controlDirectory, { recursive: true, mode: 0o700 }); await privatePath(plan.controlDirectory, { directory: true });
     await writePrivateJson(plan.overrideFile, plan.override);
   }
-  const args = ['compose', '--project-name', plan.projectName, '--file', resolve(workspace, 'compose.business.yaml')];
+  const args = ['compose', '--project-name', plan.projectName, '--file', resolve(workspace, serviceName === 'business' ? 'compose.business.yaml' : 'compose.core.yaml')];
   if (await lstat(plan.overrideFile).catch(error => { if (error.code === 'ENOENT') return null; throw error; })) args.push('--file', plan.overrideFile);
-  const deployment = await deploymentOverrides(configFile);
   if (deployment) args.push('--file', deployment.business);
   const options = { cwd: workspace, env: { ...process.env, PRAXIS_UID: String(plan.uid), PRAXIS_GID: String(plan.gid) } };
   if (command === 'up') {
     const rows = composeRows(await execute('docker', [...args, 'ps', '--format', 'json'], options));
     for (const targetPort of plan.ports) {
-      const service = targetPort === plan.port ? 'business' : targetPort === 4327 ? 'projects' : targetPort === 4328 ? 'slides-business' : 'reminder';
+      const service = targetPort === plan.port ? serviceName : targetPort === 4327 ? 'projects' : targetPort === 4328 ? 'slides-business' : 'reminder';
       if (!(await portProbe(targetPort))) continue;
       const row = rows.find(item => item.Service === service && item.State === 'running' && typeof item.ID === 'string');
       let ownPort = false;
@@ -297,17 +319,19 @@ export async function runBusinessStack(command, { configFile = process.env.PRAXI
     }
   }
   if (command === 'up' && deployment) {
-    const singletons = plan.services.filter(name => name !== 'business');
+    const singletons = plan.services.filter(name => name !== serviceName);
     if (singletons.length) await execute('docker', [...args, 'up', '-d', '--build', '--force-recreate', '--wait', '--wait-timeout', '90', ...singletons], options);
     if (deferDeploymentFacade) return '';
-    return execute('docker', [...args, 'up', '-d', '--no-recreate', '--wait', '--wait-timeout', '90', 'business'], options);
+    return execute('docker', [...args, 'up', '-d', '--no-recreate', '--wait', '--wait-timeout', '90', serviceName], options);
   }
   return execute('docker', [...args, ...({ up: ['up', '-d', '--build', '--force-recreate', '--wait', '--wait-timeout', '90', '--remove-orphans'], down: ['down', '--remove-orphans'], status: ['ps', '--format', 'json'], logs: ['logs', '--tail', '100'] }[command])], options);
 }
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+export async function main(args = process.argv.slice(2)) {
   try {
-    const { values, positionals } = parseArgs({ allowPositionals: true, options: { config: { type: 'string' }, port: { type: 'string' }, project: { type: 'string' } } });
+    const { values, positionals } = parseArgs({ args, allowPositionals: true, options: { config: { type: 'string' }, port: { type: 'string' }, project: { type: 'string' } } });
     const result = await runBusinessStack(positionals[0], { configFile: values.config, ...(values.port !== undefined ? { port: Number(values.port) } : {}), ...(values.project !== undefined ? { projectName: values.project } : {}) });
     if (result) process.stdout.write(result);
-  } catch (error) { console.error(`Business stack failed: ${error.code || 'INVALID_CONFIG'}`); process.exitCode = 1; }
+  } catch (error) { console.error(`Core stack failed: ${error.code || 'INVALID_CONFIG'}`); process.exitCode = 1; }
 }
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) await main();

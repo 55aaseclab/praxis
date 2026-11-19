@@ -29,7 +29,7 @@ Compose builds and starts all 14 built-in apps with the workbench, native app se
 Retrieve the initial login details from this installation:
 
 ```sh
-docker compose exec business node scripts/builtin-install.mjs credentials
+docker compose exec core node scripts/builtin-install.mjs credentials
 ```
 
 Open [Praxis](http://127.0.0.1:4321/) and sign in. App and resource permissions apply to both browser access and agent operations. Keep the generated account details private. `docker compose down` stops the stack while preserving its data volumes. [Running Praxis](docs/RUNNING.md) · [Built-in apps](docs/BUILTINS.md) · [Managed deployment](docs/MANAGED-DEPLOYMENT.md)

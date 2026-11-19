@@ -10,8 +10,8 @@ The frozen platform revision `8e666c2` is the source baseline for this compariso
 | --- | --- |
 | Native app images and Compose services | [Dockerfile.builtins](../Dockerfile.builtins) and [compose.yaml](../compose.yaml) build the pinned native app sources. Static readers ship in the platform image. |
 | Application stack control | [stack.mjs](../scripts/stack.mjs) retains plan, build, startup, assets, activation, status, logs and exec workflows. |
-| Unified service control | [run-stack.mjs](../scripts/run-stack.mjs) coordinates the configured app, business, storage and observation services. |
-| Business service control | [business-stack.mjs](../scripts/business-stack.mjs) preserves private identity, application keys and source mappings. |
+| Unified service control | [run-stack.mjs](../scripts/run-stack.mjs) coordinates the configured app, core, storage and observation services. |
+| Core backend service control | `npm run core:stack` uses [business-stack.mjs](../scripts/business-stack.mjs) to preserve private identity, application keys and source mappings. |
 | Backup registration | [storage-bootstrap.mjs](../scripts/storage-bootstrap.mjs) and [registry](../src/storage/registry.mjs) register existing canonical sources. |
 | Application data planning | [app-data.mjs](../scripts/app-data.mjs) and [app paths](../src/storage/app-paths.mjs) retain explicit working roots and recoverable handover. |
 | Operator data inventory | [data-inventory.mjs](../scripts/data-inventory.mjs) reports registered source bindings and coverage. |

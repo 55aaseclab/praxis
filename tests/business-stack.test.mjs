@@ -7,7 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { randomUUID, createHash } from 'node:crypto';
-import { BUSINESS_HEALTHCHECK, businessStackPlan, runBusinessStack } from '../scripts/business-stack.mjs';
+import { BUSINESS_HEALTHCHECK, businessStackPlan, runBusinessStack, coreInstallation } from '../scripts/business-stack.mjs';
 
 const runFile = promisify(execFile);
 async function fixture(t, { managed = false, cleanup = true } = {}) {
@@ -59,8 +59,8 @@ test('managed Slides adds only configured read-only native model caches to its o
   assert.equal(service.environment.LATTICE_PIPER_DIR,'/opt/lattice-model-cache/piper');
   assert.equal(service.environment.HOME,undefined);
   assert.deepEqual(service.volumes.find(volume=>volume.source===piper),{type:'bind',source:piper,target:'/opt/lattice-model-cache/piper',read_only:true,bind:{create_host_path:false}});
-  assert.equal(result.override.services.business.volumes.some(volume=>volume.source===piper),false);
-  assert.equal(result.override.services.business.environment.LATTICE_PIPER_DIR,undefined);
+  assert.equal(result.override.services.core.volumes.some(volume=>volume.source===piper),false);
+  assert.equal(result.override.services.core.environment.LATTICE_PIPER_DIR,undefined);
   f.config.apps.slides.modelCaches = {piper:join(f.state,'auth/piper')}; await mkdir(f.config.apps.slides.modelCaches.piper,{mode:0o700}); await f.save();
   await assert.rejects(plan(f),{code:'UNSAFE_MODEL_CACHE'});
 });
@@ -80,8 +80,8 @@ async function enablePublisher(f) {
 }
 
 test('business stack mounts only identity/event directories writable and precise private files read-only', async t => {
-  const f = await fixture(t), result = await plan(f), service = result.override.services.business;
-  assert.deepEqual(Object.keys(result.override.services), ['business']);
+  const f = await fixture(t), result = await plan(f), service = result.override.services.core;
+  assert.deepEqual(Object.keys(result.override.services), ['core']);
   assert.deepEqual(service.command.slice(-2), ['--port', '17326']);
   assert.equal(service.environment.HEALTH_URL, 'http://127.0.0.1:17326/health');
   const writable = service.volumes.filter(volume => !volume.read_only).map(volume => volume.source);
@@ -145,13 +145,13 @@ test('enabled source gateway binds both host-network business services to loopba
   const f = await fixture(t, { managed: true });
   f.config.webGateway = { enabled: true, originHost: 'origin.example' }; await f.save();
   const result = await plan(f);
-  for (const name of ['business', 'reminder']) {
+  for (const name of ['core', 'reminder']) {
     const command = result.override.services[name].command;
     assert.equal(command[command.indexOf('--host') + 1], '127.0.0.1');
   }
   f.config.webGateway.enabled = false; await f.save();
   const legacy = await plan(f);
-  for (const name of ['business', 'reminder']) { const command = legacy.override.services[name].command; assert.equal(command[command.indexOf('--host') + 1], '0.0.0.0'); }
+  for (const name of ['core', 'reminder']) { const command = legacy.override.services[name].command; assert.equal(command[command.indexOf('--host') + 1], '0.0.0.0'); }
 });
 
 test('managed Reminder rejects unapproved endpoints, mapping drift and writable secret overlap', async t => {
@@ -179,9 +179,9 @@ test('generated Docker controls remain outside writable mounts and use private p
   assert.equal((await stat(result.controlDirectory)).mode & 0o777, 0o700);
   assert.equal((await stat(result.overrideFile)).mode & 0o777, 0o600);
   const generated = JSON.parse(await readFile(result.overrideFile, 'utf8'));
-  assert.equal(generated.services.business.environment.PRAXIS_BUSINESS_CONFIG, f.configFile);
+  assert.equal(generated.services.core.environment.PRAXIS_BUSINESS_CONFIG, f.configFile);
   assert.equal(calls[0][0], 'docker');
-  assert.ok(calls[0][1].includes('praxis-business'));
+  assert.ok(calls[0][1].includes('praxis-core'));
   assert.equal(calls[0][2].env.PRAXIS_UID, String(process.getuid?.() ?? 1000));
 });
 
@@ -189,7 +189,7 @@ test('optional observations share only a dedicated metadata directory with the b
   const f = await fixture(t, { managed: true });
   f.config.observationsFile = join(f.root, 'private/observability/observations.db'); await f.save();
   const before = await readFile(f.configFile), result = await plan(f);
-  const core = result.override.services.business, reminder = result.override.services.reminder;
+  const core = result.override.services.core, reminder = result.override.services.reminder;
   assert.equal(core.environment.PRAXIS_OBSERVATIONS_FILE, f.config.observationsFile);
   assert.deepEqual(core.volumes.filter(volume => volume.source === result.observationsDirectory), [{ type: 'bind', source: result.observationsDirectory, target: result.observationsDirectory, bind: { create_host_path: false } }]);
   assert.equal(reminder.volumes.some(volume => volume.source === result.observationsDirectory), false);
@@ -234,8 +234,8 @@ test('observations reject business data, secrets, controls, public paths and uns
 
 test('optional offline storage publisher exposes only sanitized metadata to core and never mounts it in Reminder', async t => {
   const f = await fixture(t, { managed: true }), input = await enablePublisher(f), result = await plan(f);
-  assert.deepEqual(result.services, ['business', 'reminder', 'storage-status']);
-  const core = result.override.services.business, publisher = result.override.services['storage-status'];
+  assert.deepEqual(result.services, ['core', 'reminder', 'storage-status']);
+  const core = result.override.services.core, publisher = result.override.services['storage-status'];
   assert.equal(core.volumes.some(volume => volume.source === input.storageFile || volume.source === input.metadata), false);
   assert.deepEqual(core.volumes.find(volume => volume.source === input.statusDirectory), { type: 'bind', source: input.statusDirectory, target: input.statusDirectory, read_only: true, bind: { create_host_path: false } });
   assert.equal(publisher.network_mode, 'none');
@@ -286,7 +286,7 @@ test('idempotent up accepts only its own running container on the exact requeste
   const execute = async (command, args) => {
     calls.push(args);
     if (args[0] === 'inspect') return JSON.stringify([{ HostConfig: { NetworkMode: 'host' }, Config: { Cmd: ['node', 'src/business/server.mjs', '--port', '17326'] } }]);
-    if (args.includes('ps')) return JSON.stringify([{ Service: 'business', State: 'running', ID: 'synthetic-container' }]);
+    if (args.includes('ps')) return JSON.stringify([{ Service: 'core', State: 'running', ID: 'synthetic-container' }]);
     return '';
   };
   await runBusinessStack('up', { configFile: f.configFile, port: 17326, execute, portProbe: async () => true });
@@ -306,10 +306,10 @@ test('blue-green core facade is preserved while business applications remain sin
   const starts = calls.filter(args => args.includes('up'));
   assert.equal(starts.length, 2);
   assert.ok(starts.every(args => args.includes(join(root, 'compose.business.yml'))));
-  assert.equal(starts.find(args => args.includes('--no-recreate')).at(-1), 'business');
+  assert.equal(starts.find(args => args.includes('--no-recreate')).at(-1), 'core');
   const replace = starts.find(args => args.includes('--force-recreate'));
   assert.equal(replace.at(-1), 'reminder');
-  assert.ok(!replace.includes('business'));
+  assert.ok(!replace.includes('core'));
 });
 
 test('Docker health verifies each configured adapter rejects unsigned reads without using private credentials', () => {
@@ -351,8 +351,8 @@ if (process.env.PRAXIS_BUSINESS_DOCKER_TEST === '1') test('isolated Docker busin
   });
   await runBusinessStack('up', { ...options, execute });
   const result = await businessStackPlan(f.configFile, options);
-  const common = ['compose', '--project-name', projectName, '--file', resolve('compose.business.yaml'), '--file', result.overrideFile];
-  const containerId = (await execute('docker', [...common, 'ps', '-q', 'business'], { cwd: resolve('.') })).trim();
+  const common = ['compose', '--project-name', projectName, '--file', resolve('compose.core.yaml'), '--file', result.overrideFile];
+  const containerId = (await execute('docker', [...common, 'ps', '-q', 'core'], { cwd: resolve('.') })).trim();
   const inspected = JSON.parse((await runFile('docker', ['inspect', containerId])).stdout)[0];
   assert.equal(inspected.State.Health.Status, 'healthy');
   assert.equal(inspected.HostConfig.ReadonlyRootfs, true);
@@ -375,7 +375,7 @@ if (process.env.PRAXIS_BUSINESS_DOCKER_TEST === '1') test('isolated Docker busin
   const writeProbe = "const fs=require('node:fs');for(const file of process.argv.slice(1)){try{fs.appendFileSync(file,'forbidden');process.exit(2)}catch(error){if(error.code!=='EROFS')throw error}}";
   await runFile('docker', ['exec', containerId, 'node', '-e', writeProbe, f.keyFile, f.configFile, '/workspace/src/business/private-probe']);
   const imageProbe = "const fs=require('node:fs');for(const file of process.argv.slice(1)){if(fs.existsSync(file))process.exit(2)}";
-  await runFile('docker', ['run', '--rm', '--network', 'none', '--entrypoint', 'node', 'praxis-business/server:local', '-e', imageProbe, f.keyFile, f.configFile, f.config.database, f.config.observationsFile]);
+  await runFile('docker', ['run', '--rm', '--network', 'none', '--entrypoint', 'node', 'praxis-core/server:local', '-e', imageProbe, f.keyFile, f.configFile, f.config.database, f.config.observationsFile]);
   const base = 'http://127.0.0.1:17326';
   assert.equal((await fetch(`${base}/health`)).status, 200);
   assert.equal((await fetch(`${base}/api/business/catalog`)).status, 401);
@@ -431,9 +431,53 @@ test('administrator data locations use a separate read-only metadata directory',
   await f.save();
   const result = await plan(f);
   assert.equal(result.dataInventoryDirectory, directory);
-  assert.ok(result.override.services.business.volumes.some(mount => mount.source === directory && mount.read_only === true));
-  assert.equal(result.override.services.business.volumes.some(mount => mount.source === f.root), false);
+  assert.ok(result.override.services.core.volumes.some(mount => mount.source === directory && mount.read_only === true));
+  assert.equal(result.override.services.core.volumes.some(mount => mount.source === f.root), false);
   f.config.console.dataInventoryFile = join(f.data, 'locations.json');
   await f.save();
   await assert.rejects(plan(f), { code: 'UNSAFE_INVENTORY_PATH' });
+});
+
+
+test('core defaults and explicit legacy plans preserve the configured data mounts', async t => {
+  const f = await fixture(t);
+  const current = await plan(f), legacy = await businessStackPlan(f.configFile, { port: 17326, serviceName: 'business', projectName: 'praxis-business' });
+  assert.equal(current.serviceName, 'core');
+  assert.deepEqual(legacy.override.services.business.volumes, current.override.services.core.volumes);
+  assert.equal(legacy.projectName, 'praxis-business');
+  assert.deepEqual(coreInstallation({ projects: { business: { name: 'unchanged-project', services: ['business', 'reminder'] } } }), { group: 'business', item: { name: 'unchanged-project', services: ['business', 'reminder'] }, serviceName: 'business' });
+  assert.throws(() => coreInstallation({ projects: { core: { services: ['core', 'business'] } } }), { code: 'INVALID_CORE_SERVICE' });
+});
+
+test('managed core startup defers the actual facade while preserving legacy project identities', async () => {
+  for (const [group, service] of [['core', 'core'], ['business', 'business'], ['business', 'core']]) {
+    const installation = { version: 1, projects: { [group]: { name: 'unchanged-private-project', files: ['/private/compose.yml'], services: [service, 'reminder'] } } };
+    const calls = [];
+    await runBusinessStack('up', { installation, deferDeploymentFacade: true, execute: async (_command, args) => { calls.push(args); return ''; } });
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].includes('unchanged-private-project'));
+    assert.deepEqual(calls[0].slice(calls[0].indexOf('--wait') + 1), ['reminder']);
+  }
+});
+
+
+test('an existing standalone override keeps its legacy service and project on retry', async t => {
+  const f = await fixture(t), calls = [];
+  const legacy = await businessStackPlan(f.configFile, { port: 17326, serviceName: 'business' });
+  await mkdir(legacy.controlDirectory, { mode: 0o700 });
+  await writeFile(legacy.overrideFile, JSON.stringify(legacy.override), { mode: 0o600 });
+  await runBusinessStack('status', { configFile: f.configFile, port: 17326, execute: async (_command, args) => { calls.push(args); return '[]'; } });
+  assert.ok(calls[0].includes('praxis-business'));
+  assert.ok(calls[0].includes(resolve('compose.business.yaml')));
+  assert.ok(!calls[0].includes(resolve('compose.core.yaml')));
+});
+
+test('deployment prototype determines the facade even before a standalone override exists', async t => {
+  const f = await fixture(t, { managed: true }), root = join(dirname(f.configFile), 'deployment'), calls = [];
+  await mkdir(join(root, 'prototypes'), { recursive: true, mode: 0o700 });
+  for (const [name, value] of [['manifest.json', { enabled: true }], ['prototypes/core.json', { Config: { Labels: { 'com.docker.compose.service': 'business' } } }]]) await writeFile(join(root, name), JSON.stringify(value), { mode: 0o600 });
+  for (const name of ['compose.apps.yml', 'compose.business.yml']) await writeFile(join(root, name), 'services: {}', { mode: 0o600 });
+  await runBusinessStack('status', { configFile: f.configFile, port: 17326, execute: async (_command, args) => { calls.push(args); return '[]'; } });
+  assert.ok(calls[0].includes(resolve('compose.business.yaml')));
+  assert.ok(calls[0].includes('praxis-business'));
 });

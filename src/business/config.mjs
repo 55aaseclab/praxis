@@ -5,6 +5,7 @@ import { businessError, readSigningKey, OPERATIONS } from './bridge.mjs';
 import { validateConsoleConfig } from './console.mjs';
 import { validateSlidesModelCacheConfig } from './slides-model-caches.mjs';
 
+export const DEFAULT_CORE_CONFIG = resolve(homedir(), '.config/praxis/core.json');
 export const DEFAULT_BUSINESS_CONFIG = resolve(homedir(), '.config/praxis/business.json');
 export function validateWebGatewayConfig(value) {
   if (value === undefined) return;
@@ -16,8 +17,8 @@ export function validateWebGatewayConfig(value) {
   try { url = new URL(`http://${value.originHost}`); } catch { throw businessError(500, 'INVALID_WEB_GATEWAY_CONFIG'); }
   if (url.hostname !== value.originHost || url.port || url.username || url.password || url.pathname !== '/' || !/^(?:[a-z0-9]+(?:[.-][a-z0-9]+)*|\[[a-f0-9:]+\])$/.test(value.originHost)) throw businessError(500, 'INVALID_WEB_GATEWAY_CONFIG');
 }
-export async function loadBusinessConfig(file = process.env.PRAXIS_BUSINESS_CONFIG) {
-  if (!file) throw new Error('Supply the path to a private business configuration using --config or PRAXIS_BUSINESS_CONFIG.');
+export async function loadBusinessConfig(file = process.env.PRAXIS_CORE_CONFIG || process.env.PRAXIS_BUSINESS_CONFIG) {
+  if (!file) throw new Error('Supply the private platform configuration using --config or PRAXIS_CORE_CONFIG.');
   const info = await lstat(file);
   if (!info.isFile() || info.isSymbolicLink() || info.mode & 0o077 || info.size > 256 * 1024) throw businessError(500, 'UNSAFE_CONFIG');
   const config = JSON.parse(await readFile(file, 'utf8'));
@@ -36,3 +37,5 @@ export async function loadBusinessConfig(file = process.env.PRAXIS_BUSINESS_CONF
   validateWebGatewayConfig(config.webGateway);
   return { ...config, issuer: issuer.origin };
 }
+
+export const loadCoreConfig = loadBusinessConfig;

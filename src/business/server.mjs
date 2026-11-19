@@ -196,15 +196,21 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
     if (!closed) { closed = true; observations.close(); }
   }
   const status = () => ({ healthy: collected && !collectionErrors.size && !quiescing, quiescing, collecting: polling, inflight: pendingRequests.size, collectionErrors: collectionErrors.size });
-  server.business = { auth, events, bridge, collect, observations, status, quiesce, shutdown };
+  server.core = { auth, events, bridge, collect, observations, status, quiesce, shutdown };
+  server.business = server.core;
   server.on('close', () => { shutdown().catch(() => {}); });
   return server;
 }
 
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  const { values } = parseArgs({ options: { config: { type: 'string' }, host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '4326' } } });
+export const createCoreServer = createBusinessServer;
+
+export async function startCoreServer(argv = process.argv.slice(2)) {
+  const { values } = parseArgs({ args: argv, options: { config: { type: 'string' }, host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '4326' } } });
   const config = await loadBusinessConfig(values.config);
-  const server = createBusinessServer({ config });
-  server.listen(Number(values.port), values.host, () => console.log(`Praxis business service listening on port ${values.port}`));
+  const server = createCoreServer({ config });
+  server.listen(Number(values.port), values.host, () => console.log(`Praxis core service listening on port ${values.port}`));
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { server.close(); server.closeAllConnections(); });
+  return server;
 }
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) await startCoreServer();

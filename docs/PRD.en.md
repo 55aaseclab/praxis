@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.112 · [简体中文](PRD.md)
+Version: 0.1.113 · [简体中文](PRD.md)
 
 People should be able to ask an agent for work and open the resulting document, schedule or other app record. Each app defines the meaning, storage and presentation of its records. The workbench handles discovery and navigation. External clients choose their own agent harness.
 
@@ -16,6 +16,10 @@ People should be able to ask an agent for work and open the resulting document, 
 The public checkout supplies the complete built-in Docker Compose stack. A fresh clone starts the native services for all fourteen apps, the authenticated workbench and scoped business interface. First-start initialization creates a private owner account, workspace, service keys and persistent stores. Existing identities, configuration and records survive restarts and retries. Verify every native entry, protected resource, write/read-back flow and restart from an isolated clean installation. Preserve the original stack-management and recovery workflows during migration.
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
+
+## Platform core naming
+
+Name the platform backend Compose service **core**. Local setup, credentials and management commands use that name. The service owns identity, authorization, external-agent access and app coordination. Existing installation metadata, data volumes and legacy entry points remain readable during the rename.
 
 ## Video-engine availability
 
@@ -112,6 +116,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.105 | 2026-11-19 | Localize public MCP discovery and operational skills; use bilingual app manifests |
 | v0.1.106 | 2026-11-19 | Document how agent-native apps compare with harnesses and existing app connectors |
 | v0.1.107 | 2026-11-19 | Add owner-only Letters and Profiles readers with public code and private runtime sources |
+| v0.1.113 | 2026-11-19 | Rename the platform backend service and commands to core with installation compatibility |
 
 ### Letters and Profiles
 

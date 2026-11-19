@@ -6,7 +6,7 @@
 
 这是平台运行说明的统一入口；产品范围见[PRD](PRD.md)，排期见[路线图](ROADMAP.md)。实际部署、真实业务agent、手机App和云端验收以[验证台账](VERIFICATION.md)为准；文档存在或合成测试通过不代表未执行的验收完成。
 
-Praxis 内部没有agent。外部客户端负责理解和编排，业务服务负责身份、权限、工具契约和所属应用调用。业务数据继续由独立应用保存，平台只保留身份/授权、事件、脱敏审计和副本队列等必要元数据。
+Praxis 内部没有agent。外部客户端负责理解和编排，`core` 核心后端负责身份、权限、工具契约和所属应用调用。业务数据继续由独立应用保存，平台只保留身份/授权、事件、脱敏审计和副本队列等必要元数据。
 
 设计和评审工作台及应用时，使用同一份 [Praxis UI/UX 设计指南](UI-UX.md)。
 
@@ -39,7 +39,7 @@ Praxis 内部没有agent。外部客户端负责理解和编排，业务服务�
 | 信件 | `/apps/letters/` | 网页槽 | `third_party/letters` |
 | 个人资料 | `/apps/profiles/` | 网页槽 | `third_party/profiles` |
 
-表内端口为受管网关的目标。独立运行的 Knowledge、Lattice、听校分别使用 4324、4666、5173。源站 14321 网关转发到固定本机服务，受管业务核心监听回环 4326；具体映射、公开资源副本及健康检查见 [Docker 手册](DOCKER.md)。Knowledge 承载笔记、藏书与项目引用，旧知识和旅行路径保留受权兼容跳转。信件和个人资料分别只读挂载文档，且要求固定所有者的有效管理员会话。Polaris 的管理员入口为只读观察查看器。
+表内端口为受管网关的目标。独立运行的 Knowledge、Lattice、听校分别使用 4324、4666、5173。源站 14321 网关转发到固定本机服务，受管核心后端监听回环 4326；具体映射、公开资源副本及健康检查见 [Docker 手册](DOCKER.md)。Knowledge 承载笔记、藏书与项目引用，旧知识和旅行路径保留受权兼容跳转。信件和个人资料分别只读挂载文档，且要求固定所有者的有效管理员会话。Polaris 的管理员入口为只读观察查看器。
 
 ```mermaid
 flowchart LR
@@ -78,7 +78,7 @@ flowchart LR
 
 | 组件 | 源码/入口 | 职责 |
 |---|---|---|
-| 业务 HTTP 服务 | `src/business/server.mjs`，默认 `127.0.0.1:4326` | 受管应用界面、统一 API、MCP 和身份端点 |
+| core 核心后端 | `src/business/server.mjs`，默认 `127.0.0.1:4326` | 受管应用界面、统一 API、MCP 和身份端点 |
 | 身份与委托 | `src/business/auth.mjs` | 用户/空间/资源范围、登录、OAuth、撤销与策略锁 |
 | 网页用户与授权管理 | `${issuer}/admin/`、`src/business/admin.mjs` | 显式平台管理员管理账号、应用入口与委托撤销；不读取业务正文或隐式扩展业务权限 |
 | 应用桥接 | `src/business/bridge.mjs` | 固定业务动作及签名适配，不接受任意 URL、文件、SQL 或命令 |
@@ -89,13 +89,15 @@ flowchart LR
 开发/受控运行命令：
 
 ```bash
-npm run business -- --config /absolute/private/business.json --host 127.0.0.1 --port 4326
-npm run business:admin -- status --config /absolute/private/business.json
+npm run core -- --config /absolute/private/business.json --host 127.0.0.1 --port 4326
+npm run core:admin -- status --config /absolute/private/business.json
 ```
 
-生产对外采用明确 HTTPS issuer。回环 HTTP 只用于本机开发或隔离测试；不能把服务的监听地址 `0.0.0.0` 当作 OAuth issuer。统一工作台位于`${issuer}/`，旧通用`/business/`入口在网关模式返回工作台，独立开发模式转到明确的Reminder入口。`/business/reminder/`与`/business/tingproof/`分别直接返回应用专属HTML，禁用JavaScript也不经过通用界面；原通用HTML、控制器、样式与日历资源已删除。共享`app-transport.js`只处理认证、调用及事件，不提供通用应用界面。MCP资源位于`${issuer}/mcp`。应用启动器和业务服务是不同职责，不能因本地端口启动就宣称公网协议路由已配置。
+生产对外采用明确 HTTPS issuer。回环 HTTP 只用于本机开发或隔离测试；不能把服务的监听地址 `0.0.0.0` 当作 OAuth issuer。统一工作台位于`${issuer}/`，旧通用`/business/`入口在网关模式返回工作台，独立开发模式转到明确的Reminder入口。`/business/reminder/`与`/business/tingproof/`分别直接返回应用专属HTML，禁用JavaScript也不经过通用界面；原通用HTML、控制器、样式与日历资源已删除。共享`app-transport.js`只处理认证、调用及事件，不提供通用应用界面。MCP资源位于`${issuer}/mcp`。应用启动器和核心后端是不同职责，不能因本地端口启动就宣称公网协议路由已配置。
 
 账号菜单只保留账户信息与退出；所有有效用户均可打开「设置」。管理员保留全局及用户管理；普通用户只读查看本人应用/能力并管理本人智能体委托，不提供独立授权页面。正式网页按本人当前权限操作，无须自委托；外部agent经既有OAuth确认，只能取得当前应用与业务资源权限内、已接入的能力，详见[身份授权专题](BUSINESS-AUTH.md#5-工作台登录与智能体授权)。
+
+平台后端命令统一使用 `core`、`core:admin` 和 `core:stack`，旧 `business` 命令名继续作为兼容别名。既有源码路径、配置文件名和 `/api/business` 路由继续支持。
 
 ## 2. Git 外配置与秘密
 
@@ -139,7 +141,7 @@ npm run business:admin -- status --config /absolute/private/business.json
 初始化只建立身份/授权元数据和私有配置，不导入、读取或创建 Reminder 任务。必须明确指定现有数据文件的映射，不能猜测旧 checkout 是否仍为活动事实源。
 
 ```bash
-npm run business:admin -- init \
+npm run core:admin -- init \
   --config /absolute/private/business.json \
   --issuer https://your-existing-domain.example \
   --reminder-data /absolute/active/reminder/checklist.json \

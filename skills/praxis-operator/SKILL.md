@@ -76,6 +76,8 @@ Images are a global caching requirement. For image-serving or deployment work, r
 
 ### Services and recoverable storage
 
+Use `core` for the platform backend and the preferred `npm run core`, `npm run core:admin` and `npm run core:stack` commands. The older `business` command and managed-group names remain compatibility aliases. Preserve installation-specific project names, source/configuration paths, app business APIs and private data bindings.
+
 For deployment or machine/storage migration, read the root [Docker runbook](../../docs/DOCKER.en.md) and [storage contract](../../docs/STORAGE.en.md). Use the [managed deployment guide](../../docs/MANAGED-DEPLOYMENT.md) for the current Compose and blue/green commands. An unavailable Docker engine is a deployment prerequisite; keep working native services until the replacement is verified.
 
 For a new app, fill in the [first-release record](../../docs/DOCKER.en.md#new-app-release-record) before building or deploying. Capture its initial empty or first-run state, its data owner, an actual app → Home return check on desktop and mobile, and what the previous slot returns after rollback. Follow the [app standard](../../docs/APP-STANDARD.md) and update the English product copy and documentation before the Chinese edition.

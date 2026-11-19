@@ -11,23 +11,25 @@ git submodule update --init --recursive
 docker compose up --build -d --wait
 ```
 
-The default Compose file starts the complete built-in distribution. Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Finance, Intelligence, Projects and Polaris have their native services. Calendar, Matrix Reader, Letters and Profiles are served by the workbench image. Identity and business services enforce browser and agent authorization.
+The default Compose file starts the complete built-in distribution. Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Finance, Intelligence, Projects and Polaris have their native services. Calendar, Matrix Reader, Letters and Profiles are served by the workbench image. The `core` backend enforces browser and agent authorization.
 
 The initializer creates the installation's owner account, workspace, signing keys and empty app stores once. Retrieve the initial login information privately:
 
 ```sh
-docker compose exec business node scripts/builtin-install.mjs credentials
+docker compose exec core node scripts/builtin-install.mjs credentials
 ```
 
 Open <http://127.0.0.1:4321/> and sign in. Use an authorized agent to create the first project, then open its native reader at `/apps/projects/`. Project records appear in the workbench's project directory. Letters and Profiles open their own separate document collections for the configured owner. The language preference lives under Settings.
 
 All application stores and private configuration are in named Docker volumes. `docker compose down` stops the services and retains those volumes. On restart the initializer preserves existing accounts, grants, keys, workspace IDs and records. A missing volume or inconsistent workspace binding fails startup so it can be recovered from its original backup. Keep the generated login details and backup keys outside Git.
 
-The public entry binds to `127.0.0.1:4321`; native app and business ports share the internal service network and are reached through the authenticated gateway. Set `PRAXIS_PORT` before the first start to choose another local port. Persist installation settings in a private `.env` file. An existing installation's origin and workspace must be migrated explicitly.
+The public entry binds to `127.0.0.1:4321`; native app and core ports share the internal service network and are reached through the authenticated gateway. Set `PRAXIS_PORT` before the first start to choose another local port. Persist installation settings in a private `.env` file. An existing installation's origin and workspace must be migrated explicitly.
 
 Connect a client to `http://127.0.0.1:4321/mcp`, sign in and consent to scoped access. The public instructions remain available at `/mcp/guide` on the same entry. Use `docker compose logs -f` to inspect service logs and `docker compose ps` for service status.
 
 Existing managed installations retain their private source bindings, Compose projects and blue/green controls. Follow the [managed deployment guide](MANAGED-DEPLOYMENT.md) for that workflow and the [migration comparison](MIGRATION.en.md) for the restored original operations.
+
+For an existing default Compose installation whose backend service was named `business`, run `docker compose down --remove-orphans` before starting the renamed stack. The data volumes are retained. The initializer copies its existing private configuration to `core.json` and preserves the previous file, identities and keys.
 
 ### Native development
 
@@ -61,23 +63,25 @@ git submodule update --init --recursive
 docker compose up --build -d --wait
 ```
 
-默认 Compose 启动完整的内置发行版。Reminder、Knowledge、Lattice Slides、Travel、TingProof、Memo、Finance、Intelligence、Projects 和 Polaris 均启动自己的原生服务；日历、Matrix 阅读器、信件和个人材料由工作台镜像提供。身份与业务服务负责浏览器及智能体的授权。
+默认 Compose 启动完整的内置发行版。Reminder、Knowledge、Lattice Slides、Travel、TingProof、Memo、Finance、Intelligence、Projects 和 Polaris 均启动自己的原生服务；日历、Matrix 阅读器、信件和个人材料由工作台镜像提供。`core` 核心后端负责浏览器及智能体的授权。
 
 初始化服务仅首次生成所有者账号、工作区、签名密钥和空应用存储。私下读取初始登录信息：
 
 ```sh
-docker compose exec business node scripts/builtin-install.mjs credentials
+docker compose exec core node scripts/builtin-install.mjs credentials
 ```
 
 打开 <http://127.0.0.1:4321/> 并登录。通过已授权的智能体创建第一个项目后，可在 `/apps/projects/` 打开原生项目阅读器，项目也会出现在工作台的项目目录。信件和个人材料分别向配置的所有者展示对应文档目录。语言偏好位于「设置」中。
 
 应用数据与私有配置都保存在 Docker 命名卷。`docker compose down` 停止服务并保留这些卷。重启时初始化服务保留账号、权限、密钥、工作区标识与业务记录。缺失数据卷或工作区绑定冲突时停止启动，以便从原始备份恢复。生成的登录信息和备份密钥保存在 Git 之外。
 
-公开入口默认监听 `127.0.0.1:4321`；各原生应用及业务端口共享内部服务网络，通过已验权的网关访问。首次启动前设置 `PRAXIS_PORT` 可更换本机端口，安装设置保存在私有 `.env` 文件。既有安装的源站地址与工作区需要显式迁移。
+公开入口默认监听 `127.0.0.1:4321`；各原生应用及核心后端端口共享内部服务网络，通过已验权的网关访问。首次启动前设置 `PRAXIS_PORT` 可更换本机端口，安装设置保存在私有 `.env` 文件。既有安装的源站地址与工作区需要显式迁移。
 
 将客户端连接到 `http://127.0.0.1:4321/mcp`，登录并确认限定范围的授权。同一入口的 `/mcp/guide` 提供公共说明。用 `docker compose logs -f` 查看日志，`docker compose ps` 查看服务状态。
 
 既有受管安装保留私有来源绑定、Compose 项目及蓝绿控制，具体操作见[受管部署指南](MANAGED-DEPLOYMENT.md)，恢复的原有运维能力见[迁移对照](MIGRATION.md)。
+
+既有默认 Compose 安装的后端服务若名为 `business`，启动更名后的栈前先运行 `docker compose down --remove-orphans`，数据卷会保留。初始化服务将既有私有配置复制为 `core.json`，同时保留原文件、身份和密钥。
 
 ### 原生开发
 
