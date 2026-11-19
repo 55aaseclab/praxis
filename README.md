@@ -6,7 +6,7 @@
 
 ![An agent conversation in Paseo on the left and the Praxis workbench on the right](docs/images/workbench-en.png)
 
-*The agent conversation and app records are synthetic examples.*
+*A real Codex session in Paseo alongside the running Praxis workbench. Demo files and project records use synthetic data.*
 
 ## Quickstart
 

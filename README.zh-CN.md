@@ -6,7 +6,7 @@
 
 ![左侧为 Paseo 中的智能体会话，右侧为 Praxis 工作台](docs/images/workbench-zh.png)
 
-*图中的智能体会话与业务记录均为合成示例。*
+*左侧为真实 Codex 会话在 Paseo 中的截图，右侧为实际运行的 Praxis 工作台。演示资料和项目记录使用合成数据。*
 
 ## 本机运行
 
