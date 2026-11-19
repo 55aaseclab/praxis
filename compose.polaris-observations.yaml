@@ -1,0 +1,13 @@
+services:
+  viewer:
+    user: "${PRAXIS_VIEWER_UID:?set observation file owner UID}:${PRAXIS_VIEWER_GID:?set observation file owner GID}"
+    environment:
+      POLARIS_OBSERVATIONS_FILE: /run/praxis/observations.json
+      PRAXIS_WORKSPACE_ID: ${PRAXIS_WORKSPACE_ID:?set the authorized workspace ID}
+    volumes:
+      - type: bind
+        source: ${PRAXIS_POLARIS_OBSERVATIONS_FILE:?set the absolute path of the authorized observation file}
+        target: /run/praxis/observations.json
+        read_only: true
+        bind:
+          create_host_path: false

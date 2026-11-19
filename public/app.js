@@ -29,22 +29,29 @@ function renderGroup(selector, entries) {
   if (signature === rendered.get(selector)) return;
   rendered.set(selector, signature);
   const links = entries.map(app => {
-    const link = document.createElement('a');
+    const link = document.createElement(app.unavailable ? 'div' : 'a');
     link.className = 'desktop-app workbench-app'; link.dataset.app = app.id;
     if (app.appId) link.dataset.appId = app.appId;
     if (app.resourceId) link.dataset.projectId = app.resourceId;
-    const url = app.url ? new URL(app.url) : new URL(app.path, location.origin);
-    if (!app.url && app.port !== undefined) url.port = String(app.port);
-    link.href = url.href;
-    link.addEventListener('click', () => reportExperience('app_open', { appId: app.appId || app.id }));
+    if (!app.unavailable) {
+      const url = app.url ? new URL(app.url) : new URL(app.path, location.origin);
+      if (!app.url && app.port !== undefined) url.port = String(app.port);
+      link.href = url.href;
+      link.addEventListener('click', () => reportExperience('app_open', { appId: app.appId || app.id }));
+    }
     const appName = app.labels?.[locale()]?.name ?? app.name;
     const appDescription = app.labels?.[locale()]?.description ?? app.description;
-    link.setAttribute('aria-label', t(`Open ${appName}`, `打开 ${appName}`));
+    if (!app.unavailable) link.setAttribute('aria-label', t(`Open ${appName}`, `打开 ${appName}`));
     const icon = document.createElement('img'); icon.className = 'app-icon workbench-icon'; icon.src = app.icon; icon.alt = ''; icon.width = 80; icon.height = 80;
     const name = document.createElement('span'); name.className = 'app-name'; name.textContent = appName;
     const description = document.createElement('span'); description.className = 'app-description'; description.id = `app-description-${app.id}`; description.textContent = appDescription;
     link.setAttribute('aria-describedby', description.id); link.title = appDescription;
     link.append(icon, name, description);
+    if (app.unavailable) {
+      const status = document.createElement('small');
+      status.textContent = app.unavailable === 'install' ? t('Installation required', '需安装应用') : t('Managed access required', '需受管授权');
+      link.append(status);
+    }
     return link;
   });
   document.querySelector(selector).replaceChildren(...links);

@@ -8,3 +8,7 @@
 | Public reader apps | Letters and Profiles are pinned to independently maintained source repositories. Runtime mounts supply documents for the configured owner. |
 | Additional app integrations | Each app can be distributed after its public source, license, synthetic fixtures, data contract and pinned revision are verified. |
 | Managed deployment | Operators provide their own identity, storage, routing and app services. Each installation verifies access, revocation, return navigation and recovery against its own configuration. |
+
+## Moving an existing installation
+
+Pin the built-in app sources, publish the registry and document how to start the included services. Move the local control checkout and Docker projects together, preserve the existing workspace and persistent stores, and verify the service mounts, reads and rollback point before retiring the old control path.

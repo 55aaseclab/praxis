@@ -177,11 +177,12 @@ export class DockerDeploymentOps {
   async applyFacade(prototype, override) {
     const labels = prototype.Config.Labels, files = (labels['com.docker.compose.project.config_files'] || '').split(',').filter(Boolean);
     if (!files.length) throw fail('ORIGINAL_COMPOSE_METADATA_MISSING');
-    const args = ['compose', '--project-name', labels['com.docker.compose.project']];
+    const directory = labels['com.docker.compose.project.working_dir'] || workspace;
+    const args = ['compose', '--project-directory', directory, '--project-name', labels['com.docker.compose.project']];
     const envFile = labels['com.docker.compose.project.environment_file']; if (envFile) args.push('--env-file', envFile);
     for (const file of files) args.push('--file', file);
     args.push('--file', override, 'up', '--detach', '--no-deps', '--no-build', '--force-recreate', '--wait', '--wait-timeout', '60', labels['com.docker.compose.service']);
-    await this.run(args, { cwd: labels['com.docker.compose.project.working_dir'] || workspace });
+    await this.run(args, { cwd: directory });
   }
   async restoreOriginal(prototype) { const name = prototype.Name.replace(/^\//, ''); await this.remove(name); await this.create(prototype, { name, image: prototype.Image, command: prototype.Config.Cmd, env: {}, labels: true }); }
 }

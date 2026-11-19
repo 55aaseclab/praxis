@@ -12,7 +12,7 @@ export const WEB_APPS = Object.freeze({
   projects: { slug: 'projects', port: 4327 },
   finance: { slug: 'finance', port: 4329 },
   intelligence: { slug: 'intelligence', port: 4330 },
-  polaris: { slug: 'polaris', port: 8787 },
+  polaris: { slug: 'polaris', port: 18787 },
 });
 const webAppIds = new Set([...Object.keys(WEB_APPS), 'matrix-reader', 'calendar']);
 const slugs = new Map(Object.entries(WEB_APPS).map(([id, value]) => [value.slug, id]));
@@ -306,7 +306,7 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
       if (route) {
         if (!canOpenApp(identity, route.id)) throw fail(403, 'FORBIDDEN');
         // The coding gateway serves a separate application's active content. Keep it on its isolated origin.
-        if (route.id === 'polaris' && (route.pathname === '/g' || route.pathname.startsWith('/g/'))) throw fail(404, 'NOT_FOUND');
+        if (route.id === 'polaris' && (!['GET', 'HEAD'].includes(request.method) || route.pathname === '/g' || route.pathname.startsWith('/g/'))) throw fail(404, 'NOT_FOUND');
         if (pathname === route.prefix) { response.writeHead(308, { Location: `${route.prefix}/${search}`, 'Cache-Control': 'no-store' }); response.end(); return true; }
         if (!targets[route.id]) {
           const serve = staticApps[route.id];

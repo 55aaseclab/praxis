@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md) · [Quickstart](#quickstart) · [Try MCP](#try-mcp)
 
-**Praxis is a self-hosted workbench for apps that people and AI agents use together.** People open an app to read a document, review a task or listen to a recording. An external agent works with the same records through the Model Context Protocol (MCP), using the permissions its user grants. The app keeps the records when you switch agents.
+**Praxis is a self-hosted workbench for you and the AI agents you choose.** Run it on your own, share it with your family, or use it across a team or organization. Its 14 built-in apps cover notes and knowledge, tasks and projects, travel, calendars, communication and more. Open an app yourself or grant an external agent access to specific records and actions. You can also build your own apps and run them alongside the built-ins.
 
 ![Praxis workbench showing a field-notes reminder due today, six apps and three sample projects](docs/images/workbench-en.png)
 
@@ -19,7 +19,7 @@ npm ci
 npm start
 ```
 
-Open [the workbench](http://127.0.0.1:4321/). A fresh desktop starts empty. Open **About Praxis** for an introduction, or register a loopback app to see your first tile. The two bundled readers, Letters and Profiles, appear in a managed installation for their configured owner. [Local app walkthrough](docs/APP-STANDARD.md#run-your-own-app-locally)
+Open [the workbench](http://127.0.0.1:4321/) and select **Calendar**. Use the Home button to return. To try a service-backed app with temporary data, run `npm run app:demo -- finance` in a second terminal and open the demo workbench URL it prints. Managed installations show the entries your account can access. [Built-in app guide](docs/BUILTINS.md) · [Add a local app](docs/APP-STANDARD.md#run-your-own-app-locally)
 
 ## Try MCP
 

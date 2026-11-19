@@ -4,3 +4,42 @@
 [submodule "profiles"]
 	path = third_party/profiles
 	url = https://github.com/55aaseclab/profiles.git
+[submodule "calendar"]
+	path = third_party/calendar
+	url = https://github.com/55aaseclab/calendar.git
+[submodule "matrix-reader"]
+	path = third_party/matrix-reader
+	url = https://github.com/55aaseclab/matrix-reader.git
+[submodule "reminder"]
+	path = third_party/reminder
+	url = https://github.com/55aaseclab/reminder.git
+[submodule "intelligence"]
+	path = third_party/intelligence
+	url = https://github.com/55aaseclab/intelligence.git
+[submodule "finance"]
+	path = third_party/finance
+	url = https://github.com/55aaseclab/finance.git
+[submodule "projects"]
+	path = third_party/projects
+	url = https://github.com/55aaseclab/projects.git
+[submodule "travel"]
+	path = third_party/travel
+	url = https://github.com/55aaseclab/travel.git
+[submodule "knowledge"]
+	path = third_party/knowledge
+	url = https://github.com/55aaseclab/knowledge.git
+[submodule "memo"]
+	path = third_party/memo
+	url = https://github.com/55aaseclab/memo.git
+	branch = praxis-release
+[submodule "tingproof"]
+	path = third_party/tingproof
+	url = https://github.com/55aaseclab/tingproof.git
+	branch = praxis-release
+[submodule "lattice"]
+	path = third_party/lattice
+	url = https://github.com/55aaseclab/lattice.git
+	branch = praxis-release
+[submodule "polaris"]
+	path = third_party/polaris
+	url = https://github.com/55aaseclab/polaris-reader.git

@@ -26,7 +26,7 @@ function send(request, response, status, body, type = 'text/html; charset=utf-8'
   response.end(request.method === 'HEAD' ? undefined : bytes);
 }
 
-export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(root, 'public'), publicUrlsFile, businessUrl = process.env.PRAXIS_BUSINESS_URL, observationsFile = process.env.PRAXIS_OBSERVATIONS_FILE, observationsOrigin = process.env.PRAXIS_OBSERVATIONS_ORIGIN, consoleUpstream = process.env.PRAXIS_CONSOLE_UPSTREAM, consoleHost = process.env.PRAXIS_CONSOLE_HOST, consoleOrigin = process.env.PRAXIS_CONSOLE_ORIGIN, webGateway, canonicalUrl, developmentApps = [] } = {}) {
+export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(root, 'public'), publicUrlsFile, businessUrl = process.env.PRAXIS_BUSINESS_URL, observationsFile = process.env.PRAXIS_OBSERVATIONS_FILE, observationsOrigin = process.env.PRAXIS_OBSERVATIONS_ORIGIN, consoleUpstream = process.env.PRAXIS_CONSOLE_UPSTREAM, consoleHost = process.env.PRAXIS_CONSOLE_HOST, consoleOrigin = process.env.PRAXIS_CONSOLE_ORIGIN, webGateway, canonicalUrl, demoApp, developmentApps = [] } = {}) {
   const privateApps = Object.fromEntries(['letters', 'profiles'].map(id => {
     const serve = createManagedStaticHandler(resolve(root, 'third_party', id, 'public'), ['/app.css', '/app.js']);
     const documents = createPrivateDocumentHandler(webGateway?.privateDocumentRoots?.[id]);
@@ -34,12 +34,31 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       ? documents(request, response, pathname, reauthorize)
       : serve(request, response, pathname, navigation, reauthorize)];
   }));
+  const localStatic = {
+    calendar: { directory: resolve(root, 'third_party/calendar/public'), assets: ['/calendar.js', '/calendar.css'] },
+    'matrix-reader': { directory: resolve(root, 'third_party/matrix-reader/dist'), assets: [] },
+  };
+  const staticReaders = Object.fromEntries(Object.entries(localStatic).map(([id, app]) =>
+    [id, createManagedStaticHandler(app.directory, app.assets)]));
+  async function localEntry(app) {
+    if (!app.builtin || app.url) return app;
+    if (!app.adminOnly && demoApp?.id === app.id) {
+      return { ...app, launcher: true, url: `http://127.0.0.1:${demoApp.port}/` };
+    }
+    const { id, kind, name, description, labels, icon } = app;
+    const entry = { id, kind, name, description, labels, icon, ...(app.launcher === false && { launcher: false }) };
+    if (Object.hasOwn(localStatic, id)) {
+      const index = await stat(resolve(localStatic[id].directory, 'index.html')).catch(() => null);
+      if (index?.isFile() && index.size) return { ...entry, path: `/apps/${id}/` };
+      return { ...entry, unavailable: 'install' };
+    }
+    return { ...entry, unavailable: 'managed' };
+  }
   const gateway = webGateway?.enabled ? createWebGateway({
     ...webGateway,
     staticApps: {
       ...privateApps,
-      'matrix-reader': createManagedStaticHandler(resolve(root, 'third_party/matrix-reader/dist')),
-      calendar: createManagedStaticHandler(resolve(root, 'third_party/calendar/public'), ['/calendar.js', '/calendar.css']),
+      ...staticReaders,
     },
   }) : null;
   const projectInfo = gateway && createPublicProjectHandler(gateway.origin);
@@ -65,12 +84,16 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       if (!['GET', 'HEAD'].includes(request.method)) return send(request, response, 405, 'Method not allowed.', 'text/plain; charset=utf-8', { Allow: 'GET, HEAD' });
       let path;
       try { path = decodeURIComponent(url.pathname); } catch { return send(request, response, 400, 'Invalid URL.', 'text/plain; charset=utf-8'); }
-      if (!gateway && ['/praxis-nav.js', '/praxis-nav.css'].includes(path)) return send(request, response, 404, 'Not found.', 'text/plain; charset=utf-8');
+      const reader = !gateway && /^\/apps\/(calendar|matrix-reader)(\/.*)$/.exec(path);
+      if (reader) {
+        const context = navigationContext(request, reader[2], reader[1]);
+        return await staticReaders[reader[1]](request, response, reader[2], context && { ...context, canonicalOrigin: url.origin }, async () => {});
+      }
       if (path.includes('\0') || path.includes('\\') || path.split('/').some(part => part.startsWith('.'))) return send(request, response, 404, 'Not found.', 'text/plain; charset=utf-8');
       if (path === '/health') return send(request, response, 200, '{"status":"ok"}', 'application/json');
       if (path === '/api/apps') {
         const apps = await readApps(root, { publicUrlsFile: gateway ? undefined : publicUrlsFile });
-        const visibleApps = gateway ? gatewayApps(apps, request.webAccess, gateway.origin) : [...apps.filter(app => !app.adminOnly), ...developmentApps];
+        const visibleApps = gateway ? gatewayApps(apps, request.webAccess, gateway.origin) : [...await Promise.all(apps.filter(app => !app.adminOnly).map(localEntry)), ...developmentApps];
         return send(request, response, 200, JSON.stringify({ apps: visibleApps }), 'application/json; charset=utf-8');
       }
       if (path === '/business' || path === '/business/') {

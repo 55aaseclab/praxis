@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node src/server.mjs --host 127.0.0.1",
     "test": "node --test tests/*.test.mjs",
+    "app:demo": "bash scripts/demo-app.sh",
     "apps:dev": "node scripts/local-app.mjs",
     "business": "node src/business/server.mjs",
     "business:admin": "node scripts/business-admin.mjs",

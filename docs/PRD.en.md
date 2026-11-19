@@ -14,3 +14,7 @@ People should be able to ask an agent for work and open the resulting document, 
 | Work in either language | English is the default. Shipped interface changes carry corresponding Simplified Chinese copy. User-authored material keeps its original language. |
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
+
+## Built-in apps
+
+A standard Praxis distribution includes the maintained workbench apps as independently versioned components. The catalog covers Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Finance, Intelligence, Polaris, Calendar, Matrix Reader, Projects, Letters and Profiles. App access follows the installation and the user’s grants; private data, accounts and working files remain outside the public repository. Individuals, families and organizations can also register their own apps.
