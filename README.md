@@ -36,15 +36,23 @@ Open [Praxis](http://127.0.0.1:4321/) and sign in. App and resource permissions 
 
 ### Connect to Praxis
 
-Add your local Praxis instance as a remote server in an agent client that supports Streamable HTTP MCP and OAuth.
+1. **Connect your agent.** Copy this prompt into your agent.
 
-```text
-http://127.0.0.1:4321/mcp
-```
+   ```text
+   Connect to my local Praxis at http://127.0.0.1:4321/mcp. Help me sign in and request permission to read and create reminders.
+   ```
 
-Sign in through your browser using the account created by your local installation, then choose the records and actions your agent may access. Review or revoke its access in **Settings → Agent delegations**.
+2. **Sign in and authorize access.** Open the sign-in link, use the account created when you started Praxis, and approve the requested Reminder access.
 
-After importing your field notes into Knowledge, you can ask **“Which sampling sites do the field notes say we should revisit?”** Your agent can search the permitted library, read the relevant passages and cite their locations. Open the source in Knowledge to check the answer. [Knowledge tools](skills/knowledge-mcp/SKILL.md)
+3. **Start your first task.** Ask your agent.
+
+   ```text
+   Remind me tomorrow to review the field notes.
+   ```
+
+   Open [the workbench](http://127.0.0.1:4321/), select **Reminder → All**, and check the saved reminder.
+
+You can review or revoke your agent's access in **Settings → Agent delegations**.
 
 ## Contribute
 
