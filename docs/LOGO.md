@@ -21,8 +21,12 @@ The generator takes numeric parameters as its only visual input. It computes one
 | Asset | Use |
 | --- | --- |
 | [Wide SVG](brand/praxis-pine.svg) | Transparent mark for layouts with a light background |
-| [Square SVG](../public/praxis.svg) | README, browser tab and workbench dock |
-| [180 px](../public/praxis-180.png) · [192 px](../public/praxis-192.png) · [512 px](../public/praxis-512.png) | Apple touch icon and web app installation icons |
+| [Square SVG](../public/praxis.svg) | README and workbench dock |
+| [180 px](../public/praxis-180.png) · [192 px](../public/praxis-192.png) · [512 px](../public/praxis-512.png) | Browser favicon, Apple touch icon and web app installation icons |
+
+## Installation metadata
+
+The workbench, sign-in and Settings reference the current PNG touch icon and web app manifest. Icon URLs include an artwork version to let browsers detect a changed mark while the manifest ID and start URL stay stable. When replacing the artwork, update that version together with the generated assets. A home-screen shortcut already saved by the operating system may need to be removed and added again.
 
 ## Geometry
 
@@ -60,6 +64,8 @@ The different powers form a full shoulder and a longer tapered tip. The branch m
 偏冠松是 Praxis 现阶段使用的标识。树干代表人面对的一个 agent，分枝代表承接请求的不同应用。上层树冠下方留出一道空隙，缩到工作台图标大小时，也能看出整棵树顺风生长的方向。
 
 **复现。** 在仓库根目录使用 Node.js 22.16 或更高版本，依次运行 `npm ci`、`npm run logo:generate` 和 `npm run logo:check`。生成器的视觉输入只有数值参数。它计算出一套轮廓，输出透明 SVG 和方形 SVG，再通过锁定版本的 resvg 从方形 SVG 导出 180、192、512 像素 PNG。校验命令在内存中重算五个文件，逐字节比对。
+
+**安装图标。** 工作台、登录页与设置使用当前 PNG touch icon 和同一份 web app manifest。图标 URL 携带图案版本，manifest 的 ID 与启动地址保持稳定。更换图案时同步更新图标版本和生成资源。操作系统已保存的桌面快捷方式可能需要移除后重新添加。
 
 **树干与分枝。** 上方第一式定义枝条中心线。$P$ 是起点，$L$ 是长度尺度，$\theta$ 是起始方向，$wt^2$ 让枝条向右弯。树干从原点出发，朝向 113°，长度尺度为 1，初始半宽为 0.14。树干的风偏系数为 0.73，分枝为 0.17。每条中心线取 17 个等距参数点，沿法线向两侧展开，半宽按 $r(1-0.44t)$ 收窄；树干底部额外加宽并收平。
 

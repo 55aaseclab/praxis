@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.110 · [简体中文](PRD.md)
+Version: 0.1.111 · [简体中文](PRD.md)
 
 People should be able to ask an agent for work and open the resulting document, schedule or other app record. Each app defines the meaning, storage and presentation of its records. The workbench handles discovery and navigation. External clients choose their own agent harness.
 
@@ -14,6 +14,10 @@ People should be able to ask an agent for work and open the resulting document, 
 | Work in either language | Open **Settings → General → Language** on the workbench to choose English (default) or Simplified Chinese. The choice applies immediately and persists in this browser for the workbench and its PRD reader. Standalone users and signed-in members can change it without administrator privileges. User-authored material keeps its original language. |
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
+
+## Home-screen identity · v0.1.111
+
+Installing Praxis from the workbench, sign-in page or Settings uses the current pine mark. Sign-in and Settings expose the same manifest and Apple touch icon as the workbench. Installation metadata and PNG icons are readable before sign-in. Icon URLs carry an artwork version so an existing browser can discover a changed icon. Keep the manifest ID, start URL and scope stable when updating the artwork.
 
 ## External agent clients · v0.1.110
 

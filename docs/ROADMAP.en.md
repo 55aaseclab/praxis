@@ -9,6 +9,11 @@
 | Additional app integrations | Each app can be distributed after its public source, license, synthetic fixtures, data contract and pinned revision are verified. |
 | Managed deployment | Operators provide their own identity, storage, routing and app services. Each installation verifies access, revocation, return navigation and recovery against its own configuration. |
 
+### v0.1.111 · Home-screen icons
+
+Version the installation icon URLs, declare the current mark on sign-in and Settings, and preserve the installed app identity. Check anonymous access, actual PNG bytes, manifest consistency and the authentication-page image/manifest policy. Deploy and verify the hosted metadata.
+
+
 ### v0.1.110 · Remove the workbench Paseo portal
 
 Remove the toolbar entry, embedded panel and their assets. Verify that the workbench makes no Paseo client request and that view switching, top alignment, Settings and Home navigation still work on desktop and phone. Deploy the verified result and read back the live workbench.
