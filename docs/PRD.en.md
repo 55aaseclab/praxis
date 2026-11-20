@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.124 · [简体中文](PRD.md)
+Version: 0.1.125 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -202,6 +202,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.118 | 2026-11-20 | Move app registration ownership to app manifests and standardize release versions |
 | v0.1.119 | 2026-11-20 | Read explicit app-owned requirements revisions separately from app releases |
 | v0.1.120 | 2026-11-20 | Load app-owned integration contracts and deliver Projects planning |
+| v0.1.125 | 2026-11-20 | Remove per-app language toggles; apps follow the workbench language preference |
 
 ### Letters and Profiles
 

@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.124
+Version: 0.1.125
 
 [简体中文](ROADMAP.md)
 
@@ -239,6 +239,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.118 | 2026-11-20 | Move app registration ownership to app manifests and standardize release versions |
 | v0.1.119 | 2026-11-20 | Read explicit app-owned requirements revisions separately from app releases |
 | v0.1.120 | 2026-11-20 | Load app-owned integration contracts and deliver Projects planning |
+| v0.1.125 | 2026-11-20 | Remove per-app language toggles; apps follow the workbench language preference |
 
 ### Public applications with private collections
 
