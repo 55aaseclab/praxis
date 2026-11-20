@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.120
+Version: 0.1.121
 
 [简体中文](ROADMAP.md)
 
@@ -235,3 +235,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 ### Public applications with private collections
 
 Register Letters and Profiles in the workbench, bind private sources only at runtime and verify authorization, file boundaries, blank state, bilingual navigation and Home return. Establish public organization repositories for missing app upstreams without publishing historical business data.
+
+## 0.1.121 · Storage startup metadata
+
+Separate backup metadata validation from Core signing-key validation. Prove an intentionally absent service key is never opened by the coordinator, while Core still rejects that runtime configuration. Validate the real mounted configuration without running a job, then gracefully drain/recreate only the affected worker and verify unchanged bindings, identity and durable pending queue. Preserve the failed rollout/rollback diagnosis and honest replica status.

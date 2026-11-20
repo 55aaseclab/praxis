@@ -79,7 +79,7 @@ export async function main(args = process.argv.slice(2)) {
     const status = await stack(['status', '--json', '--source-mode', 'registered', ...stackActivationFlags, '--config', configFile], { print: () => {} });
     if (businessConfigFile) {
       const { loadBusinessConfig } = await import('../src/business/config.mjs');
-      const business = await loadBusinessConfig(businessConfigFile);
+      const business = await loadBusinessConfig(businessConfigFile, { metadataOnly: true });
       for (const { storage, adapterId } of activations) {
         const declaration = storage.activation, app = business.apps[adapterId];
         if (declaration.requireManaged && app?.managed !== true) throw new Error('The unified stack requires its declared managed application profile.');

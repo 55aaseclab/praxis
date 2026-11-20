@@ -12,7 +12,7 @@ The built-in apps are useful products in their own right. They show what a caref
 
 ## What the person gets
 
-**Read.** Ask, “How does this hiring packet say we should set starting pay?” Once the packet is imported and indexed, an authorized agent can find the relevant passages and check their context. Knowledge supplies the source file and passage location. The agent returns a conclusion that the person can verify against the exact clause, such as when an example differs from approved policy. [Knowledge requirements](../third_party/knowledge/docs/PRD.en.md) · [Knowledge agent skill](../skills/knowledge-mcp/SKILL.md)
+**Read.** Ask, “How does this hiring packet say we should set starting pay?” Once the packet is imported and indexed, an authorized agent can find the relevant passages and check their context. Knowledge supplies the source file and passage location. The agent returns a conclusion that the person can verify against the exact clause, such as when an example differs from approved policy. [Knowledge requirements](../third_party/knowledge/docs/PRD.en.md) · [Knowledge agent skill](../third_party/knowledge/skills/knowledge-mcp/SKILL.md)
 
 **Watch.** Ask, “Prepare the approved project update for the meeting.” With the required deck permissions, an agent can update the Lattice slides and inspect the rendered result. The presenter opens the finished deck for the meeting. [Lattice authoring contract](../third_party/lattice/skills/mcp-slides/SKILL.md)
 
@@ -48,7 +48,7 @@ Agent harnesses such as Codex CLI complement Praxis. The harness runs the agent 
 
 ## 用户得到什么
 
-**读。** 用户问「这份招聘资料里，入职薪资应该怎么定？」资料入库并建立索引后，获授权的智能体可以查找相关段落并回读上下文。Knowledge 提供原文件与段落位置。智能体给出结论，用户可以回到具体条款查证，例如确认一段话究竟是示例还是正式制度。[Knowledge 需求](../third_party/knowledge/docs/PRD.md) · [Knowledge 操作技能](../skills/knowledge-mcp/SKILL.md)
+**读。** 用户问「这份招聘资料里，入职薪资应该怎么定？」资料入库并建立索引后，获授权的智能体可以查找相关段落并回读上下文。Knowledge 提供原文件与段落位置。智能体给出结论，用户可以回到具体条款查证，例如确认一段话究竟是示例还是正式制度。[Knowledge 需求](../third_party/knowledge/docs/PRD.md) · [Knowledge 操作技能](../third_party/knowledge/skills/knowledge-mcp/SKILL.md)
 
 **看。** 用户说「把已经确认的项目进展整理成开会用的演示稿」。拿到相应文稿权限后，智能体可以更新 Lattice 幻灯片并检查渲染结果。主讲人可以直接打开完成的演示稿开会。[Lattice 制作合同](../third_party/lattice/skills/mcp-slides/SKILL.md)
 

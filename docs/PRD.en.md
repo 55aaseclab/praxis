@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.120 · [简体中文](PRD.md)
+Version: 0.1.121 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -64,6 +64,10 @@ The platform loads a reviewed `praxis-integration.mjs` from each installed pinne
 The platform retains account and delegation management, current authorization, source trust, token/key custody, signed assertions, policy leases, serialization, resource checks, safe HTTP/file primitives, trace recording and consistent encrypted storage coordination. App capability declarations never assign roles, grant access, start an unconfigured backend or load code from a caller-provided path/URL. Trusted app hooks receive bounded, app-scoped callbacks and safe identity facts, not tokens, signing keys or an AuthStore. Validate duplicate identities, slugs, tool/scope/action names, unsafe source paths and incompatible hooks before activation. Deactivation removes entries/tools while retaining grants, data and history; inactive stored grants cannot authorize access and do not invalidate unrelated active capabilities.
 
 Implement the complete Projects planning contract from requirements revision 2 (preserved commit `54701f5`), with the resolved role bootstrap in its next owning revision: one project main, four team mains and actual identity-owned personal drafts; structured PRD/Roadmap, target-scoped personal→team→project proposals, comparison, conflicts, immutable decisions/history, recovery and restore-as-new-draft after the P0 loop. No read creates plans, members or agreement. Business space owners/admins with project-scoped role-management authority may explicitly assign planning roles to eligible accounts; acceptance requires the assigned target role and separate current update/accept authorization. Platform-admin status and a free-text owner label confer no business decision authority. New Projects operations are supplied by its loaded app integration and owning service rather than new central schemas or switch branches.
+
+## Backup configuration and credential custody
+
+The storage coordinator loads business configuration as metadata: validate app identities, paths, mappings and declared formats, while excluding signing-key reads. It must work with its existing data/configuration mounts and must not gain application signing keys merely to register backup sources. Core runtime configuration continues to validate signing keys before accepting business traffic. Test startup with an intentionally unmounted key, keep malformed configuration fail-closed, and preserve queue generations, leases, workspace/writer identity and graceful restart behavior.
 
 ## Application publication
 

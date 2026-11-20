@@ -11,7 +11,7 @@ import { StorageRepositories } from '../src/storage/repositories.mjs';
 import { withBusinessBackupSources } from '../src/business/backup-sources.mjs';
 
 export async function runBusinessSyncWorker({ businessConfigFile, storageConfigFile = process.env.PRAXIS_STORAGE_CONFIG || DEFAULT_CONFIG_FILE, signal, clock = () => Date.now(), intervalMs = 1000, repositoriesFactory = (config, options) => new StorageRepositories(config, options), output = value => console.log(JSON.stringify(value)) }) {
-  const business = await loadBusinessConfig(businessConfigFile);
+  const business = await loadBusinessConfig(businessConfigFile, { metadataOnly: true });
   const configuredStorage = await loadConfig(storageConfigFile);
   const events = new BusinessEvents(business.eventsDatabase, { clock });
   const inventoryFile = resolve(dirname(business.eventsDatabase), 'backup-coverage.json');
@@ -21,7 +21,7 @@ export async function runBusinessSyncWorker({ businessConfigFile, storageConfigF
     let knownActiveSources = [];
     const inventoryExists = await lstat(inventoryFile).then(() => true).catch(error => { if (error.code !== 'ENOENT') throw error; return false; });
     if (inventoryExists) { await assertPrivateFile(inventoryFile); knownActiveSources = JSON.parse(await readFile(inventoryFile, 'utf8')).sources; if (!Array.isArray(knownActiveSources)) throw new Error('Invalid backup coverage inventory.'); }
-    const currentBusiness = await loadBusinessConfig(businessConfigFile);
+    const currentBusiness = await loadBusinessConfig(businessConfigFile, { metadataOnly: true });
     const storage = await withBusinessBackupSources(await loadConfig(storageConfigFile), currentBusiness, { knownActiveSources });
     await writePrivateJson(inventoryFile, { version: 1, sources: [...new Set([...knownActiveSources, ...storage.appSources.map(source => source.source)])] });
     return repositoriesFactory(storage, { configFile: storageConfigFile });

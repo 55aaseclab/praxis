@@ -17,7 +17,8 @@ export function validateWebGatewayConfig(value) {
   try { url = new URL(`http://${value.originHost}`); } catch { throw businessError(500, 'INVALID_WEB_GATEWAY_CONFIG'); }
   if (url.hostname !== value.originHost || url.port || url.username || url.password || url.pathname !== '/' || !/^(?:[a-z0-9]+(?:[.-][a-z0-9]+)*|\[[a-f0-9:]+\])$/.test(value.originHost)) throw businessError(500, 'INVALID_WEB_GATEWAY_CONFIG');
 }
-export async function loadBusinessConfig(file = process.env.PRAXIS_CORE_CONFIG || process.env.PRAXIS_BUSINESS_CONFIG, { registry = DEFAULT_APP_REGISTRY } = {}) {
+export async function loadBusinessConfig(file = process.env.PRAXIS_CORE_CONFIG || process.env.PRAXIS_BUSINESS_CONFIG, { registry = DEFAULT_APP_REGISTRY, metadataOnly = false } = {}) {
+  if (typeof metadataOnly !== 'boolean') throw businessError(500, 'INVALID_CONFIG_MODE');
   if (!file) throw new Error('Supply the private platform configuration using --config or PRAXIS_CORE_CONFIG.');
   const info = await lstat(file);
   if (!info.isFile() || info.isSymbolicLink() || info.mode & 0o077 || info.size > 256 * 1024) throw businessError(500, 'UNSAFE_CONFIG');
@@ -37,7 +38,7 @@ export async function loadBusinessConfig(file = process.env.PRAXIS_CORE_CONFIG |
     const validate = declaration?.business?.validateConfig || declaration?.deployment?.validateBusinessConfig;
     if (validate) validate(app);
     else if (app.modelCaches !== undefined) throw businessError(500, 'INVALID_ADAPTER');
-    await readSigningKey(app.keyFile);
+    if (!metadataOnly) await readSigningKey(app.keyFile);
   }
   for (const file of [config.appProviderRuntimeFile, config.providerRoot]) if (file !== undefined && (typeof file !== 'string' || !isAbsolute(file) || resolve(file) !== file || /[\0\r\n]/.test(file))) throw businessError(500, 'INVALID_APP_PROVIDER_CONFIG');
   if (config.runtimeTraceAppId !== undefined && (typeof config.runtimeTraceAppId !== 'string' || !registry.getWeb(config.runtimeTraceAppId)?.runtimeTrace)) throw businessError(500, 'INVALID_RUNTIME_TRACE_CONFIG');
@@ -58,6 +59,7 @@ export async function loadBusinessConfig(file = process.env.PRAXIS_CORE_CONFIG |
   const result = { ...config, issuer: issuer.origin, apps: Object.fromEntries(Object.entries(config.apps).filter(([id]) => !inactive.has(id))) };
   Object.defineProperty(result, 'inactiveAppConfigurations', { value: Object.fromEntries(Object.entries(config.apps).filter(([id]) => inactive.has(id))) });
   Object.defineProperty(result, 'appRegistry', { value: registry });
+  Object.defineProperty(result, 'credentialsValidated', { value: !metadataOnly });
   return result;
 }
 

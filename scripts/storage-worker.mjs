@@ -82,7 +82,7 @@ export async function planWorker(config, configFile, { uid = process.env.PRAXIS_
   if (config.businessConfigFile) {
     const { loadBusinessConfig } = await import('../src/business/config.mjs');
     const { withBusinessBackupSources } = await import('../src/business/backup-sources.mjs');
-    business = await loadBusinessConfig(config.businessConfigFile);
+    business = await loadBusinessConfig(config.businessConfigFile, { metadataOnly: true });
     config = await withBusinessBackupSources(config, business, { onDeclaredSource: source => declaredSources.push(source) });
   }
   uid = String(uid); gid = String(gid);
@@ -126,7 +126,7 @@ export async function planWorker(config, configFile, { uid = process.env.PRAXIS_
   }
   if (business) {
     await addFile(config.businessConfigFile);
-    for (const app of Object.values(business.apps)) { await addFile(app.keyFile); if (app.spacesFile) await addFile(app.spacesFile); }
+    for (const app of Object.values(business.apps)) if (app.spacesFile) await addFile(app.spacesFile);
     // Include declared, not-yet-created sources through the same owned recovery
     // projection, so a later first write does not require a broader mount.
     for (const source of declaredSources) {
