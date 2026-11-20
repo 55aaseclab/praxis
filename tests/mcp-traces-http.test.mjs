@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js';
 import { AuthStore, SESSION_COOKIE } from '../src/business/auth.mjs';
 import { BusinessEvents } from '../src/business/events.mjs';
 import { createBusinessServer } from '../src/business/server.mjs';
+import { createPraxisServer } from '../src/server.mjs';
 import { BusinessService } from '../third_party/reminder/src/business.js';
 import { createServer as createReminderServer } from '../third_party/reminder/src/server.js';
 import { Store } from '../third_party/reminder/src/store.js';
@@ -46,7 +47,7 @@ async function fixture(t) {
   };
   const native = createReminderServer({ store: nativeStore, businessService: service });
   await new Promise(resolve => native.listen(0, '127.0.0.1', resolve));
-  let backend;
+  let backend, web;
   const server = createServer((request, response) => backend.emit('request', request, response));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -64,6 +65,7 @@ async function fixture(t) {
   t.after(async () => {
     for (const barrier of barriers) barrier.release.resolve();
     await Promise.allSettled(clients.map(client => client.close()));
+    if (web) { web.closeAllConnections(); await new Promise(resolve => web.close(resolve)); }
     server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
     await backend.core.shutdown(); backend.close(() => {});
     native.closeAllConnections(); await new Promise(resolve => native.close(resolve));
@@ -80,9 +82,26 @@ async function fixture(t) {
     } });
     await client.connect(transport); return client;
   }
-  async function report(parameters = {}) {
-    const response = await fetch(origin + '/api/business/console/traces?' + new URLSearchParams({ source: 'mcp', ...parameters }), { headers: { Cookie: `${SESSION_COOKIE}=${session.sessionToken}` } });
+  async function report(parameters = {}, { signal } = {}) {
+    const response = await fetch(origin + '/api/business/console/traces?' + new URLSearchParams({ source: 'mcp', ...parameters }), { signal, headers: { Cookie: `${SESSION_COOKIE}=${session.sessionToken}` } });
     assert.equal(response.status, 200, 'native-admin Trace endpoint'); return response.json();
+  }
+  async function openWeb() {
+    web = createPraxisServer({ observationsFile: null, businessUrl: null, consoleUpstream: origin, consoleHost: new URL(origin).host, webGateway: { enabled: true, canonicalUrl: origin, coreUrl: origin } });
+    await new Promise(resolve => web.listen(0, '127.0.0.1', resolve));
+  }
+  // node:http preserves the trusted proxy's canonical Host; Node fetch replaces
+  // a caller-supplied Host with the separate network-listener port.
+  const webGet = (path, { signal } = {}) => new Promise((resolve, reject) => {
+    const outgoing = httpRequest(`http://127.0.0.1:${web.address().port}${path}`, { signal, headers: { Host: new URL(origin).host, Origin: origin, Cookie: `${SESSION_COOKIE}=${session.sessionToken}` } }, async incoming => {
+      try { const chunks = []; for await (const chunk of incoming) chunks.push(chunk); resolve(new Response(Buffer.concat(chunks), { status: incoming.statusCode, headers: incoming.headers })); }
+      catch (error) { reject(error); }
+    });
+    outgoing.on('error', reject); outgoing.end();
+  });
+  async function webReport(parameters = {}, options = {}) {
+    const response = await webGet('/api/platform/traces?' + new URLSearchParams({ source: 'mcp', ...parameters }), options);
+    assert.equal(response.status, 200, 'public gateway native-admin Trace endpoint'); return response.json();
   }
   async function httpInvoke(request, nativeBrowser = false) {
     const headers = { 'Content-Type': 'application/json', ...(nativeBrowser ? { Cookie: `${SESSION_COOKIE}=${session.sessionToken}`, Origin: origin, 'X-CSRF-Token': session.csrfToken } : { Authorization: `Bearer ${bearer}` }) };
@@ -91,7 +110,7 @@ async function fixture(t) {
   }
   const raw = (body, credential = bearer, extra = {}, options = {}) => fetch(origin + '/mcp', { ...options, method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': LATEST_PROTOCOL_VERSION, ...(credential ? { Authorization: `Bearer ${credential}` } : {}), ...extra }, body: typeof body === 'string' ? body : JSON.stringify(body) });
   function hold(operation = 'add') { const value = { operation, entered: deferred(), release: deferred() }; barriers.push(value); pendingBarrier = value; return value; }
-  return { auth, events, bearer, session, origin, nativeStore, token, sdk, report, httpInvoke, raw, hold, rpcRequests, adapterOperations };
+  return { auth, events, bearer, session, origin, nativeStore, token, sdk, report, openWeb, webGet, webReport, httpInvoke, raw, hold, rpcRequests, adapterOperations };
 }
 async function failedTool(promise) {
   try { const value = await promise; assert.equal(value.isError, true); return value; }
@@ -165,14 +184,27 @@ test('native-browser MCP rejection, bad credentials and invalid JSON are ingress
 
 test('SDK cancellation after dispatch preserves the late real commit and an independent readback without duplicate calls', async t => {
   const f = await fixture(t), client = await f.sdk(), barrier = f.hold(), controller = new AbortController();
+  await f.openWeb();
   const pending = client.callTool({ name: 'reminder_add', arguments: { spaceId: 'space-a', item: { text: secret }, idempotencyKey: 'cancel-after-dispatch' } }, undefined, { signal: controller.signal });
   await barrier.entered.promise; assert.equal((await f.nativeStore.read()).data.pool.length, 0);
-  // Console requests take the policy gate held by the pending write. Inspect
-  // only this synthetic recorder while dispatch is deliberately paused.
-  const inFlight = f.events.tracePage({ source: 'mcp' }); assert.equal(inFlight.summary.total, 1); assert.equal(inFlight.summary.inProgress, 1); assert.equal(inFlight.items[0].durationMs, null);
+  // Exercise the real public gateway, including its Core web-access bootstrap,
+  // while a native app write deliberately holds the business serialization gate.
+  let inFlight;
+  try {
+    [inFlight] = await Promise.all([
+      f.webReport({}, { signal: AbortSignal.timeout(1500) }),
+      ...['/admin/', '/api/business/account/session'].map(async path => {
+        const response = await f.webGet(path, { signal: AbortSignal.timeout(1500) }); assert.equal(response.status, 200, `public gateway ${path} stays responsive during a write`);
+        if (path === '/admin/') assert.match(await response.text(), /<html/i);
+        else assert.equal(typeof await response.json(), 'object');
+      }),
+    ]);
+  }
+  catch (error) { controller.abort(); barrier.release.resolve(); await pending.catch(() => {}); throw error; }
+  assert.equal(inFlight.summary.total, 1); assert.equal(inFlight.summary.inProgress, 1); assert.equal(inFlight.items[0].durationMs, null);
   controller.abort(); await assert.rejects(pending);
   try {
-    const cancelled = await until(() => f.events.tracePage({ source: 'lifecycle', traceId: inFlight.items[0].lifecycleTraceId }), report => report.items[0]?.steps.some(step => step.stage === 'transport' && step.status === 'cancelled'), 'actual SDK cancellation notification reaches the running call');
+    const cancelled = await until(() => f.webReport({ source: 'lifecycle', traceId: inFlight.items[0].lifecycleTraceId }, { signal: AbortSignal.timeout(1500) }), report => report.items[0]?.steps.some(step => step.stage === 'transport' && step.status === 'cancelled'), 'actual SDK cancellation notification reaches the running call');
     assert.equal(cancelled.items[0].status, 'started', 'client cancellation cannot finalize an app operation still running'); assert.equal(cancelled.items[0].committed, false);
   } finally { barrier.release.resolve(); }
   const value = await until(() => f.report(), report => report.summary.total === 1 && report.items[0]?.status === 'cancelled' && report.items[0]?.lifecycleTraceId, 'cancelled call finishes without losing its lifecycle');

@@ -1,12 +1,12 @@
 # Praxis roadmap
 
-Version: 0.1.116
+Version: 0.1.117
 
 [简体中文](ROADMAP.md)
 
 ## MCP-first Trace acceptance
 
-Make real MCP calls the default Overview trace. Verify registered-tool success, denial, schema/unknown-tool errors, controls, cancellation and application commit/readback through the actual MCP endpoint with isolated synthetic data. Verify tool names, precise transport, safe caller correlation, call counts and latency against emitted requests; delegated HTTP must not increase MCP counts. Keep Polaris history available as supplementary context. Check both languages, narrow layouts, restart persistence and access boundaries, then deploy the affected workbench/Core pair.
+Make real MCP calls the default Overview trace. Verify registered-tool success, denial, schema/unknown-tool errors, controls, cancellation and application commit/readback through the actual MCP endpoint with isolated synthetic data. Verify tool names, precise transport, safe caller correlation, call counts and latency against emitted requests; delegated HTTP must not increase MCP counts. Keep Polaris history available as supplementary context. While a synthetic write is paused after dispatch, verify that the actual administrative Trace HTTP endpoint promptly reports the in-progress call without releasing business serialization. Check both languages, narrow layouts, restart persistence and access boundaries, then deploy the affected workbench/Core pair.
 
 ## App integration delivery
 
@@ -213,6 +213,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.114 | 2026-11-19 | Deliver app-owned cards, live data inventory, private card preferences and Overview business traces with expanded experience clues |
 | v0.1.115 | 2026-11-19 | Honor private reader ownership in card discovery and preferences |
 | v0.1.116 | 2026-11-19 | Prioritize actual MCP calls, outcomes and latency in Overview Trace |
+| v0.1.117 | 2026-11-20 | Keep MCP Trace monitoring responsive during in-flight business calls |
 
 ### Public applications with private collections
 

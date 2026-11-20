@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.116 · [简体中文](PRD.md)
+Version: 0.1.117 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -44,6 +44,8 @@ Add a Trace section to Settings → Overview for the business operation lifecycl
 ### MCP calls are the primary trace
 
 Overview → Trace defaults to actual MCP tool calls. Show the registered tool, time, safe caller/client references, outcome and duration, with aggregate call counts, failures and latency for the stated observation window. Follow a business call into its authorization, app dispatch, commit and readback where recorded. Rejections, schema failures, unknown tools, control calls and interrupted calls need truthful outcomes even when no app runs. Distinguish MCP transport from delegated HTTP and native web operations. A successful HTTP response alone does not mean a tool succeeded or that business data was committed.
+
+Trace metadata must remain readable while a tool invocation is queued or running. Read-only administrative monitoring does not wait behind unrelated business-operation route gates; business execution still holds its policy lease and serialization gate.
 
 Polaris contributes already-recorded workflow context as a supplementary trace source. Runtime history, historical authorization rows and app change events must not stand in for evidence of current MCP calls. Keep usage/experience clues expanded. Record allowlisted metadata without raw arguments, outputs, credentials, arbitrary tool names or private browsing history, and preserve current administrative and business-reference authorization.
 
@@ -152,6 +154,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.114 | 2026-11-19 | Deliver app-owned cards, live data inventory, private card preferences and Overview business traces with expanded experience clues |
 | v0.1.115 | 2026-11-19 | Honor private reader ownership in card discovery and preferences |
 | v0.1.116 | 2026-11-19 | Prioritize actual MCP calls, outcomes and latency in Overview Trace |
+| v0.1.117 | 2026-11-20 | Keep MCP Trace monitoring responsive during in-flight business calls |
 
 ### Letters and Profiles
 

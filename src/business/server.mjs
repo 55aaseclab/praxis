@@ -104,6 +104,35 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
           throw error;
         }
       }
+      // Keep authenticated monitoring and its page/bootstrap reads responsive
+      // while business writes retain their serialization gate and policy lease.
+      const monitorAuth = request.method === 'GET' && ['/auth/session', '/api/business/web-access'].includes(url.pathname);
+      const monitorAccount = request.method === 'GET' && url.pathname === '/api/business/account/session';
+      const monitorConsole = url.pathname.startsWith('/api/business/console/');
+      const monitorStatic = ['/admin', '/admin/'].includes(url.pathname) || Object.hasOwn(ADMIN_ASSETS, url.pathname);
+      if (monitorAuth || monitorAccount || monitorConsole || monitorStatic) {
+        if (origin && origin !== config.issuer && !(config.allowedOrigins || []).includes(origin)) throw businessError(403, 'ORIGIN_REJECTED');
+        if (monitorAuth && await handleAuth(request, response)) return;
+        if (monitorAccount && await handleAccount(request, response)) return;
+        if (monitorConsole && await handleConsole(request, response)) return;
+        if (['/admin', '/admin/'].includes(url.pathname) || Object.hasOwn(ADMIN_ASSETS, url.pathname)) {
+          const shared = ['/admin', '/admin/', '/admin.js', '/admin.css'].includes(url.pathname);
+          const authorizePage = () => shared ? requireAccountSession(request, { auth }) : requireConsoleAdmin(request, { auth, config });
+          try { authorizePage(); }
+          catch (error) {
+            if (error.status === 401 && !request.headers.authorization && ['/admin', '/admin/'].includes(url.pathname) && ['GET', 'HEAD'].includes(request.method)) {
+              response.writeHead(303, { Location: '/auth/login?return_to=%2Fadmin%2F', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }); response.end(); return;
+            }
+            throw error;
+          }
+          if (!['GET', 'HEAD'].includes(request.method)) return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET, HEAD' });
+          const asset = ADMIN_ASSETS[url.pathname] || ['admin.html', 'text/html'];
+          const content = await readFile(asset[0] instanceof URL ? asset[0] : new URL(`../../public/${asset[0]}`, import.meta.url));
+          authorizePage();
+          response.writeHead(200, { 'Content-Type': `${asset[1]}; charset=utf-8`, 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', Vary: 'Cookie' });
+          response.end(request.method === 'HEAD' ? undefined : content); return;
+        }
+      }
       if (await gate.run(() => handleAuth(request, response))) return;
       if (origin && origin !== config.issuer && !(config.allowedOrigins || []).includes(origin)) throw businessError(403, 'ORIGIN_REJECTED');
       if (await handleSlidesJobAuthorization(request, response)) return;
@@ -111,24 +140,6 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
       if (await gate.run(() => handleAccount(request, response))) return;
       if (await gate.run(() => handleMcpManagement(request, response))) return;
       if (await gate.run(() => handleAdmin(request, response))) return;
-      if (['/admin', '/admin/'].includes(url.pathname) || Object.hasOwn(ADMIN_ASSETS, url.pathname)) {
-        const shared = ['/admin', '/admin/', '/admin.js', '/admin.css'].includes(url.pathname);
-        const authorizePage = () => shared ? requireAccountSession(request, { auth }) : requireConsoleAdmin(request, { auth, config });
-        try { authorizePage(); }
-        catch (error) {
-          if (error.status === 401 && !request.headers.authorization && ['/admin', '/admin/'].includes(url.pathname) && ['GET', 'HEAD'].includes(request.method)) {
-            response.writeHead(303, { Location: '/auth/login?return_to=%2Fadmin%2F', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }); response.end(); return;
-          }
-          throw error;
-        }
-        if (!['GET', 'HEAD'].includes(request.method)) return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET, HEAD' });
-        const asset = ADMIN_ASSETS[url.pathname] || ['admin.html', 'text/html'];
-        const content = await readFile(asset[0] instanceof URL ? asset[0] : new URL(`../../public/${asset[0]}`, import.meta.url));
-        authorizePage();
-        response.writeHead(200, { 'Content-Type': `${asset[1]}; charset=utf-8`, 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', Vary: 'Cookie' });
-        response.end(request.method === 'HEAD' ? undefined : content); return;
-      }
-      if (await handleConsole(request, response)) return;
       if (url.pathname === '/health' && request.method === 'GET') return json(response, collectionErrors.size ? 503 : 200, { status: collectionErrors.size ? 'degraded' : 'ok', version });
       if (['/', '/business', '/business/', '/business.html'].includes(url.pathname)) {
         if (!['GET', 'HEAD'].includes(request.method)) return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET, HEAD' });
