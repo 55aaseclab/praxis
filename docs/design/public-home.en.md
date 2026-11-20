@@ -75,6 +75,10 @@ The hosted flow copies the exact README OAuth prompt, opens the existing workben
 
 ## Interaction and accessibility
 
+The footer uses © with the current year and a 55AA Security Lab link to https://www.55aaseclab.com/ in both editions, replacing the repeated product tagline.
+
+
+
 Deployment assets use content-hashed CSS/JavaScript paths. HTML and legacy unversioned aliases revalidate rather than staying fresh independently; immutable caching applies only to exact content-addressed assets. This prevents the observed mixed-version header and missing demo spacing after an upgrade.
 
 

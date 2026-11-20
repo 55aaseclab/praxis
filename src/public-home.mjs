@@ -56,7 +56,6 @@ const copy = {
       ['Can I build and host my own app?', 'Yes. Use the app standard to register an independent app. Managed deployment also needs its reviewed integration and explicit installation configuration.'],
       ['Can I see what my agent did?', 'Settings includes Trace for actual MCP calls and supplemental runtime observations. Full-business-process analysis and workflow improvement remain product goals.'],
     ],
-    tagline: 'Apps for work delegated to agents. Results for people.',
     resources: 'Resources', docs: 'Documentation', contribute: 'Contribute',
   },
   zh: {
@@ -106,7 +105,6 @@ const copy = {
       ['能开发和部署自己的应用吗？', '可以。按照应用标准登记独立应用；受管部署还需要审核过的集成和明确的安装配置。'],
       ['能查看智能体做过哪些操作吗？', '设置中的 Trace 展示实际 MCP 调用及补充的运行观察。覆盖完整业务过程的分析与流程改进仍属于产品目标。'],
     ],
-    tagline: '把日常工作交给智能体，把结果交给人。',
     resources: '相关资源', docs: '文档', contribute: '参与贡献',
   },
 };
@@ -158,7 +156,7 @@ docker compose up --build -d --wait</code></pre><p class="small">${texts.credent
   scripts/builtin-install.mjs credentials</code></pre><p class="small">${texts.thenOpen}</p></div></section>
 <section class="faq wrap" aria-labelledby="faq-heading"><h2 id="faq-heading">${texts.faqHeading}</h2><div>${texts.faq.map(([question, answer]) => `<div><h3>${question}</h3><p>${answer}</p></div>`).join('')}</div></section>
 </main>
-<footer class="wrap"><div><a class="brand" href="${texts.home}"><img src="${icon}" width="26" height="26" alt="">Praxis</a><p>${texts.tagline}</p></div><nav aria-label="${texts.resources}"><a href="https://github.com/55aaseclab/praxis/blob/main/docs/README.md">${texts.docs}</a><a href="https://github.com/55aaseclab/praxis/blob/main/CONTRIBUTING.md">${texts.contribute}</a><a href="https://github.com/55aaseclab/praxis">GitHub</a></nav></footer>
+<footer class="wrap"><div><a class="brand" href="${texts.home}"><img src="${icon}" width="26" height="26" alt="">Praxis</a><p>© ${new Date().getUTCFullYear()} <a href="https://www.55aaseclab.com/">55AA Security Lab</a></p></div><nav aria-label="${texts.resources}"><a href="https://github.com/55aaseclab/praxis/blob/main/docs/README.md">${texts.docs}</a><a href="https://github.com/55aaseclab/praxis/blob/main/CONTRIBUTING.md">${texts.contribute}</a><a href="https://github.com/55aaseclab/praxis">GitHub</a></nav></footer>
 </body></html>`;
 }
 

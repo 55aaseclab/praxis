@@ -52,6 +52,10 @@
 
 ## 交互与可访问性
 
+双语页脚均使用 ©、当前年份及链接 https://www.55aaseclab.com/ 的 55AA Security Lab 版权署名，替代重复产品宣传语。
+
+
+
 部署资源使用带内容摘要的 CSS/JavaScript 路径。HTML 及旧无版本别名重新校验，不再各自独立保持新鲜缓存；仅精确摘要资源采用 immutable 缓存，避免升级后出现已复现的 header 混排和演示间距丢失。
 
 

@@ -45,6 +45,8 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.match(html, /property="og:image" content="https:\/\/public-home\.synthetic\.test\/home-images\/workbench-en\.png"/);
   assert.doesNotMatch(html, /noindex/);
   assert.doesNotMatch(html, /About Praxis/);
+  assert.match(html, /© \d{4} <a href="https:\/\/www\.55aaseclab\.com\/">55AA Security Lab<\/a>/);
+  assert.doesNotMatch(html, /Apps for work delegated to agents\. Results for people\./);
   assert.doesNotMatch(html, /Ask for an outcome\. Choose what your agent can access\./);
   assert.match(html, /<header class="site-header"><div class="header-inner wrap"/);
   assert.match(html, /<div class="hero-intro"><h1[^>]*>[\s\S]*?<\/h1><div class="hero-actions">[\s\S]*?<\/div><\/div><figure class="product-example hero-demo">/);
@@ -69,6 +71,8 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.equal(chinese.status, 200);
   const zhHtml = await chinese.text();
   assert.match(zhHtml, /<html lang="zh-CN">/);
+  assert.match(zhHtml, /© \d{4} <a href="https:\/\/www\.55aaseclab\.com\/">55AA Security Lab<\/a>/);
+  assert.doesNotMatch(zhHtml, /把日常工作交给智能体，把结果交给人。/);
   assert.match(zhHtml, new RegExp(`<link rel="canonical" href="${canonical}/zh-cn/">`));
   assert.match(zhHtml, /为你的 AI 智能体，<br>准备一个自己的工作台。/);
   assert.match(zhHtml, /授权。提问。查看结果。/);

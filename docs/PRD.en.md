@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.133 · [简体中文](PRD.md)
+Version: 0.1.134 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -12,7 +12,7 @@ Provide complete English and Simplified Chinese HTML editions with ordinary navi
 
 Keep the public page’s sticky navigation, title-only hero with two actions, full-width autoplaying example below it, Authorize → Ask → Review order and result-card design preview after the app directory. Preserve reduced-motion/no-JavaScript fallback and public SEO metadata while improving visual hierarchy. Homepage HTML must revalidate on navigation; CSS/JavaScript URLs include their content hash so deployments cannot combine new markup with an old cached asset.
 
-The public homepage describes cards as attention management: choose what to focus on, defer or hide, without treating reading as acceptance. Remove the two demo caption lines, keep only necessary motion controls, stack the app-directory title and description, and present the ownership heading on the left and two concise data/access and trace entries stacked on the right, collapsing to one column on phones. Include Documentation and Contribute in the sticky header in both languages.
+The public homepage describes cards as attention management: choose what to focus on, defer or hide, without treating reading as acceptance. Remove the two demo caption lines, keep only necessary motion controls, stack the app-directory title and description, and present the ownership heading on the left and two concise data/access and trace entries stacked on the right, collapsing to one column on phones. Include Documentation and Contribute in the sticky header in both languages. Replace the repeated footer tagline with a copyright notice linking 55AA Security Lab to https://www.55aaseclab.com/.
 
 ## External agent tools and authorization
 
@@ -215,6 +215,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.131 | 2026-11-20 | Version homepage assets by content to prevent mixed cached layouts after deployment |
 | v0.1.132 | 2026-11-20 | Refocus homepage cards on attention and simplify content with documentation and contribution navigation |
 | v0.1.133 | 2026-11-20 | Restore the homepage ownership section to a left-heading and right-copy layout |
+| v0.1.134 | 2026-11-20 | Replace the repeated homepage footer tagline with 55AA Security Lab copyright attribution |
 
 ### Letters and Profiles
 
