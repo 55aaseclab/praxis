@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.134 · [简体中文](PRD.md)
+Version: 0.1.135 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -62,6 +62,10 @@ In Settings → Data, location values and the workspace alias are consistent pre
 Show copying/success/failure in an existing fixed icon slot, with a visually hidden live announcement. Never insert a “Copied” line below a value or change row, table or page geometry. Keep the full value readable during feedback; repeated copies, error/recovery and returning to idle must not flash or move the content. Clipboard failure must remain truthful and expose manual selection. Preserve focus and scroll in clipboard fallback. An unchanged inventory refresh updates its timestamp without replacing the controls, closing a preview or clearing copy feedback; changed/cleared data and identity changes remove stale previews. Verify both languages, mouse hover, keyboard and touch at desktop and phone widths using synthetic values.
 
 ## App cards, live data inventory and business traces
+
+Selecting card text with a mouse or pen and releasing it must preserve the selection and current card. Only a primary touch gesture may swipe between cards; ignore selection, interactive controls, cancelled gestures and modified selection keys. Keep explicit previous/next buttons and unmodified arrow-key navigation.
+
+
 
 Implement the approved [card design](design/workbench-cards.en.md) and its prototype, including result/question previews, expandable source evidence, one native primary entry, a finite queue and list, private Later/Hide this version with Undo, and Home returning to the selected card and position. Keep both workbench views top-aligned, language in Settings and the existing bottom-bar icon switch. Browsing does not acknowledge, accept or complete a business item; personal presentation state never changes a source deadline or becomes a colleague-visible read receipt.
 
@@ -216,6 +220,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.132 | 2026-11-20 | Refocus homepage cards on attention and simplify content with documentation and contribution navigation |
 | v0.1.133 | 2026-11-20 | Restore the homepage ownership section to a left-heading and right-copy layout |
 | v0.1.134 | 2026-11-20 | Replace the repeated homepage footer tagline with 55AA Security Lab copyright attribution |
+| v0.1.135 | 2026-11-20 | Preserve card text selection and restrict swipe navigation to primary touch gestures |
 
 ### Letters and Profiles
 

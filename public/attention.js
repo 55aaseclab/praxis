@@ -11,6 +11,7 @@ let owner = '', deniedOwner = '', request, preferenceRequest, preferences = null
 let opened = new Set(), menu = '', mutation = null, lastAction = null, personalError = '', restoring = null;
 let listDialog, toast, timer;
 const origin = () => location.origin;
+const hasTextSelection = () => document.getSelection?.()?.isCollapsed === false;
 const identityKey = value => value?.workbench && (value?.apps?.length || value.documentOwner === true || value.platformAdmin === true)
   ? JSON.stringify([value.userId || value.username, value.csrfToken, value.apps, value.documentOwner === true, value.documentOwners || []]) : '';
 const label = value => localizedText(value, locale());
@@ -170,9 +171,19 @@ function renderCard(item) {
   const more = menuControl('more', t('More options', '更多选项'), [{ text: t('Hide this version', '隐藏这个版本'), run: () => choosePreference(item, 'hidden') }]);
   more.classList.add('attention-overflow'); actions.append(later, more); card.append(actions);
   let start;
-  card.addEventListener('pointerdown', event => { if (!event.target.closest('a,button,summary')) start = [event.clientX, event.clientY]; });
-  card.addEventListener('pointerup', event => { if (!start) return; const dx = event.clientX - start[0], dy = event.clientY - start[1]; start = null; if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) turn(dx < 0 ? 1 : -1); });
-  card.addEventListener('pointercancel', () => { start = null; }); return card;
+  card.addEventListener('pointerdown', event => {
+    start = null;
+    if (event.pointerType !== 'touch' || !event.isPrimary || hasTextSelection() || event.target.closest('a,button,summary,input,select,textarea,[contenteditable]')) return;
+    start = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  });
+  card.addEventListener('pointerup', event => {
+    const gesture = start; start = null;
+    if (!gesture || event.pointerType !== 'touch' || event.pointerId !== gesture.id || hasTextSelection()) return;
+    const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) turn(dx < 0 ? 1 : -1);
+  });
+  card.addEventListener('pointercancel', () => { start = null; });
+  card.addEventListener('lostpointercapture', () => { start = null; }); return card;
 }
 function menuControl(name, text, entries) {
   const wrap = element('div', 'attention-menu-wrap'), toggle = button(name === 'more' ? '' : text, () => {
@@ -349,6 +360,7 @@ if (root) {
       }
     }
     if (program !== 'attention' || listDialog?.open || !root.contains(event.target) || event.target.closest('a,button,summary,input,select,textarea')) return;
+    if (event.defaultPrevented || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey || hasTextSelection()) return;
     if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); turn(event.key === 'ArrowLeft' ? -1 : 1); }
   });
   timer = setInterval(refresh, 60000);

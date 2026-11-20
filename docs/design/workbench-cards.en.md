@@ -39,11 +39,15 @@ Synthetic examples in the prototype cover a revised fieldwork brief, a personal 
 
 Reading, deferral and personal display preferences stay separate from shared business progress. Workflow traces can record authorized committed actions, source versions and explicit decisions. Personal browsing is not a team performance feed. Security access logs retain their separate authorization and retention rules.
 
+## Text-selection regression
+
+The real mouse-selection release reproduced the previous-card bug before the fix. The synthetic browser regression now covers retained selection and native clipboard copy, selection/modifier-key protection, primary-touch navigation in both directions (including browser-generated touch events), cancellation, interactive controls and keyboard navigation in English/Chinese at1440px and390px. Run `tests/browser/attention-selection.mjs` with `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` pointing to the installed browser tooling; optional `PRAXIS_BROWSER_EVIDENCE_DIR` selects an external evidence directory. No private records are used.
+
 ## Visual and interaction language
 
 Use the current gray workbench canvas, white cards, native system typography and pine-green actions. A single source accent identifies context. Dates use ordinary text; the interface does not turn every deadline into an alarm. Preserve existing navigation and the app-owned result view.
 
-Use a clear title, a compact preview and quieter source metadata. Keep evidence expandable. Do not put several competing primary actions on a card. A visible focus ring, 44 CSS px targets and normal vertical scrolling apply on desktop and phone. Horizontal swipes remain optional; buttons and keyboard controls provide equivalent navigation.
+Use a clear title, a compact preview and quieter source metadata. Keep evidence expandable. Do not put several competing primary actions on a card. A visible focus ring, 44 CSS px targets and normal vertical scrolling apply on desktop and phone. Horizontal swipes remain optional; buttons and keyboard controls provide equivalent navigation. Mouse and pen drags select text without turning a card. Only a primary touch can start a swipe; a noncollapsed selection, interactive control, cancelled gesture or modified selection key must never turn the card.
 
 Open enters the owning app at the particular object. Home returns to the same card and safe scroll position. Any future consequential mutation belongs to the owning app's typed, version-checked and authorized operation, with explicit intent and readback.
 

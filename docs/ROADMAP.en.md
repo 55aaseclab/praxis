@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.134
+Version: 0.1.135
 
 [简体中文](ROADMAP.md)
 
@@ -249,6 +249,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.132 | 2026-11-20 | Refocus homepage cards on attention and simplify content with documentation and contribution navigation |
 | v0.1.133 | 2026-11-20 | Restore the homepage ownership section to a left-heading and right-copy layout |
 | v0.1.134 | 2026-11-20 | Replace the repeated homepage footer tagline with 55AA Security Lab copyright attribution |
+| v0.1.135 | 2026-11-20 | Preserve card text selection and restrict swipe navigation to primary touch gestures |
 
 ### Public applications with private collections
 
