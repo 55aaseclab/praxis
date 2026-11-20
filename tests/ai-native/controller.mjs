@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, chmodSync, realpathSync, existsSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash, createPublicKey, randomUUID, sign, verify } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { actorKey, actorKeys, campaignFor, campaigns, destinations, draw, models } from './campaigns.mjs';
 
 const repoRoot = realpathSync(fileURLToPath(new URL('../../', import.meta.url)));
@@ -38,7 +38,7 @@ function binding(value) {
   return structuredClone(value);
 }
 export function validateConfig(input) {
-  requireValue(exact(input, ['coordinator', 'maintenance', 'maintenanceTargets', 'actors', 'approvalPublicKey', 'investment']), 'Invalid campaign configuration.');
+  requireValue(exact(input, ['coordinator', 'maintenance', 'maintenanceTargets', 'actors', 'origin', 'investment']), 'Invalid campaign configuration.');
   const config = { coordinator: binding(input.coordinator), maintenance: binding(input.maintenance), actors: {} };
   requireValue(input.maintenanceTargets === undefined || Array.isArray(input.maintenanceTargets), 'maintenanceTargets must be an array of owning-repository bindings.');
   config.maintenanceTargets = (input.maintenanceTargets || []).map(binding);
@@ -50,9 +50,11 @@ export function validateConfig(input) {
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
     if ((all[i].host || 'self') === (all[j].host || 'self')) requireValue(!inside(resolve(all[i].cwd), resolve(all[j].cwd)) && !inside(resolve(all[j].cwd), resolve(all[i].cwd)), 'Role working directories must be separate.');
   }
-  const publicKey = createPublicKey(input.approvalPublicKey);
-  requireValue(publicKey.asymmetricKeyType === 'ed25519', 'Use an Ed25519 human approval key.');
-  config.approvalPublicKey = publicKey.export({ type: 'spki', format: 'pem' });
+  if (input.origin !== undefined) {
+    const origin = new URL(input.origin);
+    requireValue(origin.protocol === 'https:' && !origin.username && !origin.password && origin.pathname === '/' && !origin.search && !origin.hash, 'Use a public canonical HTTPS origin without credentials.');
+    config.origin = origin.origin;
+  }
   if (input.investment !== undefined) {
     requireValue(exact(input.investment, ['market', 'horizon', 'asOf']) && ['market', 'horizon', 'asOf'].every(k => nonempty(input.investment[k])) && Number.isFinite(Date.parse(input.investment.asOf)), 'Investment requires market, horizon and an ISO asOf timestamp.');
     config.investment = structuredClone(input.investment);
@@ -68,10 +70,6 @@ export function validatePacket(packet) {
   requireValue(Array.isArray(packet.files) && packet.files.length > 0 && packet.files.every(p => nonempty(p) && !isAbsolute(p) && !p.split(/[\\/]/).includes('..')), 'Packet files must be relative code paths.');
   requireValue(Array.isArray(packet.verification) && packet.verification.length > 0 && packet.verification.every(nonempty), 'A technical verification plan is required.');
   return structuredClone(packet);
-}
-
-export function signApproval(challenge, privateKey) {
-  return { challenge, signature: sign(null, Buffer.from(canonical(challenge)), privateKey).toString('base64') };
 }
 
 export class Controller {
@@ -137,7 +135,7 @@ export class Controller {
     return Object.values(s.tasks).filter(t => t.status === 'queued' && t.dependsOn.every(id => ['passed', 'not_applicable'].includes(s.tasks[id].status)))
       .sort((a, b) => Number(Boolean(b.repairId)) - Number(Boolean(a.repairId)) || a.attempts.length - b.attempts.length)[0] || null;
   }
-  reserve(kind, id, approval) {
+  reserve(kind, id) {
     return this.change(s => {
       requireValue(!s.paused, 'Campaign is paused.');
       requireValue(['worker', 'coordinator', 'maintenance'].includes(kind), 'Unknown dispatch kind.');
@@ -150,14 +148,9 @@ export class Controller {
         key = subject.actor; target = s.config.actors[key]; subject.status = 'running';
       } else if (kind === 'maintenance') {
         subject = requireValue(s.repairs[id], 'Unknown repair.');
-        requireValue(subject.status === 'pending_approval', 'This repair invocation is no longer awaiting approval.');
-        requireValue(hash(validatePacket(subject.packet)) === subject.packetHash, 'Technical packet changed after review.');
-        const ch = approval?.challenge;
-        requireValue(exact(approval, ['challenge', 'signature']) && exact(ch, ['runId', 'requestId', 'packetHash', 'expiresAt']) && Object.keys(ch).length === 4, 'A human signed approval is required.');
-        const expiry = Date.parse(ch.expiresAt);
-        requireValue(ch.runId === s.runId && ch.requestId === id && ch.packetHash === subject.packetHash && expiry > Date.now() && expiry <= Date.now() + 86400000, 'Approval scope or expiry is invalid.');
-        requireValue(verify(null, Buffer.from(canonical(ch)), s.config.approvalPublicKey, Buffer.from(approval.signature || '', 'base64')), 'Invalid human approval signature.');
-        subject.status = 'running'; subject.approval = { ...ch, consumedAt: new Date().toISOString() };
+        requireValue(subject.status === 'approved' && subject.approval && !subject.approval.consumedAt, 'Explicit human confirmation in Paseo is required for this invocation.');
+        requireValue(hash(validatePacket(subject.packet)) === subject.packetHash && subject.approval.packetHash === subject.packetHash, 'Technical packet changed after human confirmation.');
+        subject.status = 'running'; subject.approval.consumedAt = new Date().toISOString();
         target = subject.binding;
       } else { key = 'coordinator'; target = s.config.coordinator; }
       const d = { id: randomUUID(), kind, subjectId: id || null, key: key || null, binding: target, model: models[kind], agentId: key ? s.sessions[key] || null : null, status: 'reserved', createdAt: new Date().toISOString() };
@@ -186,10 +179,9 @@ export class Controller {
     });
   }
   uncertain(id) { return this.change(s => { const d = requireValue(s.dispatches[id], 'Unknown dispatch.'); requireValue(active(d), 'Dispatch is already settled.'); d.status = 'uncertain'; this.event(s, 'dispatch_uncertain', id); }); }
-  resolveDispatch({ resolution, signature }) {
+  resolveDispatch({ resolution }) {
     return this.change(s => {
-      requireValue(exact(resolution, ['runId', 'dispatchId', 'agentId', 'decision', 'evidence', 'expiresAt']) && Object.keys(resolution).length === 6 && resolution.runId === s.runId && nonempty(resolution.evidence) && Date.parse(resolution.expiresAt) > Date.now() && Date.parse(resolution.expiresAt) <= Date.now() + 86400000, 'A scoped, unexpired operator resolution is required.');
-      requireValue(verify(null, Buffer.from(canonical(resolution)), s.config.approvalPublicKey, Buffer.from(signature || '', 'base64')), 'Invalid operator resolution signature.');
+      requireValue(exact(resolution, ['runId', 'dispatchId', 'agentId', 'decision', 'evidence', 'questionId', 'replyReference', 'answer']) && Object.keys(resolution).length === 8 && resolution.runId === s.runId && ['evidence', 'questionId', 'replyReference', 'answer'].every(k => nonempty(resolution[k])), 'Record the explicit Paseo human reply and scope for this resolution.');
       const d = requireValue(s.dispatches[resolution.dispatchId], 'Unknown dispatch.');
       requireValue(['reserved', 'uncertain'].includes(d.status) || d.status === 'running' && !d.observedRunning, 'Dispatch is not unresolved.');
       if (resolution.decision === 'delivered') {
@@ -250,15 +242,32 @@ export class Controller {
       return { requestId: r.id, packetHash, status: r.status };
     });
   }
-  challenge(id, expiresAt = new Date(Date.now() + 3600000).toISOString()) {
-    const s = this.read(), r = requireValue(s.repairs[id], 'Unknown repair.');
-    requireValue(r.status === 'pending_approval', 'Repair is not awaiting approval.');
-    return { runId: s.runId, requestId: id, packetHash: r.packetHash, expiresAt };
+  approvalRequest(id) {
+    return this.change(s => {
+      const r = requireValue(s.repairs[id], 'Unknown repair.');
+      requireValue(r.status === 'pending_approval', 'Repair is not awaiting a human answer.');
+      requireValue(hash(validatePacket(r.packet)) === r.packetHash, 'Technical packet changed; create a new repair request.');
+      r.question ||= { id: randomUUID(), packetHash: r.packetHash, askedAt: new Date().toISOString() };
+      return { requestId: id, questionId: r.question.id, packetHash: r.packetHash, status: 'waiting_for_human',
+        question: s.locale === 'zh' ? '是否批准下方技术问题包所述的本次维护？请在 Paseo 明确批准或拒绝；未回复时不会启动 Maintenance。' : 'Approve this Maintenance invocation for the technical packet below? Answer explicitly in Paseo; no answer leaves Maintenance blocked.', packet: r.packet };
+    });
+  }
+  confirmApproval(id, reply) {
+    return this.change(s => {
+      const r = requireValue(s.repairs[id], 'Unknown repair.');
+      requireValue(r.status === 'pending_approval' && r.question, 'Ask the human in Paseo before recording a decision.');
+      requireValue(exact(reply, ['questionId', 'replyReference', 'answer', 'decision']) && Object.keys(reply).length === 4 && ['questionId', 'replyReference', 'answer'].every(k => nonempty(reply[k])) && ['approve', 'reject'].includes(reply.decision), 'Record an explicit human approve/reject reply from Paseo; unanswered or ambiguous questions are not approval.');
+      requireValue(reply.questionId === r.question.id && r.question.packetHash === r.packetHash && hash(validatePacket(r.packet)) === r.packetHash, 'Human reply scope does not match the current question and packet.');
+      r.approval = { ...structuredClone(reply), packetHash: r.packetHash, recordedAt: new Date().toISOString() };
+      r.status = reply.decision === 'approve' ? 'approved' : 'rejected';
+      this.event(s, 'human_decision_recorded', id);
+      return { requestId: id, status: r.status };
+    });
   }
   reject(id, reason) {
     return this.change(s => {
       const r = requireValue(s.repairs[id], 'Unknown repair.');
-      requireValue(['pending_approval', 'awaiting_release', 'ready'].includes(r.status) && nonempty(reason), 'Cannot reject an active or unknown repair.');
+      requireValue(['pending_approval', 'approved', 'awaiting_release', 'ready'].includes(r.status) && nonempty(reason), 'Cannot reject an active or unknown repair.');
       r.status = 'rejected'; r.reason = reason; this.event(s, 'repair_rejected', id);
     });
   }

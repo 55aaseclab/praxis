@@ -20,20 +20,20 @@ Personality 影响选择，不是固定剧本。情境抽样种子和结果按�
 
 ## 先配置，不启动
 
-需要 Node 22.16+ 的 SQLite 和已安装的 Paseo CLI。一个状态文件定义**本测试安装的全局槽**，不得另开副本绕过。状态、配置、审批、证据、客户端工作文件保存在 Git 外。SQLite 文件权限0600，新父目录0700。状态不是应用存储，不含签名私钥，其目录由预期主控身份保护。
+需要 Node 22.16+ 的 SQLite 和已安装的 Paseo CLI。一个状态文件定义**本测试安装的全局槽**，不得另开副本绕过。状态、配置、审批、证据、客户端工作文件保存在 Git 外。SQLite 文件权限0600，新父目录0700。状态不是应用存储，也不需要审批密钥，其目录由预期主控身份保护。
 
 为主控、九位业务角色和 Maintenance 分配独立 Paseo 工作区。角色各有业务账户和指向指定测试环境的 scoped OAuth/MCP 连接，不复制管理员或备份凭据。主控可操作框架，无权自行修代码。Maintenance 只获得源码工作区和合成夹具环境。先发现 Paseo 主机与 profiles；源码验证时没有已配置 profile，故使用已发现的精确模型。binding 可选 `host` 指定 CLI 端点，路径与 workspace ID 均属于目标端点；host 字符串不嵌入凭据。
 
-**人工签名私钥必须对所有 agent 不可访问。** 使用独立 operator OS 身份/主机、硬件签名器或等价隔离。同一无限制 OS 用户的不同工作区不提供这种保护。JSON 声明或 agent 自己能改的文件不代表人工确认。框架验证 Ed25519 签名，但不会替你隔离 OS 身份或识别文本的业务语义。
+建号、建团队、同意和业务操作**仅经公开支持界面、已文档化公开 API 或公开 MCP**。不调用内部/未公开端点、管理员 bootstrap、SQL、高权限辅助工具或服务端文件补流程。保留正常客户端工具及文档化本地框架命令；缺少公开入组流程就是测试结果，不代替客户端从后台建号。
 
-由 operator 身份使用适合的密钥工具生成 Ed25519 密钥。OpenSSL 示例：`openssl genpkey -algorithm ED25519 -out private.pem`，再运行 `openssl pkey -in private.pem -pubout -out public.pem`；私钥位于私有目录、权限0600。配置仅提供**公钥 PEM**。不要在业务 agent 会话里执行密钥生成。
+人工审批直接在 Paseo 提问与回复，不生成密钥、不配签名服务，也不要求 operator 密钥即可开始测试。
 
 ```sh
 npm run ai-native -- config-example
 npm run ai-native -- help --lang zh
 ```
 
-按输出模板替换工作区、路径与公钥。尚未确定投资市场、期限和 ISO 信息截止时点时移除 `investment`。九个角色 key 固定，每个工作区独立。配置不含 OAuth token，直接在相应获授权客户端内配置。
+按输出模板替换工作区、路径并设置公开 canonical HTTPS `origin`。尚未确定投资市场、期限和 ISO 信息截止时点时移除 `investment`。九个角色 key 固定，每个工作区独立。配置不含 OAuth token，直接在相应获授权客户端内配置。
 
 ```sh
 node tests/ai-native/cli.mjs init --state /private/testing/campaign.sqlite --input /private/testing/config.json --lang zh --seed campaign-1
@@ -46,7 +46,7 @@ node tests/ai-native/cli.mjs report --state /private/testing/campaign.sqlite --l
 
 ## 通过 Paseo 启动与推进
 
-仅在测试环境、身份、凭据与审批公钥齐备后：
+仅在测试环境、身份与凭据齐备后：
 
 ```sh
 node tests/ai-native/cli.mjs resume --state /private/testing/campaign.sqlite
@@ -55,7 +55,7 @@ node tests/ai-native/cli.mjs coordinator --state /private/testing/campaign.sqlit
 
 在指定工作区启动或恢复 main 主控。主控通过 `status`、`next`、`dispatch --task ID` 派发，角色结束本轮后 `collect --dispatch ID`。各角色复用状态中保存的原会话。恢复和回收前核对实际 provider/model/mode/cwd；新建时明确绑定工作区。提示词不产生权限，仍须按 C01 等验收检查真实 OAuth、发现、grants 和应用结果。
 
-`collect` 必须先观察本次派发进入 running，再在 idle/error 时释放占槽，排队中的空闲接收者不能释放。极短任务若未观察到 running，保留为 `awaiting_start_evidence`，须依据实际执行证据取得人工签名核对结果。回收不表示业务成功。用 `verify --task ID --input /private/testing/evidence.json` 提交独立证据：
+`collect` 必须先观察本次派发进入 running，再在 idle/error 时释放占槽，排队中的空闲接收者不能释放。极短任务若未观察到 running，保留为 `awaiting_start_evidence`，须依据实际执行证据在 Paseo 取得明确人工核对结果。回收不表示业务成功。用 `verify --task ID --input /private/testing/evidence.json` 提交独立证据：
 
 ```json
 {
@@ -94,27 +94,28 @@ node tests/ai-native/cli.mjs repair --state /private/testing/campaign.sqlite --t
 node tests/ai-native/cli.mjs approval-request --state /private/testing/campaign.sqlite --request REQUEST_ID --out /private/testing/review.json
 ```
 
-仅把待审技术包交给**人工 operator**，由其检查后在独立身份下执行：
+主控通过正常 question 工具在 Paseo 展示精确技术问题包和范围；没有该工具时在 Paseo 会话中提问。由你直接批准或拒绝。未回复时保持阻塞，询问含义也不算批准，不要求签文件或配置密钥。
 
-```sh
-node tests/ai-native/cli.mjs sign --input /operator/review.json --key /operator/private.pem --out /operator/approval.json
+收到实际明确人工答复后，主控才在私有 JSON 记录问题标识、原答复、回复引用与决定：
+
+```json
+{"questionId":"approval-request 返回的问题标识","replyReference":"paseo:用户消息或权限答复标识","answer":"批准本次维护","decision":"approve"}
 ```
 
-只返回签名结果，再派发：
-
 ```sh
-node tests/ai-native/cli.mjs maintenance --state /private/testing/campaign.sqlite --request REQUEST_ID --input /private/testing/approval.json
+node tests/ai-native/cli.mjs approve --state /private/testing/campaign.sqlite --request REQUEST_ID --input /private/testing/paseo-reply.json
+node tests/ai-native/cli.mjs maintenance --state /private/testing/campaign.sqlite --request REQUEST_ID
 ```
 
-审批绑定 run ID、request ID、精确规范问题包 SHA-256 和期限，派发时剩余期限不超过24小时。Paseo 调用前即消耗，不能重复用或授权下一次介入。每次新建干净的纯技术 Maintenance 会话。拒绝或未成功的已完成介入可用 `reject --request ID --reason 文本` 结束，再创建新 repair 并重新确认。包内容变化须新请求，旧签名无效。正常 shell 保留，门槛依靠私钥隔离而非提示词保密。
+拒绝用 `decision: "reject"`，不得编造或自答。回执是会话流程审计，不是防能修改框架/状态的任意客户端的身份安全边界。确认绑定问题和精确包摘要，Paseo 调用前单次消耗，不能授权下一次介入。每次新建纯技术维护会话。拒绝或失败的已完成介入可用 `reject --request ID --reason 文本` 结束，再发起新问题。扩大范围须新提问和人工答复。此次源码纠正由你明确要求改用 Paseo 提问授权，后续仍逐次确认。
 
-回收完成的维护会话。通过 `release --request ID --input RELEASE.json` 提交 `version`、源码 `commit`、合成 `verification` 引用和测试环境实际 `deploymentEvidence`，不包含业务正文。再 `retry --task ID --reason 文本`，原角色在指定运行版本从原断点复测，验收版本必须匹配。失败后不能对同一修复版本无限重跑，需新修复/新审批。无关的暂时连接故障可以明确说明原因后重试；其他失败保持阻塞。此次框架搭建由用户实施指令授权，未来每次测试维护仍须独立签名确认。
+回收完成的维护会话。通过 `release --request ID --input RELEASE.json` 提交 `version`、源码 `commit`、合成 `verification` 引用和测试环境实际 `deploymentEvidence`，不包含业务正文。再 `retry --task ID --reason 文本`，原角色在指定运行版本从原断点复测，验收版本必须匹配。失败后不能对同一修复版本无限重跑，需新修复/新审批。无关的暂时连接故障可以明确说明原因后重试；其他失败保持阻塞。此次框架搭建由用户实施指令授权，未来每次测试维护仍须在 Paseo 明确人工确认。
 
 ## 中断与不明派发
 
 SQLite 事务跨进程序列化预留，占槽不自动过期；调用 Paseo create/send 前先提交预留。CLI 回执丢失进入 `uncertain`。`reconcile --dispatch ID` 用不透明派发 label 查找新会话，只有一个精确匹配且身份/模型正确时才接管。零或多个匹配保持阻塞。send 回执丢失需要 operator 证据，不能凭 idle 判断消息已交付或未接受。
 
-人工核对时，在 Maintenance 之外检查真实 Paseo 队列/时间线。准备私有文件，`resolution` 恰含 `runId`、`dispatchId`、`agentId`、`decision`、`evidence`、`expiresAt`。`delivered` 指定原 agent ID；`not-dispatched` 的 agentId 为 null，且须有明确证据证明无排队、运行或已提交请求。人工审阅后用 `sign` 签名，再 `resolve --input 已签名.json` 验签。已交付工作仍须身份检查、回收和业务验收；未派发工作保留失败历史。已消耗维护审批仍不可复用，需新请求/审批。不因时间过去就取消占槽。
+人工核对时，在 Maintenance 之外检查真实 Paseo 队列/时间线证据，并在 Paseo 提问。私有文件的 `resolution` 恰含 `runId`、`dispatchId`、`agentId`、`decision`、`evidence`、`questionId`、`replyReference`、`answer`。`delivered` 指定原 agent，`not-dispatched` 的 agentId 为 null，并须明确证据证明无排队、运行或已提交请求。记录实际人工答复后 `resolve --input 核对结果.json`。已交付工作仍须身份检查、回收和业务验收；未派发工作保留失败。已消耗维护确认不可复用，不因时间过去或 idle 就推断未执行。
 
 ## 指标与边界
 

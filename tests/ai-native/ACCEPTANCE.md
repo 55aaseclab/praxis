@@ -1,4 +1,8 @@
-# Acceptance evidence · 0.1.126
+# AI-native testing acceptance evidence
+
+Current checkpoint: **0.1.127**. The 0.1.126 section below is historical; its signing-key workflow is superseded by explicit human questions/replies in Paseo.
+
+当前验收点：**0.1.127**。下方0.1.126为历史记录，其中密钥签名流程已被 Paseo 人工提问/回复替代。
 
 English · 简体中文 below. Contract: [PRD ANT01–ANT10](../../docs/PRD.en.md#long-lived-ai-native-testing), [roadmap](../../docs/ROADMAP.en.md#long-lived-ai-native-testing), [external-client verification](../../docs/VERIFICATION.en.md).
 
@@ -51,3 +55,16 @@ The Paseo browser host could not reach the build host's loopback URL. The PRD re
 | 匿名应用源码启动 | Pending | 远端拒绝既有 Calendar ref 后，从本地源码对象获取原精确 pin；pin 未变化，不声称完成新的匿名源码发布验证。 |
 
 Paseo 浏览器主机不能访问构建主机回环 URL，因此使用本机无头 Chromium 和临时工作台验证，没有访问生产工作台。人工确认绑定每一次 Maintenance 介入，不是对整个测试活动的一次性授权。
+
+
+## 0.1.127 — Paseo human confirmation / Paseo 人工确认
+
+| Scope / 范围 | Status | Evidence / 证据 |
+| --- | --- | --- |
+| ANT04, ANT09 — no approval-key prerequisite / 无审批密钥前提 | Pass | Initialization and reports use no keys; unanswered questions, missing decisions, mismatched question IDs, rejection, changed packets and replay cannot dispatch Maintenance. Approval is recorded only after the real human reply in Paseo, with question/reply references. 无密钥初始化；未回复、缺决定、问题不符、拒绝、包变化及重放均不派发维护；仅在 Paseo 真实人工回复后记录问题/回复引用。 |
+| ANT01–ANT08 — source regressions / 源码回归 | Pass | Linux/Node22.22.1: npm test456/456, including15 harness cases; no failures/skips. No business mutations occur in these tests. 456项含15项框架检查全部通过，无失败/跳过，不操作业务记录。 |
+| ANT10 — bilingual PRD reader / 双语阅读器 | Pass | Local Chromium opened both actual workbench PRD editions, HTTP200, version0.1.127, showing Paseo confirmation and public-interface requirements. 本地 Chromium 打开实际中英工作台 PRD，HTTP200，显示0.1.127及新规则。 |
+| Public-only business entry / 业务仅经公开入口 | Pass | Bilingual PRD, skill and prompts require public UI/documented APIs/public MCP for account/team/consent/business setup, with no internal endpoint/admin bootstrap/SQL fallback. All ten prepared client workspaces carry the same rule. 中英 PRD、技能、提示词及十个已准备工作区均含公开入口限制，不用内部接口/管理 bootstrap/SQL补流程。 |
+| Actual launch and business acceptance / 实际启动与业务验收 | Pending | Authorized next step; runtime evidence is kept outside Git and must not be inferred from controller tests. 已获授权继续启动，运行证据留在 Git 外，不从控制器检查推断。 |
+
+Conversation receipts are auditable workflow records, not cryptographic verification of a hostile client. The human is asked directly in Paseo and does not configure keys or sign files. Provider-native question tools are preferred; if unavailable, ask in the Paseo conversation and end the turn until the human replies. 会话回执用于审计流程，不是对恶意客户端的密码学验身；直接在 Paseo 问你，不配置密钥或签文件，优先用 provider 的 question 工具，否则在会话中提问并等待。

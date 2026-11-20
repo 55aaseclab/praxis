@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { models } from './campaigns.mjs';
 import { coordinatorPrompt, maintenancePrompt, workerPrompt } from './prompts.mjs';
 
-export async function dispatch(controller, paseo, kind, subjectId, approval) {
+export async function dispatch(controller, paseo, kind, subjectId) {
   if (kind === 'coordinator') {
     const previous = Object.values(controller.read().dispatches).find(d => d.kind === kind && d.status === 'running');
     if (previous) await collect(controller, paseo, previous.id);
@@ -12,10 +12,10 @@ export async function dispatch(controller, paseo, kind, subjectId, approval) {
   if (!binding || !models[kind]) throw Error('Unknown dispatch target.');
   // Discovery is read-only. Reserve durably before any external creation/send.
   await paseo.preflight(models[kind], binding);
-  const d = controller.reserve(kind, subjectId, approval);
+  const d = controller.reserve(kind, subjectId);
   const s = controller.read();
   const prompt = kind === 'worker' ? workerPrompt(s, d) : kind === 'maintenance' ? maintenancePrompt(s.repairs[subjectId].packet, s.locale)
-    : coordinatorPrompt({ stateFile: controller.file, cliFile: fileURLToPath(new URL('./cli.mjs', import.meta.url)), skillFile: fileURLToPath(new URL('../../skills/ai-native-testing/SKILL.md', import.meta.url)), locale: s.locale });
+    : coordinatorPrompt({ stateFile: controller.file, cliFile: fileURLToPath(new URL('./cli.mjs', import.meta.url)), skillFile: fileURLToPath(new URL('../../skills/ai-native-testing/SKILL.md', import.meta.url)), locale: s.locale, state: s });
   try {
     const agentId = await paseo.start(d, prompt);
     controller.acknowledge(d.id, agentId);

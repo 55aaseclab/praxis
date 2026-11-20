@@ -20,20 +20,20 @@ Personality influences choices, not a fixed script. Context draws have stable se
 
 ## Configure without launching
 
-Use Node 22.16+ with SQLite and the installed Paseo CLI. One state file defines the **global slot for this campaign installation**; do not run separate copies to bypass it. Keep state, configs, approvals, evidence and client working files outside Git. The SQLite file is mode 0600; new parent directories use 0700. The state is not app storage and contains no signing private key. Protect its directory under the intended coordinator identity.
+Use Node 22.16+ with SQLite and the installed Paseo CLI. One state file defines the **global slot for this campaign installation**; do not run separate copies to bypass it. Keep state, configs, approvals, evidence and client working files outside Git. The SQLite file is mode 0600; new parent directories use 0700. The state is not app storage and requires no approval key. Protect its directory under the intended coordinator identity.
 
 Create independent Paseo workspaces for the coordinator, all nine actors and Maintenance. Give actors their own business accounts and scoped OAuth/MCP connections to the designated test installation; never copy administrator or backup credentials to them. The coordinator gets harness access, not authority to repair code. Maintenance gets only its source workspace and synthetic fixture environment. Discover Paseo hosts/profiles first; there were no configured profiles at source verification, so exact discovered provider/model IDs are used. An optional `host` in each binding selects the CLI endpoint; paths/workspace IDs belong to that endpoint. Do not embed credentials in host strings.
 
-**The human signing key must be inaccessible to every agent.** Store it under an independent operator OS identity/host, hardware-backed signer or equivalent separation. Different workspaces under the same unrestricted OS user do not provide that protection. A JSON claim or file owned by the same unrestricted agent is not human confirmation. The harness verifies Ed25519 signatures; it cannot isolate OS identities or identify semantic business content for you.
+Account creation, team setup, consent and business operations use **publicly supported UI, documented public APIs or public MCP only**. Do not use internal/undocumented endpoints, administrator bootstrap, SQL, privileged helpers or server files to fill gaps. Normal client tools and documented local harness commands remain available. Missing public setup is a test result, not a reason to pre-create accounts behind the client.
 
-In the operator identity, generate an Ed25519 key using a suitable key-management tool. One OpenSSL example is `openssl genpkey -algorithm ED25519 -out private.pem`, then `openssl pkey -in private.pem -pubout -out public.pem`; set the private key to 0600 in a private directory. Supply **only the public PEM** in configuration. Do not run these commands in a business agent session.
+Human approval happens in Paseo. No key generation, signing service or operator key setup is required to start testing.
 
 ```sh
 npm run ai-native -- config-example
 npm run ai-native -- help --lang zh
 ```
 
-Use `config-example` as a template, replace workspace/path values and the public key. Remove `investment` until its actual market, horizon and ISO information cutoff are chosen. The nine actor keys are fixed and each role needs its own workspace. Configuration contains no OAuth tokens: set those up directly in each authorized client. Then:
+Use `config-example` as a template, replace workspace/path values and set the canonical public HTTPS `origin`. Remove `investment` until its actual market, horizon and ISO information cutoff are chosen. The nine actor keys are fixed and each role needs its own workspace. Configuration contains no OAuth tokens: set those up directly in each authorized client. Then:
 
 ```sh
 node tests/ai-native/cli.mjs init --state /private/testing/campaign.sqlite --input /private/testing/config.json --lang en --seed campaign-1
@@ -46,7 +46,7 @@ Initialization is paused. The investor round refuses to start without its parame
 
 ## Start and advance through Paseo
 
-Only after the test installation, identities, credentials and approval key are ready:
+Only after the test installation, identities, credentials are ready:
 
 ```sh
 node tests/ai-native/cli.mjs resume --state /private/testing/campaign.sqlite
@@ -55,7 +55,7 @@ node tests/ai-native/cli.mjs coordinator --state /private/testing/campaign.sqlit
 
 This starts or resumes the main-model coordinator in its assigned workspace. It uses `status`, `next` and `dispatch --task ID`, then `collect --dispatch ID` when the actor has ended its turn. Original role sessions are retained in state and resumed. Actual provider/model/mode/cwd are checked before resuming and collecting. Workspace binding is explicit on creation. Paseo does not create permissions merely from a prompt: independently verify real OAuth discovery, grants and app outcomes under C01 and subsequent verification cases.
 
-`collect` requires this dispatch to have been observed running before an idle/error state can release its slot; an idle queued recipient cannot release it. If a very short turn was never observed running, retain the slot as `awaiting_start_evidence` and obtain a signed operator resolution based on actual turn evidence. Collection is not business success. Use `verify --task ID --input /private/testing/evidence.json` with independent evidence:
+`collect` requires this dispatch to have been observed running before an idle/error state can release its slot; an idle queued recipient cannot release it. If a very short turn was never observed running, retain the slot as `awaiting_start_evidence` and obtain an explicit human resolution in Paseo based on actual turn evidence. Collection is not business success. Use `verify --task ID --input /private/testing/evidence.json` with independent evidence:
 
 ```json
 {
@@ -94,27 +94,28 @@ node tests/ai-native/cli.mjs repair --state /private/testing/campaign.sqlite --t
 node tests/ai-native/cli.mjs approval-request --state /private/testing/campaign.sqlite --request REQUEST_ID --out /private/testing/review.json
 ```
 
-Transfer only the review packet to the **human operator**, who inspects it and runs under the separate identity:
+The coordinator presents the exact technical packet and scope through its normal user-question tool in Paseo, or in the Paseo conversation when the tool is unavailable. The human approves or rejects there. While unanswered, Maintenance stays blocked; a question asking what something means is not approval. The user does not sign files or configure keys.
 
-```sh
-node tests/ai-native/cli.mjs sign --input /operator/review.json --key /operator/private.pem --out /operator/approval.json
+Only after the actual explicit human reply, the coordinator records its question ID, original answer, reply reference and decision in a private JSON file:
+
+```json
+{"questionId":"ID returned by approval-request","replyReference":"paseo:user-message-or-permission-reply-id","answer":"Approve this Maintenance invocation","decision":"approve"}
 ```
 
-Return only the signed approval, then dispatch:
-
 ```sh
-node tests/ai-native/cli.mjs maintenance --state /private/testing/campaign.sqlite --request REQUEST_ID --input /private/testing/approval.json
+node tests/ai-native/cli.mjs approve --state /private/testing/campaign.sqlite --request REQUEST_ID --input /private/testing/paseo-reply.json
+node tests/ai-native/cli.mjs maintenance --state /private/testing/campaign.sqlite --request REQUEST_ID
 ```
 
-Approval binds run ID, request ID, exact canonical packet SHA-256 and expiry (at most 24 hours from dispatch). It is consumed before the Paseo call, cannot be reused, and never authorizes another invocation. Every repair starts a fresh technical-only Maintenance session. A rejected or unsuccessful completed invocation can be `reject`ed with a reason, then a new `repair` and fresh approval prepared. Packet changes need a new request; old signatures cannot authorize it. The normal client shell remains available; the approval key separation, not prompt secrecy, protects this gate.
+Use `decision: "reject"` for a refusal; never invent or self-approve a human answer. This is an auditable workflow record, not an adversarial identity boundary against a client that can alter the harness/state. Confirmation binds the question and exact packet hash, is consumed before the Paseo call and cannot authorize another invocation. Every invocation starts a fresh technical-only Maintenance session. Rejected or unsuccessful completed work can be `reject`ed with a reason, then a new repair/question prepared. Changed scope needs a new question and human answer. The initial source correction is authorized by the user's explicit instruction to use Paseo questions; future maintenance still requires per-invocation confirmation.
 
-Collect the finished maintenance invocation. Submit `release --request ID --input RELEASE.json` containing `version`, source `commit`, synthetic `verification` reference and actual test-environment `deploymentEvidence`. No business body is accepted there. Then `retry --task ID --reason TEXT`; it resumes the original actor at the original breakpoint on the specified running version. Evidence must match that version. A failed retest cannot loop on the same repair version: prepare a new repair/approval. An unrelated transient connection failure permits an explicit reasoned retry without Maintenance; other failures remain blocked. Initial framework implementation is authorized by the user's implementation request; future campaign maintenance still requires each signed confirmation.
+Collect the finished maintenance invocation. Submit `release --request ID --input RELEASE.json` containing `version`, source `commit`, synthetic `verification` reference and actual test-environment `deploymentEvidence`. No business body is accepted there. Then `retry --task ID --reason TEXT`; it resumes the original actor at the original breakpoint on the specified running version. Evidence must match that version. A failed retest cannot loop on the same repair version: prepare a new repair/approval. An unrelated transient connection failure permits an explicit reasoned retry without Maintenance; other failures remain blocked. Future campaign maintenance still requires each explicit human confirmation in Paseo.
 
 ## Interrupted or uncertain dispatches
 
 SQLite transactions serialize reservations across processes; the slot never expires automatically. The reservation is committed before any Paseo create/send. A lost CLI receipt leaves `uncertain` status. `reconcile --dispatch ID` finds a newly created session using the opaque dispatch label, validates identity/model and adopts a single exact match. Zero or multiple matches leave it blocked. A lost send acknowledgement requires operator evidence; idle status cannot prove that a queued message was delivered or never accepted.
 
-For manual resolution, inspect actual Paseo queue/timeline evidence outside Maintenance. Prepare a private review file with `resolution` containing exactly `runId`, `dispatchId`, `agentId`, `decision`, `evidence`, `expiresAt`. Decision `delivered` identifies the original `agentId`; `not-dispatched` uses `agentId: null` and requires positive evidence that no request remains queued, running or committed. The human reviews/signs with `sign`, then `resolve --input SIGNED.json` verifies it. Delivered work still needs identity inspection, collection and business verification; non-dispatched work keeps its failed attempt. A consumed maintenance approval stays consumed: use a new request and approval. Do not cancel/release a slot merely because enough time passed.
+For manual resolution, inspect actual Paseo queue/timeline evidence outside Maintenance and ask the human in Paseo. A private file has `resolution` containing exactly `runId`, `dispatchId`, `agentId`, `decision`, `evidence`, `questionId`, `replyReference`, `answer`. Decision `delivered` identifies the original agent; `not-dispatched` uses `agentId: null` and requires positive evidence of no queued/running/committed request. Record the actual human answer, then `resolve --input RESOLUTION.json`. Delivered work still needs identity inspection, collection and business verification; non-dispatched work keeps its failed attempt. A consumed maintenance confirmation stays consumed. Do not infer nonexecution from time or idle status.
 
 ## Metrics and limits
 

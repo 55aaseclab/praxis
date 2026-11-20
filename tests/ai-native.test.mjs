@@ -1,22 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { actorKeys, campaigns, draw, models } from './ai-native/campaigns.mjs';
-import { canonical, Controller, metrics, privatePath, signApproval, validatePacket } from './ai-native/controller.mjs';
+import { Controller, metrics, privatePath, validatePacket } from './ai-native/controller.mjs';
 import { Paseo } from './ai-native/adapters/paseo.mjs';
 import { collect, dispatch, reconcile } from './ai-native/runner.mjs';
 import { maintenancePrompt, workerPrompt } from './ai-native/prompts.mjs';
 import { main } from './ai-native/cli.mjs';
 
 const exec = promisify(execFile);
-const keys = generateKeyPairSync('ed25519');
 function config() {
-  return { approvalPublicKey: keys.publicKey.export({ type: 'spki', format: 'pem' }), coordinator: { workspaceId: 'main-space', cwd: '/synthetic/main' }, maintenance: { workspaceId: 'maint-space', cwd: '/synthetic/source' },
+  return { origin: 'https://public.example.test', coordinator: { workspaceId: 'main-space', cwd: '/synthetic/main' }, maintenance: { workspaceId: 'maint-space', cwd: '/synthetic/source' },
     actors: Object.fromEntries(actorKeys.map((key, i) => [key, { workspaceId: `actor-space-${i}`, cwd: `/synthetic/actor-${i}` }])) };
 }
 function fixture(t, options = {}) {
@@ -155,30 +153,36 @@ test('investor time advances explicitly between completed rounds without resetti
   assert.equal(c.read().tasks[d.subjectId].context.asOf, '2025-01-02T00:00:00Z');
 });
 
-test('each Maintenance invocation requires an expiring scope-bound single-use human signature', t => {
+function approve(c, id) {
+  const q = c.approvalRequest(id);
+  return c.confirmApproval(id, { questionId: q.questionId, replyReference: 'paseo:user-message:synthetic', answer: '批准本次维护', decision: 'approve' });
+}
+
+test('each Maintenance invocation waits for an explicit scoped human reply in Paseo', t => {
   const { c } = fixture(t), taskId = failedTask(c), r = c.repair([taskId], technical());
-  assert.throws(() => c.reserve('maintenance', r.requestId), /human signed/);
-  const wrong = generateKeyPairSync('ed25519');
-  assert.throws(() => c.reserve('maintenance', r.requestId, signApproval(c.challenge(r.requestId), wrong.privateKey)), /signature/);
-  assert.throws(() => c.reserve('maintenance', r.requestId, signApproval(c.challenge(r.requestId, new Date(Date.now() - 1).toISOString()), keys.privateKey)), /expiry/);
-  const scope = c.challenge(r.requestId); scope.requestId = 'different-request';
-  assert.throws(() => c.reserve('maintenance', r.requestId, signApproval(scope, keys.privateKey)), /scope/);
-  const approval = signApproval(c.challenge(r.requestId), keys.privateKey);
-  const d = c.reserve('maintenance', r.requestId, approval);
-  assert.ok(c.read().repairs[r.requestId].approval.consumedAt);
-  assert.equal(c.next(), null);
-  c.uncertain(d.id);
-  assert.throws(() => c.reserve('maintenance', r.requestId, approval), /slot/);
+  assert.throws(() => c.reserve('maintenance', r.requestId), /human confirmation/);
+  assert.throws(() => c.confirmApproval(r.requestId, {}), /Ask the human/);
+  const q = c.approvalRequest(r.requestId);
+  assert.throws(() => c.reserve('maintenance', r.requestId), /human confirmation/);
+  assert.throws(() => c.confirmApproval(r.requestId, { questionId: q.questionId, replyReference: 'paseo:user-message:question', answer: '什么意思', decision: 'question' }), /explicit human/);
+  assert.throws(() => c.confirmApproval(r.requestId, { questionId: 'wrong-question', replyReference: 'paseo:user-message:test', answer: '批准', decision: 'approve' }), /scope/);
+  c.confirmApproval(r.requestId, { questionId: q.questionId, replyReference: 'paseo:user-message:deny', answer: '暂不维护', decision: 'reject' });
+  assert.throws(() => c.reserve('maintenance', r.requestId), /human confirmation/);
+  const next = c.repair([taskId], technical()); approve(c, next.requestId);
+  const d = c.reserve('maintenance', next.requestId);
+  assert.ok(c.read().repairs[next.requestId].approval.consumedAt);
+  assert.equal(c.next(), null); c.uncertain(d.id);
+  assert.throws(() => c.reserve('maintenance', next.requestId), /slot/);
   c.acknowledge(d.id, 'maintenance-1'); c.observeRunning(d.id, { agentId: 'maintenance-1', status: 'running' }); c.settle(d.id, { agentId: 'maintenance-1', status: 'idle' });
-  assert.throws(() => c.reserve('maintenance', r.requestId, approval), /no longer/);
+  assert.throws(() => c.reserve('maintenance', next.requestId), /human confirmation/);
 });
 
 test('changed technical packets and unallowlisted business fields cannot pass the approval gate', t => {
   const { c } = fixture(t), id = failedTask(c), r = c.repair([id], technical());
   assert.throws(() => validatePacket({ ...technical(), businessContent: 'private' }), /Only technical/);
-  const approval = signApproval(c.challenge(r.requestId), keys.privateKey);
+  approve(c, r.requestId);
   c.change(s => { s.repairs[r.requestId].packet.actual = 'changed after human review'; });
-  assert.throws(() => c.reserve('maintenance', r.requestId, approval), /changed after review/);
+  assert.throws(() => c.reserve('maintenance', r.requestId), /changed after human confirmation/);
   for (const lang of ['en', 'zh']) {
     const prompt = maintenancePrompt(technical(), lang);
     assert.doesNotMatch(prompt, /AI 时代的漏洞管理新范式|1000000|family-travel|stock-investor/);
@@ -191,8 +195,8 @@ test('app repairs dispatch to the explicitly configured owning repository withou
   const { c } = fixture(t, { config: cfg }), taskId = failedTask(c);
   assert.throws(() => c.repair([taskId], { ...technical(), repository: '/unconfigured/repository' }), /configured owning-repository/);
   const r = c.repair([taskId], { ...technical(), repository: '/synthetic/owning-app' }), before = c.read().sessions;
-  const paseo = new FakePaseo();
-  const result = await dispatch(c, paseo, 'maintenance', r.requestId, signApproval(c.challenge(r.requestId), keys.privateKey));
+  const paseo = new FakePaseo(); approve(c, r.requestId);
+  const result = await dispatch(c, paseo, 'maintenance', r.requestId);
   const d = c.read().dispatches[result.dispatchId];
   assert.equal(d.binding.workspaceId, 'owning-app-source');
   assert.equal(d.binding.host, 'app-maintenance-host');
@@ -205,7 +209,8 @@ test('repair retries require release evidence, original actor and a new repair a
   c.round('security-research');
   const r = c.repair([id], technical());
   assert.throws(() => c.retry(id, 'repair'), /Wait for a new/);
-  const d = c.reserve('maintenance', r.requestId, signApproval(c.challenge(r.requestId), keys.privateKey));
+  approve(c, r.requestId);
+  const d = c.reserve('maintenance', r.requestId);
   finish(c, d);
   assert.throws(() => c.release(r.requestId, { version: 'fixed-2' }), /checked commit/);
   c.release(r.requestId, { version: 'fixed-2', commit: 'abcdef1234567', verification: 'synthetic-check', deploymentEvidence: 'isolated-running-entry-readback' });
@@ -222,15 +227,14 @@ test('repair retries require release evidence, original actor and a new repair a
   assert.notEqual(newer.requestId, r.requestId);
 });
 
-test('signed operator resolution recovers ambiguous sends without inferred execution or approval reuse', t => {
+test('Paseo human resolution recovers ambiguous sends without inferred execution or approval reuse', t => {
   const { c } = fixture(t); c.round('family-travel'); c.pause(false);
   const id = c.next().id, d = c.reserve('worker', id); c.uncertain(d.id);
-  const resolution = { runId: c.read().runId, dispatchId: d.id, agentId: null, decision: 'not-dispatched', evidence: 'operator checked actual queue and transport receipts', expiresAt: new Date(Date.now() + 60000).toISOString() };
-  assert.throws(() => c.resolveDispatch({ resolution, signature: 'invalid' }), /signature/);
-  const signed = { resolution, signature: sign(null, Buffer.from(canonical(resolution)), keys.privateKey).toString('base64') };
-  c.resolveDispatch(signed);
+  const resolution = { runId: c.read().runId, dispatchId: d.id, agentId: null, decision: 'not-dispatched', evidence: 'operator checked actual queue and transport receipts', questionId: 'paseo-question', replyReference: 'paseo:user-message:resolution', answer: 'Confirmed no dispatch'  };
+  assert.throws(() => c.resolveDispatch({ resolution: { ...resolution, answer: '' } }), /human reply/);
+  c.resolveDispatch({ resolution });
   assert.equal(c.read().tasks[id].status, 'failed');
-  assert.throws(() => c.resolveDispatch(signed), /not unresolved/);
+  assert.throws(() => c.resolveDispatch({ resolution }), /not unresolved/);
   c.retry(id, 'operator proved request was never dispatched');
   assert.equal(c.next().id, id);
 });
@@ -267,13 +271,14 @@ test('Paseo adapter uses exact argument vectors, identity checks and sanitized e
   await assert.rejects(bad.preflight(d.model, d.binding), e => !/private-business-body|credential/.test(e.message));
 });
 
-test('CLI signs reviewed packets offline and writes approvals outside Git without touching campaign execution', async t => {
-  const { c, dir } = fixture(t), id = failedTask(c), r = c.repair([id], technical());
-  const review = join(dir, 'review.json'), key = join(dir, 'private.pem'), out = join(dir, 'approval.json');
-  writeFileSync(review, JSON.stringify({ challenge: c.challenge(r.requestId), packet: technical() }));
-  writeFileSync(key, keys.privateKey.export({ type: 'pkcs8', format: 'pem' }));
-  await main(['sign', '--input', review, '--key', key, '--out', out]);
+test('CLI exports a Paseo question and records the actual user reply without any key setup', async t => {
+  const { c, file, dir } = fixture(t), id = failedTask(c), r = c.repair([id], technical());
+  const out = join(dir, 'question.json'), reply = join(dir, 'reply.json');
+  const q = await main(['approval-request', '--state', file, '--request', r.requestId, '--out', out]);
   assert.equal(statSync(out).mode & 0o777, 0o600);
   assert.equal(c.read().repairs[r.requestId].status, 'pending_approval');
-  c.reserve('maintenance', r.requestId, JSON.parse(readFileSync(out, 'utf8')));
+  writeFileSync(reply, JSON.stringify({ questionId: q.questionId, replyReference: 'paseo:user-message:confirmed', answer: '批准本次维护', decision: 'approve' }));
+  await main(['approve', '--state', file, '--request', r.requestId, '--input', reply]);
+  assert.equal(c.read().repairs[r.requestId].status, 'approved');
+  c.reserve('maintenance', r.requestId);
 });
