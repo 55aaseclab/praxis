@@ -89,6 +89,10 @@ Design basis: [Google SEO starter guide](https://developers.google.com/search/do
 
 ### v0.1.130 visual revision
 
+Deployed **0.1.130** at the existing canonical origin. Curl readback confirms the full-width template and exact CSS bytes in English/Chinese, with anonymous app-directory access still401. Live Chromium screenshots at both widths replace the local-fixture previews. Blue is the sole writer and green0.1.129 remains healthy for rollback; all35 non-slot containers retain their original IDs. Consistent identity/events backups and private deployment receipts remain outside Git. This release was committed locally; it was not pushed.
+
+
+
 The final source passes **442/442** platform checks, including the public-home integration case. Four actual server-rendered scenes (English/Chinese, 1440px/390px) show the full-width demo below the two actions, a viewport-wide sticky header (69px desktop/97px phone), uncovered Apps/Get started/Self-host anchors and no horizontal overflow. Both editions retain normal-motion autoplay, reduced-motion play/pause, and a no-JavaScript poster with an explicit animation link. Clipboard success/failure leaves the control geometry unchanged. Both current PRDs opened in the workbench reader. The linked screenshots below were replaced with this server-rendered implementation.
 
 
