@@ -14,6 +14,10 @@ The latest approved layout places the H1 and its two actions together above a fu
 
 ## Ownership layout correction
 
+Deployed in **0.1.133**. Both language editions pass the focused public-home checks and desktop/phone browser assertions: the heading is left of the stacked copy on desktop, with a single column on phones. Existing attention copy, navigation, demo behavior and versioned assets remain intact. Live CSS bytes match the source; all35 non-slot containers are unchanged.
+
+
+
 Restore Keep the work yours to its original left/right composition: heading on the left, the two shortened data/access and trace entries stacked on the right. Phones retain a single column. Keep the removed agent-choice entry removed and leave the other homepage revisions intact.
 
 ## Content revision — attention and concise sections
