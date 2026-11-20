@@ -1,8 +1,16 @@
 # Praxis roadmap
 
-Version: 0.1.125
+Version: 0.1.126
 
 [简体中文](ROADMAP.md)
+
+## Long-lived AI-native testing
+
+1. Define ANT01–ANT10 in the platform PRD before implementation; keep English and Simplified Chinese in sync.
+2. Deliver three campaign manifests, stable personas, repeatable scenario draws, a durable controller, coverage evidence and a Paseo adapter. Enforce one global worker slot and signed human approval for every technical-only Maintenance invocation.
+3. Verify restart, ambiguous dispatch, approval expiry/replay/scope changes, original-actor repair retries, pause and truthful coverage with synthetic fixtures; open both PRD editions through the workbench reader. Deliver without creating campaign agents, schedules or business records.
+4. After explicit launch direction, provision isolated business identities/workspaces and a separate maintenance environment, supply the human verification key, choose the investor market/horizon and verify actual MCP capabilities. Start the coordinator and actors through Paseo, then collect actual client evidence. Recurrence, load acceptance and any production rollout remain separately assigned.
+
 
 ## Public product homepage design
 
@@ -240,6 +248,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.119 | 2026-11-20 | Read explicit app-owned requirements revisions separately from app releases |
 | v0.1.120 | 2026-11-20 | Load app-owned integration contracts and deliver Projects planning |
 | v0.1.125 | 2026-11-20 | Remove per-app language toggles; apps follow the workbench language preference |
+| v0.1.126 | 2026-11-20 | Add bilingual persistent AI-native testing with human-approved maintenance |
 
 ### Public applications with private collections
 
