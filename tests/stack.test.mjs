@@ -16,7 +16,7 @@ async function fixture(t) {
   const env = { PRAXIS_STORAGE_CONFIG: configPath, PRAXIS_UID: String(process.getuid?.() || 1000), PRAXIS_GID: String(process.getgid?.() || 1000), PRAXIS_PUBLIC_URLS_FILE: join(root, 'public-urls.json') };
   const settings = await resolveStackSettings({ env, home: root });
   for (const name of ['reminder', 'tingproof', 'slides/decks', 'slides/.lattice']) await mkdir(join(settings.appsRoot, name), { recursive: true });
-  for (const name of ['reminder/checklist.json', 'tingproof/tingproof.db', 'slides/decks/registry.js']) await writeFile(join(settings.appsRoot, name), 'Synthetic nonempty file.');
+  for (const name of ['reminder/reminder.db', 'tingproof/tingproof.db', 'slides/decks/registry.js']) await writeFile(join(settings.appsRoot, name), 'Synthetic nonempty file.');
   await writeFile(settings.publicUrlsFile, JSON.stringify({ apps: {} }));
   return { root, config, configPath, env, settings };
 }
@@ -68,7 +68,7 @@ test('stack resolves the canonical workspace and writes only private path config
 
 test('missing app data is rejected without creating an empty replacement', async t => {
   const { settings } = await fixture(t);
-  const file = join(settings.appsRoot, 'reminder/checklist.json');
+  const file = join(settings.appsRoot, 'reminder/reminder.db');
   await rm(file);
   await assert.rejects(validateData(settings), /Refusing to initialize or replace/);
   await assert.rejects(stat(file), { code: 'ENOENT' });
@@ -119,7 +119,7 @@ test('Travel map credentials reject missing explicit paths, readable files, link
   await assert.rejects(resolveMap(file), /private canonical/);
   await rm(alias); await chmod(directory, 0o755);
   await assert.rejects(resolveMap(file), /private canonical/);
-  const dataFile = join(f.settings.appsRoot, 'reminder/checklist.json'); await chmod(dataFile, 0o600); await chmod(dirname(dataFile), 0o700);
+  const dataFile = join(f.settings.appsRoot, 'reminder/reminder.db'); await chmod(dataFile, 0o600); await chmod(dirname(dataFile), 0o700);
   await assert.rejects(resolveMap(dataFile), /private canonical/);
 });
 
@@ -188,7 +188,7 @@ test('activation receipt requires all healthy services and is cleared on down wi
   await main(['down'], { env, home: root, run: docker.run });
   assert.ok(!docker.calls.some(call => call.args.includes('--volumes') || call.args.includes('-v')));
   await assert.rejects(stat(settings.receiptFile), { code: 'ENOENT' });
-  assert.ok((await stat(join(settings.appsRoot, 'reminder/checklist.json'))).isFile());
+  assert.ok((await stat(join(settings.appsRoot, 'reminder/reminder.db'))).isFile());
 });
 
 test('unhealthy startup does not produce an activation receipt', async t => {
@@ -716,7 +716,7 @@ test('Intelligence preview and external-data modes are explicit, fingerprinted a
   assert.equal(projection.services.intelligence.environment.INTELLIGENCE_DATA_DIR, '/data/intelligence');
   const external = await resolveStackSettings({ env: { ...f.env, PRAXIS_INTELLIGENCE_PREVIEW: '0' }, home: f.root });
   assert.notEqual(external.sourceFingerprint, f.settings.sourceFingerprint);
-  await assert.rejects(validateData(external), /Intelligence data mode requires an existing canonical data.json/);
+  await assert.rejects(validateData(external), /Intelligence data mode requires an existing canonical intelligence.db/);
   await assert.rejects(stat(join(f.paths.intelligence, 'data.json')), { code: 'ENOENT' });
   await assert.rejects(resolveStackSettings({ env: { ...f.env, PRAXIS_INTELLIGENCE_PREVIEW: 'yes' }, home: f.root }), /0 or 1/);
   f.config.intelligencePreview = false; await writeFile(f.configPath, JSON.stringify(f.config));

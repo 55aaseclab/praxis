@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.122
+Version: 0.1.123
 
 [简体中文](ROADMAP.md)
 
@@ -243,3 +243,10 @@ Separate backup metadata validation from Core signing-key validation. Prove an i
 ## 0.1.122 · Stable data previews and copy feedback
 
 Use consistent pointer/focus/touch previews and fixed-slot copy outcomes in Settings Data. Preserve raw clipboard values, no layout shift, long-value containment, keyboard/manual recovery and unchanged-refresh DOM/focus/scroll. Verify synthetic desktop/phone scenes and both PRD editions, then deploy only the affected workbench/Core image.
+
+## Structured database cutover
+
+1. Specify each app’s database/attachment/browser boundary and lossless migration acceptance before implementation.
+2. Implement owning app stores and explicit conversion/export, with synthetic parity, concurrency, rollback and authorization checks.
+3. Publish app main revisions, update app-owned deployment/provider/recovery metadata and generic platform integration.
+4. Back up and stop affected writers, convert faithful sources into new stores, verify contents and restore, then deploy and read back current identities, entry points and data coverage. Retain originals.

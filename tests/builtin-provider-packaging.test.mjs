@@ -131,7 +131,7 @@ test('fresh provider defaults expose configured paths while excluding keys and a
   const inventory = await registry.inventory({ bindings: { apps: [] }, resolveDataSource: resolver });
   assert.equal(inventory.apps.length, 14);
   for (const [appId, sourceId, expected] of [
-    ['finance', 'ledger', '/synthetic/finance/finance.json'], ['intelligence', 'observations', '/synthetic/intelligence/data.json'],
+    ['finance', 'ledger', '/synthetic/finance/finance.json'], ['intelligence', 'observations', '/synthetic/intelligence/intelligence.db'],
     ['reminder', 'managed-records:0', '/synthetic/reminder/checklist.json'], ['lattice-slides', 'managed-decks:0', '/synthetic/slides/slides.json'],
   ]) {
     const locations = inventory.apps.find(app => app.id === appId).locations;

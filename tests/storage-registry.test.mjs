@@ -11,7 +11,7 @@ async function fixture(t) {
   for (const id of ['reminder', 'tingproof', 'lattice', 'memo', 'travel', 'knowledge', 'finance', 'intelligence', 'projects', 'calendar', 'matrix-reader', 'letters', 'profiles', 'polaris']) {
     await mkdir(join(root, 'third_party', id, '.git'), { recursive: true });
   }
-  for (const path of ['reminder/data/checklist.json', 'tingproof/data/tingproof.db']) {
+  for (const path of ['reminder/data/reminder.db', 'tingproof/data/tingproof.db']) {
     const file = join(root, 'third_party', path);
     await mkdir(join(file, '..'), { recursive: true });
     await writeFile(file, 'Synthetic registered data.');

@@ -1,8 +1,16 @@
 # Praxis product requirements
 
-Version: 0.1.122 · [简体中文](PRD.md)
+Version: 0.1.123 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
+
+## App-owned structured databases
+
+Use one app-owned SQLite database per application for authoritative server-managed structured records. Reminder, Finance, Intelligence, Travel and Lattice business state move from live JSON to their own databases; existing Knowledge, Projects, Memo, TingProof and platform databases retain ownership. Records keep stable space/resource IDs, revisions, ordering, receipts, events, timestamps, unknown historical fields and authorization. Reminder uses `reminder.db` with space-qualified records instead of a live `spaces/<id>/checklist.json` tree. Database namespaces do not grant access. JSON remains an explicit import/export or compatibility format, never an automatic fallback for a missing configured database.
+
+Original documents, media, authored source files and exports retain their files and content hashes, with database references where the app needs them. Calendar device records move to browser IndexedDB without becoming a server account or server-backup claim; Matrix SDK encryption/device databases and external homeserver ownership remain unchanged. Letters/Profiles remain original-file readers; Polaris remains a read-only projection of separately owned runtime observations and gains no executor.
+
+A cutover is a representational storage migration, not a business content edit. The user has authorized faithful conversion and deployment of the existing data: stop its writers, keep immutable originals and configuration/image rollback points, validate schema, convert into a new database, compare canonical content/IDs/revisions/receipt and event coverage, run integrity checks and an empty-directory restore, switch only verified bindings and restart one writer. Do not manufacture records, normalize business meaning, replace missing data with an empty store or delete the old source. Keep DB/WAL/SHM in the same mounted writable directory and use consistent SQLite online backups. Applications supply their storage, migration and inventory contracts; Praxis consumes them generically.
 
 ## Protect employees’ attention
 

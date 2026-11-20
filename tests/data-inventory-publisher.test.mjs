@@ -35,8 +35,8 @@ test('publisher covers split app stores without serializing configuration secret
   assert.equal(find('memo').locations.filter(item => item.kind === 'browser').length, 2);
   assert.equal(find('memo').locations[0].hostPath, '/example/data/memo/memo.db');
   assert.equal(find('lattice-slides').locations.length, 4);
-  assert.equal(find('finance').locations[0].hostPath, '/example/volumes/finance/_data/finance.json');
-  assert.equal(find('finance').locations[0].containerPath, '/data/finance.json');
+  assert.equal(find('finance').locations[0].hostPath, '/example/volumes/finance/_data/finance.db');
+  assert.equal(find('finance').locations[0].containerPath, '/data/finance.db');
   assert.equal(find('tingproof').locations.find(item => item.label === '原始音频').kind, 'unknown');
   assert.equal(find('tingproof').locations.find(item => item.kind === 'browser').storageKey, 'IndexedDB: tingproof');
   assert.equal(find('future').locations[0].kind, 'unknown');
@@ -51,7 +51,7 @@ test('unavailable Docker never produces an invented Finance host path', () => {
   assert.equal(location.kind, 'docker-volume');
   assert.equal(location.volumeName, 'custom-project_finance-data');
   assert.equal(location.hostPath, undefined);
-  assert.equal(location.containerPath, '/data/finance.json');
+  assert.equal(location.containerPath, '/data/finance.db');
 });
 
 test('sensitive files cannot be reclassified as app data through configuration fields', () => {
@@ -145,8 +145,8 @@ test('Intelligence inventory distinguishes explicit preview from verified readon
   assert.equal(preview.length, 1); assert.equal(preview[0].kind, 'source');
   assert.equal(preview[0].hostPath, '/example/source/third_party/intelligence/fixtures/preview.json');
   const working = createDataInventory({ ...common, intelligenceRuntime: { preview: false, hostPath: '/example/private/intelligence' } }).apps[0].locations;
-  assert.equal(working[0].hostPath, '/example/private/intelligence/data.json');
-  assert.equal(working[0].containerPath, '/data/intelligence/data.json');
+  assert.equal(working[0].hostPath, '/example/private/intelligence/intelligence.db');
+  assert.equal(working[0].containerPath, '/data/intelligence/intelligence.db');
   assert.equal(createDataInventory(common).apps[0].locations[0].kind, 'unknown');
 });
 test('Intelligence runtime discovery is bounded to one trusted service and readonly mount metadata', async () => {

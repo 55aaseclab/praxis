@@ -126,15 +126,15 @@ Default to `<dataRoot>/workspaces/<workspaceId>/apps/<appId>`. A private storage
 
 | App | Live data below its root |
 | --- | --- |
-| Reminder | `spaces/<spaceId>/checklist.json`, shared by web and container CLI |
+| Reminder | `reminder.db`, with space-qualified records shared by authorized interfaces |
 | TingProof | `tingproof.db`; source audio is a separate input |
 | Knowledge | `knowledge.db`, `content/catalog`, published content for the app entry points |
-| Travel | `itineraries`, `content/catalog`, `content/published` |
-| Lattice | `native/decks`, `native/.lattice`, `business` |
+| Travel | `itineraries/travel.db`, original `content/catalog` and derived `content/published` |
+| Lattice | `native/decks`, `native/.lattice`, `business/lattice.db` and separate assets |
 | Memo | `memo.db` with guides, records, photos and history; old device-local content needs import |
-| Finance | Explicitly mounted `finance.json` |
+| Finance | Explicitly mounted `finance.db` |
 | Projects | `projects.db` shared by project records |
-| Intelligence | `data.json` in live mode; explicit preview uses source fixtures |
+| Intelligence | `intelligence.db` for configured snapshots; explicit source demos keep their fixture |
 | Polaris | Read-only observation file in the private workspace. The viewer image and source carry no records. |
 | Praxis | `business` for authorization/events and `observations` |
 
@@ -157,3 +157,11 @@ Installed apps declare storage aliases, source formats, read-only schema validat
 Recovery source discovery reads declared configuration metadata and the coordinator's used-space cursors/events, not business bodies. A used or independently known source that disappears fails the backup. An unused mapped source can remain an explicit opaque omission; the worker mounts its declared parent without claiming that the missing file was backed up. Browser originals, exports and credentials retain their separate coverage boundaries.
 
 `app-data.mjs plan` reports unavailable relocation paths. Migration stops before moving files or writing its journal when a legacy execution tree needs an unsupported application-owned export. It never imports or runs an archived execution engine. Preserve the original tree and rollback material; the supported physical relocation path copies or renames verified bytes without interpreting business content.
+
+## App-owned structured databases
+
+Use one app-owned SQLite database per application for authoritative server-managed structured records. Reminder, Finance, Intelligence, Travel and Lattice business state move from live JSON to their own databases; existing Knowledge, Projects, Memo, TingProof and platform databases retain ownership. Records keep stable space/resource IDs, revisions, ordering, receipts, events, timestamps, unknown historical fields and authorization. Reminder uses `reminder.db` with space-qualified records instead of a live `spaces/<id>/checklist.json` tree. Database namespaces do not grant access. JSON remains an explicit import/export or compatibility format, never an automatic fallback for a missing configured database.
+
+Original documents, media, authored source files and exports retain their files and content hashes, with database references where the app needs them. Calendar device records move to browser IndexedDB without becoming a server account or server-backup claim; Matrix SDK encryption/device databases and external homeserver ownership remain unchanged. Letters/Profiles remain original-file readers; Polaris remains a read-only projection of separately owned runtime observations and gains no executor.
+
+A cutover is a representational storage migration, not a business content edit. The user has authorized faithful conversion and deployment of the existing data: stop its writers, keep immutable originals and configuration/image rollback points, validate schema, convert into a new database, compare canonical content/IDs/revisions/receipt and event coverage, run integrity checks and an empty-directory restore, switch only verified bindings and restart one writer. Do not manufacture records, normalize business meaning, replace missing data with an empty store or delete the old source. Keep DB/WAL/SHM in the same mounted writable directory and use consistent SQLite online backups. Applications supply their storage, migration and inventory contracts; Praxis consumes them generically.

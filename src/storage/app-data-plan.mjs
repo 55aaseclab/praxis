@@ -24,7 +24,7 @@ export function planAppData(input) {
     const map = relocation.spaceMap;
     if (map && input[map.input]) {
       const value = structuredClone(input[map.input]), files = Object.values(value.spaces || {}), parent = appPathAlias(paths, map.path, declaration.rootId);
-      if (map.mode === 'basename' && (new Set(files.map(file => basename(file))).size !== files.length || files.some(file => dirname(file) !== business.apps?.[adapterId]?.[map.businessDirectoryField]))) throw new Error('Mapped files must be distinct direct children of the configured business directory.');
+      if (map.mode === 'basename' && ((new Set(files).size===files.length && new Set(files.map(file => basename(file))).size !== files.length) || (map.businessDirectoryField && files.some(file => dirname(file) !== business.apps?.[adapterId]?.[map.businessDirectoryField])))) throw new Error('Mapped files must be distinct direct children of the configured business directory.');
       for (const [space, file] of Object.entries(value.spaces || {})) {
         if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,199}$/.test(space)) throw new Error('Invalid application space.');
         const target = map.mode === 'space' ? join(parent, space, map.filename) : join(parent, basename(file));

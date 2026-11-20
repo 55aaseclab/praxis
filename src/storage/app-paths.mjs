@@ -61,6 +61,7 @@ export function appStorageSources(paths, spaceMaps = {}, { registry = DEFAULT_AP
       const map = spaceMaps[source.spaceMap]?.spaces || spaceMaps[source.spaceMap] || {};
       for (const [index, [space, file]] of Object.entries(map).entries()) {
         if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,199}$/.test(space) || typeof file !== 'string' || !isAbsolute(file) || !safeSuffix(source.filename)) fail();
+        if(source.kind==='sqlite'&&result.some(item=>item.id===id&&item.source===file))continue;
         result.push({ id, kind: source.kind, ...(source.schema ? { schema: source.schema } : {}), source: file, target: index ? `spaces/${space}/${source.filename}` : source.primaryTarget || source.filename });
       }
     } else {

@@ -63,13 +63,13 @@ export function createDataSourceResolver({config={},root,environment={}}={}) {
       }
     }
     if(loc.map){
-      if(loc.map!=='spaces')throw unavailable();
+      if(typeof loc.map!=='string'||!/^[-a-zA-Z0-9_]{1,80}$/.test(loc.map))throw unavailable();
       let paths=[];
-      const declaredMap=runtime.pathMaps?.[loc.env];
+      const declaredMap=loc.map==='spaces'?runtime.pathMaps?.[loc.env]:runtime.namedPathMaps?.[loc.env]?.[loc.map];
       if(object(declaredMap))paths=Object.values(declaredMap).filter(safePath);
       try {if(!paths.length)paths=await readPathMap(base,loc.map);}catch {paths=rows.filter(row=>row.kind==='json'&&safePath(row.containerPath||row.hostPath)).map(row=>row.containerPath||row.hostPath);}
       if(!paths.length)throw unavailable();
-      return paths.map(path=>mappedPath(path+(loc.suffix||''),rows));
+      return [...new Set(paths)].map(path=>mappedPath(path+(loc.suffix||''),rows));
     }
     if(loc.kind==='source'||loc.sourceRelative){
       const relative=loc.sourceRelative||loc.relative||'';

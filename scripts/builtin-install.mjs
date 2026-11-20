@@ -56,24 +56,24 @@ export function builtinProviderDefaults({ providers, runtime, spaceMaps = {}, wo
     const { app, descriptor } = provider, adapterId = descriptor.adapterAppId || app.id;
     const configured = runtime[adapterId];
     if (!configured) continue;
-    const environment = {}, pathMaps = {};
+    const environment = {}, pathMaps = {}, namedPathMaps = {};
     for (const source of descriptor.dataSources) {
       const location = source.location || {}, name = location.env;
       if (!name) continue;
       if (!/^[A-Z][A-Z0-9_]{0,119}$/.test(name) || /(?:^|_)(?:KEY|PASSWORD|PASSWD|SECRET|TOKEN|CREDENTIALS?)(?:_|$)/i.test(name)) throw new Error('An app provider declared an unsafe data-location variable.');
       const value = configured[name];
       if (typeof value === 'string' && isAbsolute(value) && resolve(value) === value && !/[\x00-\x1f\x7f]/.test(value)) environment[name] = value;
-      const map = spaceMaps[adapterId]?.spaces;
-      if (location.map === 'spaces' && map && !Array.isArray(map) && typeof map === 'object') {
+      const map = spaceMaps[adapterId]?.[location.map];
+      if (location.map && map && !Array.isArray(map) && typeof map === 'object') {
         const entries = Object.entries(map);
         if (entries.some(([, path]) => typeof path !== 'string' || !isAbsolute(path) || resolve(path) !== path || /[\x00-\x1f\x7f]/.test(path))) throw new Error('An app data-path mapping is invalid.');
-        pathMaps[name] = Object.fromEntries(entries);
+        if(location.map==='spaces')pathMaps[name] = Object.fromEntries(entries);else{namedPathMaps[name]??={};namedPathMaps[name][location.map]=Object.fromEntries(entries);}
       }
     }
     if (!Object.keys(environment).length && !Object.keys(pathMaps).length && !workingDirectories[adapterId]) continue;
     result[app.id] = { ...result[app.id], runtime: { status: 'ready', bindingSource: 'installation-layout', environment,
       ...(workingDirectories[adapterId] ? { workingDirectory: workingDirectories[adapterId] } : {}),
-      ...(Object.keys(pathMaps).length ? { pathMaps } : {}) } };
+      ...(Object.keys(pathMaps).length ? { pathMaps } : {}), ...(Object.keys(namedPathMaps).length ? { namedPathMaps } : {}) } };
   }
   return result;
 }
@@ -247,6 +247,12 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
     if (complete && !await exists(file)) throw new Error('Application data is missing. Restore its original snapshot.');
     await mkdir(dirname(file), { recursive: true, mode: 0o700 });
     await privateJson(file, renderAppRecipe(initial.value, parameters));
+  }
+  for (const { deployment } of defaultDeclarations) for (const initial of deployment.initialDatabases || []) {
+    if (!deployment.dataId || typeof deployment.initializeDatabase !== 'function' || typeof initial.path !== 'string' || initial.path.startsWith('/') || initial.path.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('An app database initialization declaration is invalid.');
+    const file = '/data/' + deployment.dataId + '/' + initial.path;
+    if (complete) { if (!await exists(file)) throw new Error('An initialized database is missing. Restore its snapshot.'); continue; }
+    await deployment.initializeDatabase({ ...renderAppRecipe(initial, parameters), file });
   }
   if (!complete) {
     const auth = new AuthStore({ file: config.database, issuer: origin });
