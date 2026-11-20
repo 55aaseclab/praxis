@@ -1,6 +1,6 @@
 # Praxis 产品需求
 
-版本：0.1.129 · [English](PRD.en.md)
+版本：0.1.130 · [English](PRD.en.md)
 
 Praxis 是一个可自托管的平台，为 agent 执行工作和人使用结果设计应用。用户表达想要的结果，授权 agent 完成日常操作。应用校验操作、保存结果，并以适合人阅读、观看或收听的方式呈现。每款应用负责自己的业务对象、可对这些对象执行的操作，以及让人理解结果的界面。
 
@@ -9,6 +9,8 @@ Praxis 是一个可自托管的平台，为 agent 执行工作和人使用结果
 设计匿名可读、可索引的产品主页，面向通过搜索发现 Praxis 的人。说明自托管平台、用户自选外部 agent、应用保存和呈现结果及用户控制授权的关系。以真实产品示例开篇，同时提供在线试用和完整本地 Compose 栈入口。展示全部十四个已发布组件，区分 Polaris 运行观察与应用卡片，说明自建应用；不把计划中的工作流执行或开放注册当作现有能力。技术安装内容放在产品说明之后。
 
 英文与简体中文各有完整 HTML 和普通导航链接。生产验收要求关闭 JavaScript 仍可阅读正文、明确 canonical/语言 URL、真实搜索/分享元数据、桌面和手机可访问布局及无私有记录。已在既有工作台 canonical origin 上实现：未登录访问 origin 根路径或 `/zh-cn/` 时返回公开产品主页，已登录会话在 `/` 继续使用工作台；页面携带 canonical/hreflang/OG 元数据、JSON-LD 及 sitemap，robots 仅放行这些公开页面。原工作台「关于 Praxis」入口及其 `/about/` 页面已移除，由公开主页承接内容。组件目录从审核过的应用注册表渲染，不另维护应用表。[设计](design/public-home.md)
+
+公开主页保留吸顶导航、仅含主标题与两个按钮的首屏、下方通栏自动播放示例、授权→提问→查看结果顺序，以及应用目录后的结果卡片设计预览。优化视觉层级时保留减少动态效果/无 JavaScript 降级与公开 SEO 元数据。
 
 ## 外部 agent 工具与授权
 
@@ -269,6 +271,7 @@ Praxis 将维护中的应用作为独立版本的内置组件发布。目录包�
 | v0.1.127 | 2026-11-20 | 作者与实现代理 | Default the workbench to the card view and return to the public homepage after sign-out |
 | v0.1.128 | 2026-11-20 | 作者与实现代理 | Make the For you card deck the workbench home without a view switch |
 | v0.1.129 | 2026-11-20 | 作者与实现代理 | Refine the public homepage: sticky header, autoplaying hero demo, authorize-ask-review order and a card design preview |
+| v0.1.130 | 2026-11-20 | 作者与实现代理 | 恢复公开主页通栏演示，优化导航、间距与结果卡片层级 |
 
 ## 零、需求体检与澄清
 

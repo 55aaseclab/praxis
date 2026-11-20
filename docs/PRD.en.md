@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.129 · [简体中文](PRD.md)
+Version: 0.1.130 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -9,6 +9,8 @@ Praxis is a self-hosted platform for apps designed around work done by agents an
 Design an anonymous, indexable product homepage for people discovering Praxis through search. Explain the self-hosted platform, the user's chosen external agent, app-owned results and user-controlled authorization. Lead with a real product example and offer both trying the hosted service and running the complete local Compose stack. Present all fourteen published components, distinguishing Polaris runtime observations from app cards, and describe custom app development without claiming planned workflow execution or account registration is available. Keep technical setup below the product explanation.
 
 Provide complete English and Simplified Chinese HTML editions with ordinary navigation links. Production acceptance requires readable content without JavaScript, explicit canonical/language URLs, truthful search/share metadata, accessible desktop/phone layouts and no private records. Implemented on the existing canonical workbench origin: anonymous visitors opening the origin root or `/zh-cn/` receive the public homepage while signed-in sessions keep the workbench at `/`; the pages carry canonical/hreflang/OG metadata, JSON-LD and a sitemap with a robots policy that permits only these public pages. The former workbench About Praxis link and its `/about/` pages are removed; the homepage replaces that content. The component directory renders from the reviewed app registry, not a separate app table. [Design](design/public-home.en.md)
+
+Keep the public page’s sticky navigation, title-only hero with two actions, full-width autoplaying example below it, Authorize → Ask → Review order and result-card design preview after the app directory. Preserve reduced-motion/no-JavaScript fallback and public SEO metadata while improving visual hierarchy.
 
 ## External agent tools and authorization
 
@@ -207,6 +209,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.127 | 2026-11-20 | Default the workbench to the card view and return to the public homepage after sign-out |
 | v0.1.128 | 2026-11-20 | Make the For you card deck the workbench home without a view switch |
 | v0.1.129 | 2026-11-20 | Refine the public homepage: sticky header, autoplaying hero demo, authorize-ask-review order and a card design preview |
+| v0.1.130 | 2026-11-20 | Restore the full-width homepage demo and refine navigation, spacing and result-card hierarchy |
 
 ### Letters and Profiles
 

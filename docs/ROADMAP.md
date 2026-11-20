@@ -1,12 +1,12 @@
 # Praxis 路线图
 
-版本：0.1.129
+版本：0.1.130
 
 [English](ROADMAP.en.md)
 
 ## 公开产品主页设计
 
-定义公开搜索意图、双语正文、真实产品图及在线试用/自托管路径。先交付响应式静态原型和 SEO/交互验收，再改路由。确定官网 origin 后实现可抓取的语言版本与元数据，验证并部署公开页面，保持工作台受保护。当前阶段仅设计。
+定义公开搜索意图、双语正文、真实产品图及在线试用/自托管路径。先交付响应式静态原型和 SEO/交互验收，再改路由。确定官网 origin 后实现可抓取的语言版本与元数据，验证并部署公开页面，保持工作台受保护。公开页面已在既有 canonical origin 部署。本轮优化紧凑吸顶页头、主标题/按钮下方通栏演示及原生结果卡片质感，保留授权入口和双语 SEO 合同。
 
 ## 外部客户端验收纠正
 
@@ -524,6 +524,7 @@ Preserve the native Travel renderer, stable route and relative assets. Serve the
 | v0.1.127 | 2026-11-20 | Default the workbench to the card view and return to the public homepage after sign-out |
 | v0.1.128 | 2026-11-20 | Make the For you card deck the workbench home without a view switch |
 | v0.1.129 | 2026-11-20 | Refine the public homepage: sticky header, autoplaying hero demo, authorize-ask-review order and a card design preview |
+| v0.1.130 | 2026-11-20 | 恢复公开主页通栏演示，优化导航、间距与结果卡片层级 |
 
 交接：按 PRD 明确的七文件清单实施；先读原文能力，再联调图标与阅读页，最后验证安全和一致性。本次操作技能实现仅改主仓技能和发现入口；PRD 集合不得读取私人运行数据或在界面展示调试实现信息。当前角色以 F30 为准：维护 agent 只交付代码/文档，外部业务执行者通过获准 API/MCP 操作数据；两者不能互代。私有运行数据不提交。实现代码注释与内部错误英文，UI 与产品文档中文。
 

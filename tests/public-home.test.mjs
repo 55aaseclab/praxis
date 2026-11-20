@@ -42,11 +42,15 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.doesNotMatch(html, /noindex/);
   assert.doesNotMatch(html, /About Praxis/);
   assert.doesNotMatch(html, /Ask for an outcome\. Choose what your agent can access\./);
-  assert.match(html, /<header class="site-header wrap"/);
+  assert.match(html, /<header class="site-header"><div class="header-inner wrap"/);
+  assert.match(html, /<div class="hero-intro"><h1[^>]*>[\s\S]*?<\/h1><div class="hero-actions">[\s\S]*?<\/div><\/div><figure class="product-example hero-demo">/);
+  assert.match(html, /class="card-stage"><article class="result-card"/);
+  assert.match(html, /<\/header><p class="card-reason">/);
   assert.match(html, /Authorize\. Ask\. Review\./);
   assert.match(html, /id="cards" class="cards-section wrap"/);
   assert.match(html, /class="result-card"/);
   assert.match(html, /data-animation="\/home-images\/workbench-en\.gif"/);
+  assert.match(html, /<noscript><a class="demo-toggle demo-fallback" href="\/home-images\/workbench-en\.gif"/);
   for (const id of ['reminder', 'knowledge', 'lattice-slides', 'travel', 'tingproof', 'memo', 'finance', 'intelligence', 'polaris', 'letters', 'profiles', 'projects', 'calendar', 'matrix-reader']) {
     assert.match(html, new RegExp(`github\\.com/55aaseclab/${id === 'lattice-slides' ? 'lattice' : id}"`));
   }

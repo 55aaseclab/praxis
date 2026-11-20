@@ -1,12 +1,12 @@
 # Praxis roadmap
 
-Version: 0.1.129
+Version: 0.1.130
 
 [简体中文](ROADMAP.md)
 
 ## Public product homepage design
 
-Define public-search intent, bilingual content, real product imagery and the try/self-host journeys. Deliver a responsive static prototype and SEO/interaction acceptance before changing routing. Confirm the public site's origin, implement crawlable language editions and metadata, then verify and deploy the public surface separately from the protected workbench. Current phase: design only.
+Define public-search intent, bilingual content, real product imagery and the try/self-host journeys. Deliver a responsive static prototype and SEO/interaction acceptance before changing routing. Confirm the public site's origin, implement crawlable language editions and metadata, then verify and deploy the public surface separately from the protected workbench. The public page is deployed on the existing canonical origin. Refine its compact sticky header, title/actions followed by a full-width example, and native result-card presentation while preserving the authorized entry and bilingual SEO contract.
 
 ## External-client acceptance correction
 
@@ -244,6 +244,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.127 | 2026-11-20 | Default the workbench to the card view and return to the public homepage after sign-out |
 | v0.1.128 | 2026-11-20 | Make the For you card deck the workbench home without a view switch |
 | v0.1.129 | 2026-11-20 | Refine the public homepage: sticky header, autoplaying hero demo, authorize-ask-review order and a card design preview |
+| v0.1.130 | 2026-11-20 | Restore the full-width homepage demo and refine navigation, spacing and result-card hierarchy |
 
 ### Public applications with private collections
 
