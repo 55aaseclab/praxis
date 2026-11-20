@@ -12,6 +12,10 @@ Implementation decision (2026-11-20): the homepage is served from the existing c
 
 The latest approved layout places the H1 and its two actions together above a full-width product example, replacing the side-by-side hero. Keep the actual GIF at a readable size and preserve autoplay, reduced-motion controls and no-JavaScript poster. Use a full-viewport sticky header with a compact content row, a consistent section rhythm and a result-card preview on the native workbench canvas. The card separates app identity, reason, title, due time, evidence and primary/secondary actions instead of squeezing them into one header. Keep all existing content sections, authorization/ask/review order and SEO endpoints.
 
+## Content revision — attention and concise sections
+
+Remove both visible demo caption lines; normal autoplay leaves no empty caption strip. Reduced-motion users retain the play/pause control, and no-JavaScript visitors retain the animation link. Position cards as **Your attention, on your terms.**: focus now, defer or hide, with reading kept separate from acceptance/read receipts. Stack the app-directory heading above its description. Under Keep the work yours, show only two concise columns for data/access and recorded actions; remove Your agent, your choice. Add Documentation and Contribute to the sticky header, preserving mobile wrapping and anchor clearance. English and Simplified Chinese change together.
+
 ## Visual direction
 
 Use the native product's quiet system typography and recognizable app artwork. The distinctive content is the existing real Paseo / Praxis four-frame example with synthetic Reminder content, not a fabricated chat UI. Revision (2026-11-20, applied): the header is sticky; the hero drops the supporting paragraphs and shows the animated workbench example beside the H1, playing automatically (static poster with an explicit play control under `prefers-reduced-motion`; the poster remains the no-JavaScript and share-card image); the connection steps read Authorize → Ask → Review; and a result-card design preview follows the app directory. No fake customer logos, usage metrics, star counts or decorative dashboard replicas.
@@ -33,7 +37,7 @@ The first pass considered a conventional three-benefit card row. Remove it: a re
 ## Content and flow
 
 ```text
-Praxis       Apps / Get started / GitHub / Language / Open workbench   (sticky)
+Praxis       Apps / Get started / Documentation / Contribute / GitHub / Language / Open workbench   (sticky)
 
 A self-hosted workbench
 for your AI agent.
@@ -45,9 +49,9 @@ Authorize / Ask / Review: three actual steps
 
 Fourteen published components: icons, names, brief purposes, source links
 
-Result-card design preview: what changed, why it appeared, one tap to source
+Attention-card preview: choose what to focus on, defer or hide
 
-Keep the work yours: data ownership, trace evidence, build your own apps
+Keep the work yours: two concise columns for data/access and recorded actions
 
 Try online: copy connection prompt, sign in, choose access, first task
 Self-host: full Compose command, credentials command, local connection

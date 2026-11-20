@@ -18,7 +18,6 @@ const copy = {
     skip: 'Skip to content', mainNav: 'Main navigation', apps: 'Apps', start: 'Get started', openWorkbench: 'Open workbench',
     heroTitle: 'A self-hosted workbench<br>for your AI agent.',
     tryAgent: 'Try with your agent', selfHost: 'Self-host Praxis',
-    demoCaption: 'Your agent. Your apps.', demoNote: 'Real Paseo. Synthetic reminder.',
     play: 'Play example', pause: 'Pause example',
     stepsHeading: 'Authorize. Ask. Review.',
     steps: [
@@ -29,17 +28,16 @@ const copy = {
     appsHeading: 'Useful apps. A place for your own.',
     appsLead: 'Fourteen built-in components, each with its own records and interface. Start with what you need, then build an app around the way you work.',
     viewSource: 'View source for',
-    cardsHeading: 'Results you can read at a glance.',
-    cardsLead: 'Work your agent completes arrives as a card in For you: what changed, why it appeared and one tap to the source record.',
-    cardsNote: 'Design preview with synthetic content. Cards open the originating app and its actions stay inside its permissions.',
+    cardsHeading: 'Your attention, on your terms.',
+    cardsLead: 'Choose what to focus on, what can wait and what to hide. Open the source when you need context.',
+    cardsNote: 'Synthetic design preview. Reading a card does not accept work or send a read receipt.',
     cardApp: 'Reminder', cardReason: 'Because you scheduled tomorrow’s review',
     cardTitle: 'Review field notes', cardMeta: 'Due tomorrow · 10:00', cardEvidence: 'Synthetic example · source record lives in your Reminder',
     cardOpen: 'Open', cardLater: 'Later', cardHide: 'Hide this version',
     ownHeading: 'Keep the work yours.',
     ownership: [
-      ['Your agent, your choice.', 'Praxis connects to external agents through authorized tools. Keep the client and model you prefer; verify that your client supports the connection.'],
-      ['Your data, on your terms.', 'Run your own instance. Review or revoke app access. Reading a card does not accept work or send a colleague a read receipt.'],
-      ['A trace you can follow.', 'Inspect authorized MCP call metadata and recorded Polaris observations. Broader end-to-end workflow improvement is part of the product direction.'],
+      ['Your data, on your terms.', 'Run your own instance. Choose app access and revoke it when you need to.'],
+      ['A trace you can follow.', 'Review recorded agent calls and workflow observations.'],
     ],
     startHeading: 'Try one real task.', startLead: 'Before setting up your own instance, paste this prompt into your agent.',
     signIn: 'Open the workbench to sign in',
@@ -70,7 +68,6 @@ const copy = {
     skip: '跳到正文', mainNav: '主导航', apps: '内置应用', start: '开始使用', openWorkbench: '打开工作台',
     heroTitle: '为你的 AI 智能体，<br>准备一个自己的工作台。',
     tryAgent: '用你的智能体试试', selfHost: '自行部署 Praxis',
-    demoCaption: '你的智能体，你的应用。', demoNote: '真实 Paseo 界面，合成提醒。',
     play: '播放示例', pause: '暂停示例',
     stepsHeading: '授权。提问。查看结果。',
     steps: [
@@ -81,17 +78,16 @@ const copy = {
     appsHeading: '现成的应用，也给你的应用留了位置。',
     appsLead: '十四个内置组件，各自保存记录、提供界面。从需要的开始，也可以围绕自己的工作开发新应用。',
     viewSource: '查看源码：',
-    cardsHeading: '结果一眼可读。',
-    cardsLead: '智能体完成的工作会作为卡片出现在「待关注」里：改了什么、为什么出现，以及一键打开来源记录。',
-    cardsNote: '合成内容的设计预览。卡片打开来源应用，操作仍受其权限约束。',
+    cardsHeading: '你的注意力，由你安排。',
+    cardsLead: '哪些现在看，哪些稍后处理，哪些先收起，由你决定。需要上下文时，再打开来源。',
+    cardsNote: '合成内容设计预览。阅读卡片不代表接受工作，也不会发送已读回执。',
     cardApp: '提醒', cardReason: '因为你安排了明天的复核',
     cardTitle: '复核现场笔记', cardMeta: '明天 10:00 到期', cardEvidence: '合成示例 · 来源记录保存在你的提醒中',
     cardOpen: '打开', cardLater: '稍后', cardHide: '收起这一版',
     ownHeading: '自己的工作，自己掌握。',
     ownership: [
-      ['智能体，由你选择。', 'Praxis 通过获授权工具连接外部智能体。继续使用你喜欢的客户端和模型，并核实它支持相应连接。'],
-      ['数据与授权，由你掌握。', '可以自行部署，查看或撤销应用访问。阅读卡片不会替你接受工作，也不会给同事发已读回执。'],
-      ['操作线索，可以回看。', '查看获授权的 MCP 调用元数据及 Polaris 已记录的运行观察。更完整的业务流程改进仍属于产品方向。'],
+      ['数据与授权，由你掌握。', '自行部署数据，按需授权应用，随时撤销访问。'],
+      ['操作线索，可以回看。', '回看已记录的智能体调用和工作流观察。'],
     ],
     startHeading: '先试一件真正的事。', startLead: '部署自己的实例之前，把下面这段话复制给你的智能体。',
     signIn: '打开工作台并登录',
@@ -147,9 +143,9 @@ function homeHtml({ texts, origin, apps, icons, icon, stylesHref, scriptHref }) 
 </head>
 <body>
 <a class="skip" href="#content">${texts.skip}</a>
-<header class="site-header"><div class="header-inner wrap"><a class="brand" href="${texts.home}" aria-label="Praxis"><img src="${icon}" width="34" height="34" alt="">Praxis</a><nav aria-label="${texts.mainNav}"><a href="#apps">${texts.apps}</a><a href="#start">${texts.start}</a><a href="https://github.com/55aaseclab/praxis">GitHub</a></nav><div class="header-actions"><a href="${texts.other}" lang="${texts.otherLang}" hreflang="${texts.otherLang}">${texts.otherLabel}</a><a class="workbench" href="${loginUrl}">${texts.openWorkbench}</a></div></div></header>
+<header class="site-header"><div class="header-inner wrap"><a class="brand" href="${texts.home}" aria-label="Praxis"><img src="${icon}" width="34" height="34" alt="">Praxis</a><nav aria-label="${texts.mainNav}"><a href="#apps">${texts.apps}</a><a href="#start">${texts.start}</a><a href="https://github.com/55aaseclab/praxis/blob/main/docs/README.md">${texts.docs}</a><a href="https://github.com/55aaseclab/praxis/blob/main/CONTRIBUTING.md">${texts.contribute}</a><a href="https://github.com/55aaseclab/praxis">GitHub</a></nav><div class="header-actions"><a href="${texts.other}" lang="${texts.otherLang}" hreflang="${texts.otherLang}">${texts.otherLabel}</a><a class="workbench" href="${loginUrl}">${texts.openWorkbench}</a></div></div></header>
 <main id="content">
-<section class="hero wrap" aria-labelledby="hero-title"><div class="hero-intro"><h1 id="hero-title">${texts.heroTitle}</h1><div class="hero-actions"><a class="button primary" href="#start">${texts.tryAgent}</a><a class="button secondary" href="#self-host">${texts.selfHost}</a></div></div><figure class="product-example hero-demo"><img id="product-demo" src="${texts.demoImage}" data-animation="${texts.demoAnimation}" width="2048" height="1233" alt="${escapeHtml(texts.demoAlt)}" fetchpriority="high"><figcaption><div><strong>${texts.demoCaption}</strong><span>${texts.demoNote}</span></div><button class="demo-toggle" type="button" aria-pressed="false" data-play="${texts.play}" data-pause="${texts.pause}" data-poster="${texts.demoImage}" data-animation="${texts.demoAnimation}" hidden><span aria-hidden="true" class="play-symbol">▷</span><span data-demo-label>${texts.play}</span></button><noscript><a class="demo-toggle demo-fallback" href="${texts.demoAnimation}"><span aria-hidden="true" class="play-symbol">▷</span><span>${texts.play}</span></a></noscript></figcaption></figure></section>
+<section class="hero wrap" aria-labelledby="hero-title"><div class="hero-intro"><h1 id="hero-title">${texts.heroTitle}</h1><div class="hero-actions"><a class="button primary" href="#start">${texts.tryAgent}</a><a class="button secondary" href="#self-host">${texts.selfHost}</a></div></div><figure class="product-example hero-demo"><img id="product-demo" src="${texts.demoImage}" data-animation="${texts.demoAnimation}" width="2048" height="1233" alt="${escapeHtml(texts.demoAlt)}" fetchpriority="high"><figcaption class="demo-controls"><button class="demo-toggle" type="button" aria-pressed="false" data-play="${texts.play}" data-pause="${texts.pause}" data-poster="${texts.demoImage}" data-animation="${texts.demoAnimation}" hidden><span aria-hidden="true" class="play-symbol">▷</span><span data-demo-label>${texts.play}</span></button><noscript><a class="demo-toggle demo-fallback" href="${texts.demoAnimation}"><span aria-hidden="true" class="play-symbol">▷</span><span>${texts.play}</span></a></noscript></figcaption></figure></section>
 <section class="steps wrap" aria-labelledby="steps-heading"><h2 id="steps-heading">${texts.stepsHeading}</h2><ol>${texts.steps.map(([heading, text], index) => `<li><span class="step-number" aria-hidden="true">${index + 1}</span><h3>${heading}</h3><p>${text}</p></li>`).join('')}</ol></section>
 <section id="apps" class="apps-section wrap" aria-labelledby="apps-heading"><div class="section-heading"><h2 id="apps-heading">${texts.appsHeading}</h2><p>${texts.appsLead}</p></div><ul class="apps">${appsList}</ul></section>
 <section id="cards" class="cards-section wrap" aria-labelledby="cards-heading"><div class="cards-grid"><div><h2 id="cards-heading">${texts.cardsHeading}</h2><p class="cards-lead">${texts.cardsLead}</p><p class="small">${texts.cardsNote}</p></div><div class="card-stage"><article class="result-card" aria-label="${texts.cardTitle}"><header><img src="${icons.get('reminder')}" alt="" width="28" height="28"><span class="card-app">${texts.cardApp}</span></header><p class="card-reason">${texts.cardReason}</p><h3>${texts.cardTitle}</h3><p class="card-meta">${texts.cardMeta}</p><p class="card-evidence">${texts.cardEvidence}</p><div class="card-actions"><span class="card-primary">${texts.cardOpen}</span><span class="card-quiet">${texts.cardLater}</span><span class="card-quiet">${texts.cardHide}</span></div></article></div></div></section>

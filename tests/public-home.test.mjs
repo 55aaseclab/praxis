@@ -53,6 +53,9 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.match(html, /Authorize\. Ask\. Review\./);
   assert.match(html, /id="cards" class="cards-section wrap"/);
   assert.match(html, /class="result-card"/);
+  assert.match(html, /Your attention, on your terms\./);
+  assert.doesNotMatch(html, /Results you can read|Your agent, your choice|Your agent\. Your apps\.|Real Paseo\. Synthetic reminder/);
+  assert.match(html, /<nav[^>]*>[\s\S]*?docs\/README\.md">Documentation<\/a>[\s\S]*?CONTRIBUTING\.md">Contribute<\/a>/);
   assert.match(html, /data-animation="\/home-images\/workbench-en\.gif"/);
   assert.match(html, /<noscript><a class="demo-toggle demo-fallback" href="\/home-images\/workbench-en\.gif"/);
   for (const id of ['reminder', 'knowledge', 'lattice-slides', 'travel', 'tingproof', 'memo', 'finance', 'intelligence', 'polaris', 'letters', 'profiles', 'projects', 'calendar', 'matrix-reader']) {
@@ -70,6 +73,8 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.match(zhHtml, /为你的 AI 智能体，<br>准备一个自己的工作台。/);
   assert.match(zhHtml, /授权。提问。查看结果。/);
   assert.match(zhHtml, /class="result-card"/);
+  assert.match(zhHtml, /你的注意力，由你安排。/);
+  assert.doesNotMatch(zhHtml, /结果一眼可读|智能体，由你选择。/);
   assert.match(zhHtml, /\/home-images\/workbench-zh\.png/);
   assert.equal((await request('/zh-cn', null)).status, 308);
 

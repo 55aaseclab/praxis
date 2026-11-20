@@ -3,7 +3,7 @@ const image = document.querySelector('#product-demo');
 const reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 if (image && image.dataset.animation && !reducedMotion) {
   image.src = image.dataset.animation;
-  demo?.remove();
+  demo?.closest('figcaption')?.remove();
 } else if (demo && image) {
   demo.hidden = false;
   demo.addEventListener('click', () => {
