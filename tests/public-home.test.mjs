@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { createPublicHomeHandler } from '../src/public-home.mjs';
+import { writeInstalledAppsFixture, SYNTHETIC_ICON } from './helpers/app-manifest-fixture.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AuthStore, createAuthHandler, SESSION_COOKIE } from '../src/business/auth.mjs';
@@ -34,6 +37,7 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.equal(home.status, 200);
   assert.match(home.headers.get('content-type'), /text\/html/);
   assert.equal(home.headers.get('x-robots-tag'), undefined);
+  assert.equal(home.headers.get('cache-control'), 'private, no-cache, must-revalidate');
   const html = await home.text();
   assert.match(html, /<html lang="en">/);
   assert.match(html, new RegExp(`<link rel="canonical" href="${canonical}/">`));
@@ -78,6 +82,13 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.equal(stylesheet.status, 200);
   assert.match(stylesheet.headers.get('content-type'), /text\/css/);
   assert.equal((await request('/home.js', null)).status, 200);
+  assert.equal(stylesheet.headers.get('cache-control'), 'no-cache, must-revalidate');
+  const cssPath = html.match(/rel="stylesheet" href="([^"]+)"/)[1];
+  assert.match(cssPath, /^\/home\.[a-f0-9]{20}\.css$/);
+  const versionedCss = await request(cssPath, null);
+  assert.equal(versionedCss.status, 200);
+  assert.equal(await versionedCss.text(), await stylesheet.text());
+  assert.equal(versionedCss.headers.get('cache-control'), 'public, max-age=31536000, immutable');
   const poster = await request('/home-images/workbench-en.png', null);
   assert.equal(poster.status, 200);
   assert.match(poster.headers.get('content-type'), /image\/png/);
@@ -101,4 +112,38 @@ test('anonymous visitors get the public product homepage and signed-in users kee
 
   assert.equal((await request('/about/', null)).status, 401);
   assert.equal((await request('/apps/travel/', null)).status, 401);
+});
+
+
+test('homepage deploys change only changed asset addresses and never reuse a version for different bytes', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'praxis-home-cache-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'public'), { recursive: true });
+  await mkdir(join(root, 'docs/images'), { recursive: true });
+  await writeInstalledAppsFixture(root, [{ id: 'reminder', name: 'Synthetic reminder' }]);
+  await writeFile(join(root, 'public/praxis.svg'), SYNTHETIC_ICON);
+  for (const name of ['workbench-en.png', 'workbench-en.gif', 'workbench-zh.png', 'workbench-zh.gif']) await writeFile(join(root, 'docs/images', name), 'synthetic-public-image');
+  const firstCss = '.header-inner { display: flex }', secondCss = '.header-inner { display: grid }';
+  await writeFile(join(root, 'public/home.css'), firstCss);
+  await writeFile(join(root, 'public/home.js'), '// unchanged synthetic script');
+  let handler;
+  const server = createServer(async (req, res) => { if (!await handler(req, res)) res.writeHead(404).end(); });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(async () => { server.closeAllConnections(); await new Promise(done => server.close(done)); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  handler = createPublicHomeHandler({ canonicalUrl: origin, root });
+  const addresses = html => [html.match(/rel="stylesheet" href="([^"]+)"/)[1], html.match(/<script src="([^"]+)"/)[1]];
+  const before = addresses(await (await fetch(origin)).text());
+  assert.equal(await (await fetch(origin + before[0])).text(), firstCss);
+  await writeFile(join(root, 'public/home.css'), secondCss);
+  handler = createPublicHomeHandler({ canonicalUrl: origin, root });
+  const after = addresses(await (await fetch(origin)).text());
+  assert.notEqual(after[0], before[0]);
+  assert.equal(after[1], before[1]);
+  assert(after[0].includes(createHash('sha256').update(secondCss).digest('hex').slice(0, 20)));
+  const reply = await fetch(origin + after[0]);
+  assert.equal(await reply.text(), secondCss);
+  assert.match(reply.headers.get('cache-control'), /immutable/);
+  assert.equal((await fetch(origin + before[0])).status, 404);
+  assert.equal((await fetch(origin + '/home.' + '0'.repeat(20) + '.css')).status, 404);
 });

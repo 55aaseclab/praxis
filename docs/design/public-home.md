@@ -40,6 +40,10 @@
 
 ## 交互与可访问性
 
+部署资源使用带内容摘要的 CSS/JavaScript 路径。HTML 及旧无版本别名重新校验，不再各自独立保持新鲜缓存；仅精确摘要资源采用 immutable 缓存，避免升级后出现已复现的 header 混排和演示间距丢失。
+
+
+
 导航与源码使用普通链接。复制只改变固定图标槽和隐藏的无障碍播报，不插入“已复制”一行、不跳布局、不弹 toast；失败时保留可手选文本。演示有明确播放/暂停状态和可访问名称，无 JavaScript 时仍能看静态图。保留焦点、最小44px点击区域，手机应用目录为两列，正文与 FAQ 不折叠，页面不横向溢出。
 
 ## SEO 与分享
@@ -61,6 +65,12 @@
 依据：[Google SEO 入门](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)、[多语言页面](https://developers.google.com/search/docs/specialty/international/localized-versions)、[结构化数据要求](https://developers.google.com/search/docs/appearance/structured-data/software-app)。这些做法不保证收录、排名或富结果。
 
 ## 实现检查
+
+### v0.1.131 缓存回归
+
+浏览器保留 v0.1.129 CSS 时，复现了反馈中的块布局 header 和按钮下方0间距。在不清空旧缓存的情况下，带内容摘要的样式地址恢复了 flex 页头及桌面40px/手机30px间距。源码集成与完整平台套件 **443/443** 通过，英中桌面/手机及双语 PRD 阅读器检查通过。
+
+
 
 ### v0.1.130 视觉修订
 

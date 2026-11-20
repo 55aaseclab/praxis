@@ -117,7 +117,7 @@ const copy = {
 
 const repository = app => 'https://github.com/55aaseclab/' + (app.source ? app.source.replace(/^third_party\//, '').replace(/\/+$/, '') : app.id);
 
-function homeHtml({ texts, origin, apps, icons, icon, structuredDataHash }) {
+function homeHtml({ texts, origin, apps, icons, icon, stylesHref, scriptHref }) {
   const o = escapeHtml(origin);
   const loginUrl = `${o}/auth/login?return_to=${encodeURIComponent('/')}`;
   const prompt = `Connect to Praxis at ${o}/mcp using OAuth. Help me sign in and choose what you may access, then show my available apps and tools.`;
@@ -142,7 +142,7 @@ function homeHtml({ texts, origin, apps, icons, icon, structuredDataHash }) {
 <meta property="og:url" content="${o}${texts.path}">
 <meta property="og:image" content="${o}${texts.demoImage}"><meta property="og:image:width" content="2048"><meta property="og:image:height" content="1233"><meta property="og:image:alt" content="${escapeHtml(texts.demoAlt)}">
 <link rel="icon" href="${icon}" type="image/svg+xml">
-<link rel="stylesheet" href="/home.css"><script src="/home.js" defer></script>
+<link rel="stylesheet" href="${stylesHref}"><script src="${scriptHref}" defer></script>
 <script type="application/ld+json">${jsonLd}</script>
 </head>
 <body>
@@ -176,6 +176,8 @@ async function buildPages({ canonical, root }) {
     readFile(resolve(publicDir, 'home.js')),
     readFile(resolve(publicDir, 'praxis.svg')),
   ]);
+  const assetPath = (bytes, extension) => `/home.${createHash('sha256').update(bytes).digest('hex').slice(0, 20)}.${extension}`;
+  const stylesHref = assetPath(css, 'css'), scriptHref = assetPath(script, 'js');
   const brandUri = dataUri(brand, 'image/svg+xml');
   const images = new Map(await Promise.all(['workbench-en.png', 'workbench-en.gif', 'workbench-zh.png', 'workbench-zh.gif'].map(async name => {
     const body = await readFile(resolve(root, 'docs/images', name));
@@ -191,7 +193,7 @@ async function buildPages({ canonical, root }) {
   const pages = new Map();
   const cspFor = html => `default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'sha256-${createHash('sha256').update(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]).digest('base64')}'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'`;
   for (const texts of [copy.en, copy.zh]) {
-    const html = homeHtml({ texts, origin, apps, icons, icon: brandUri });
+    const html = homeHtml({ texts, origin, apps, icons, icon: brandUri, stylesHref, scriptHref });
     pages.set(texts.path, { type: 'text/html; charset=utf-8', body: Buffer.from(html), csp: cspFor(html) });
   }
   const alternates = `<xhtml:link rel="alternate" hreflang="en" href="${origin}/"/><xhtml:link rel="alternate" hreflang="zh-Hans" href="${origin}/zh-cn/"/><xhtml:link rel="alternate" hreflang="x-default" href="${origin}/"/>`;
@@ -200,6 +202,8 @@ async function buildPages({ canonical, root }) {
   return {
     pages,
     assets: new Map([
+      [stylesHref, { type: 'text/css; charset=utf-8', body: css, immutable: true }],
+      [scriptHref, { type: 'text/javascript; charset=utf-8', body: script, immutable: true }],
       ['/home.css', { type: 'text/css; charset=utf-8', body: css }],
       ['/home.js', { type: 'text/javascript; charset=utf-8', body: script }],
       ...[...images].map(([name, file]) => [`/home-images/${name}`, { type: file.type, body: file.body }]),
@@ -220,12 +224,15 @@ export function createPublicHomeHandler({ canonicalUrl, root = WORKSPACE_ROOT })
       : url.pathname === '/zh-cn' ? '/zh-cn/'
       : url.pathname === '/zh-cn/' || url.pathname === '/zh-cn/index.html' ? '/zh-cn/'
       : null;
-    const asset = url.pathname === '/home.css' || url.pathname === '/home.js' || url.pathname.startsWith('/home-images/')
+    const asset = url.pathname === '/home.css' || url.pathname === '/home.js' || /^\/home\.[a-f0-9]{20}\.(?:css|js)$/.test(url.pathname) || url.pathname.startsWith('/home-images/')
       ? url.pathname : url.pathname === '/sitemap.xml' || url.pathname === '/robots.txt' ? url.pathname : null;
     if (!page && !asset) return false;
     if (url.search || request.headers.host !== canonical.host) return false;
     const { pages, assets } = await state();
-    const cache = page ? 'public, max-age=300' : asset.startsWith('/home-') ? 'public, max-age=86400' : 'public, max-age=300';
+    const cache = page ? 'private, no-cache, must-revalidate'
+      : assets.get(asset)?.immutable ? 'public, max-age=31536000, immutable'
+      : ['/home.css', '/home.js'].includes(asset) ? 'no-cache, must-revalidate'
+      : asset.startsWith('/home-') ? 'public, max-age=86400' : 'public, max-age=300';
     const reply = (status, type, body, extra = {}) => {
       response.writeHead(status, {
         'Content-Type': type, 'Content-Length': body.length, Vary: 'Cookie',

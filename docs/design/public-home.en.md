@@ -63,6 +63,10 @@ The hosted flow copies the exact README OAuth prompt, opens the existing workben
 
 ## Interaction and accessibility
 
+Deployment assets use content-hashed CSS/JavaScript paths. HTML and legacy unversioned aliases revalidate rather than staying fresh independently; immutable caching applies only to exact content-addressed assets. This prevents the observed mixed-version header and missing demo spacing after an upgrade.
+
+
+
 Use links for navigation and source destinations. Copy controls update only their existing fixed icon slot and a visually hidden live region; failure preserves selectable prompt text. No inserted “Copied” row, shifting geometry or toast. The demo button updates its accessible name and `aria-pressed`; the static poster remains meaningful without JavaScript. Preserve visible focus, minimum 44px touch targets, no horizontal page overflow and two-column app directory at phone width. Do not hide the product explanation or FAQ in accordions.
 
 ## Search and sharing contract
@@ -86,6 +90,12 @@ The page shares the existing canonical origin with the authenticated workbench. 
 Design basis: [Google SEO starter guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide), [localized pages](https://developers.google.com/search/docs/specialty/international/localized-versions), [structured-data requirements](https://developers.google.com/search/docs/appearance/structured-data/software-app). These practices do not guarantee indexing, ranking or rich results.
 
 ## Verified implementation checks
+
+### v0.1.131 cache regression
+
+A browser retaining v0.1.129 CSS reproduced the reported block-layout header and zero gap below the hero actions. Without clearing that browser cache, the content-addressed stylesheet restored the flex header and 40px desktop / 30px phone gap. Source integration and the full platform suite pass **443/443** checks; English/Chinese desktop/phone and both PRD readers also pass.
+
+
 
 ### v0.1.130 visual revision
 
