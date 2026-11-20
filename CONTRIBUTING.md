@@ -46,8 +46,16 @@ For external cross-app contributions, keep a tracking issue in Praxis and link t
 - Keep commits focused on one problem. External PRs should solve one complete problem; split unrelated work and use drafts for pending dependencies or early discussion.
 - Make commits that describe an observable result. Prefer `type(scope): summary`, such as `fix(knowledge): preserve imported source references` or `docs(storage): clarify restore verification`.
 - PR branches can contain multiple implementation and fix commits. Default to squash merge for external PRs. Direct maintenance commits need no PR wrapper.
-- Coordinate a versioned change with the latest release branch before publication. Use `npm run version:patch` once for a platform behavior change and keep the package, lockfile and English/Chinese release records aligned. App versions follow their own policy. Editorial corrections can retain the current version.
+- Coordinate a versioned change with the latest release branch before publication. Use `npm run version:patch` once for a platform behavior change and keep the package, lockfile and English/Chinese release records aligned. App versions follow their own policy. Editorial corrections made directly on the current branch can retain its version; integrating another branch follows the merge-version rule below.
 - Protect merged release history. Use a follow-up fix or revert for a merged change. A contributor rebasing their own work branch uses `--force-with-lease` and reruns affected checks after changing the reviewed head.
+
+## Merging branches and versions
+
+Every integration from another branch must advance the target branch's release version. This applies to merge commits, squash merges and fast-forward integration, including branches that already changed their own version. Resolve against the latest target branch; do not keep its unchanged version or copy an older feature-branch version over it.
+
+For an ordinary platform integration, assign the next PATCH after the latest target version, once for the completed merge. Synchronize `package.json`, both root versions in `package-lock.json`, and the English/Simplified Chinese PRD and roadmap declarations and release rows. Feature-branch draft version numbers do not become conflicting published release rows: preserve the target's existing release history and record the integrated work under the new target release. Preserve source commits through the chosen merge history.
+
+For example, merging a branch based on 0.1.125 with a local draft version 0.1.128 into main 0.1.136 produces main 0.1.137. Resolve code and dependency/lockfile conflicts as well as the numbers, run `npm run version:check` and the combined applicable checks, then commit the resolved integration. Application repositories use their own version policy and the platform pins their released revisions separately.
 
 ## One platform and multiple app repositories
 
@@ -138,8 +146,16 @@ Contributions use the [Apache 2.0 license](LICENSE). Follow the [code of conduct
 - Commit 聚焦一个问题。外部 PR 解决一个完整问题，无关工作分开；待合并依赖或提前讨论使用 draft。
 - Commit 描述可观察的结果，推荐 `type(scope): summary`，例如 `fix(knowledge): preserve imported source references`、`docs(storage): clarify restore verification`。
 - PR 分支内可有多个实现和修复提交；外部 PR 默认 squash merge。直接维护提交无需额外套一层 PR。
-- 发布前和最新主线协调版本。平台行为改动使用一次 `npm run version:patch`，同步 package、lockfile 和中英文发布记录；应用使用自己的版本策略，单纯文字编辑可保留版本。
+- 发布前和最新主线协调版本。平台行为改动使用一次 `npm run version:patch`，同步 package、lockfile 和中英文发布记录；应用使用自己的版本策略，直接在当前分支进行的单纯文字编辑可保留版本；跨分支整合遵循下方合并版本规则。
 - 保护已合并历史，用后续修复或 revert 处理问题。重排个人工作分支时使用 `--force-with-lease`，并在评审 head 变化后重跑受影响的检查。
+
+### 合并分支与版本
+
+每次从其他分支整合到目标分支，都须推进目标分支的发行版本。适用于 merge commit、squash 和 fast-forward，也适用于源分支已经自行升级版本的情况。以目标分支最新版本为基线解决冲突，不能保留未变的目标版本，也不能把旧功能分支版本覆盖到主线。
+
+普通平台整合在目标最新版本上递增一次 PATCH，作为本次完成合并的版本；同步 `package.json`、`package-lock.json` 根对象及根 package 的两个版本，以及中英文 PRD/路线图的声明和发布记录。功能分支草稿版本不得混入为冲突的正式发布行：保留目标分支已有发布历史，将整合内容记录到新的目标发行版，源提交按选定合并方式保留。
+
+例如，源分支基于0.1.125、草稿版本0.1.128，合入0.1.136主线后使用0.1.137。除版本号外也要处理代码、依赖与 lockfile 冲突，运行 `npm run version:check` 及整合后的适用检查，再提交合并结果。各应用仓按自身版本策略发布，平台另行固定已发行提交。
 
 ### 一主仓、多应用仓的发布顺序
 

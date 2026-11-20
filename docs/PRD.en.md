@@ -1,8 +1,41 @@
 # Praxis product requirements
 
-Version: 0.1.136 · [简体中文](PRD.md)
+Version: 0.1.137 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
+
+## Long-lived AI-native testing
+
+Deliver an opt-in external-agent test harness under `tests/ai-native/`, with English and Simplified Chinese instructions and reports. Paseo manages agent sessions; a separate GLM-5.3-Flash main coordinator advances durable campaigns. Business actors use GLM-5.3-Flash worker with one globally enforced worker inference slot. Maintenance uses GPT-6.1-Sol, ultra reasoning and the provider's default context window. Discover exact provider models at launch; never substitute free/fp8 models or disable normal client tools. No worker token budget or fixed end date applies. Concurrency/load acceptance remains pending.
+
+The test configuration sets `fullAccess: true` for all roles. OpenCode coordinator/workers use their discovered `auto_accept: true` feature in build mode, applied before the first prompt; Codex Maintenance uses full-access mode. Ordinary file, shell and network tool permissions do not interrupt the human. Keep explicit human questions interactive, including per-invocation Maintenance approval; automatic tool permission acceptance must never answer those questions. Use supported Paseo SDK/MCP/CLI controls only, and verify the observed runtime setting. This grants harness tools, not additional business permissions or internal API access.
+
+The test configuration sets `communication: "paseo-send-message"`. Agents use Paseo's public send-message operation for assignments, reports, questions and coordination, including worker→coordinator and coordinator→parent reports. Do not read another agent's working files or repeatedly pull logs/timelines as a message transport. Reading harness state and independently verifying app outcomes remains necessary; app records remain authoritative. New/resumed business tasks still reserve the global worker slot before sending; communication does not authorize extra parallel workers.
+
+Three synthetic campaigns retain identities and accumulated records: a three-person travelling family; a research organization studying **A new paradigm for vulnerability management in the AI era**, with Research (mentor/student), Productization (engineer), Marketing and Finance/support; and a full-time simulated investor starting with CNY 1,000,000 and targeting 10% net return. The investor's market and horizon must be supplied before trading. Research uses Reminder, Knowledge, Lattice, Memo, Polaris, Calendar, Projects and Intelligence; investment uses Reminder, Memo, Finance, Intelligence and Polaris. Campaign application use follows actual discovered capabilities. Polaris remains a read-only authorized observer and Calendar retains its device-local boundary; missing capabilities are recorded rather than fabricated. Keep all teams and personal/shared scopes separate. Real public information may be researched; orders, money and organizational operations remain synthetic.
+
+Stable personalities, persisted random scenario draws and actor autonomy produce variation. Provide goals and acceptance criteria rather than operation scripts. Preserve failures, supporting evidence and individual knowledge boundaries; local notes cannot replace authoritative app records. Resume original actors at their failure point after repair, with isolated full replay when needed. Thirty initial travel destinations are material, not a completion condition. A trading return is an objective, not a promised result or product pass criterion; retain costs, losses, drawdown and information timestamps.
+
+Every Maintenance invocation requires a fresh, explicit human reply to a question in Paseo about the exact technical packet and scope. The coordinator asks through its normal user-question tool, or in the Paseo conversation when that tool is unavailable, then waits. Record the question ID, user-reply reference, decision, original answer and packet hash; an unanswered question, an agent's own reply or ambiguous text is not approval. Consume an accepted confirmation once, before dispatch. Changed scope requires a new question and confirmation. No signing key or approval-key setup is required to initialize or run tests. This is an auditable conversation workflow, not a cryptographic identity boundary against an arbitrary client.
+
+The maintenance prompt contains only the approved minimal synthetic technical reproduction, code scope and verification plan: no campaign topic, business bodies, actor discussions, credentials or raw business output. Human packet review is required; structural validation cannot prove semantic redaction. Maintenance fixes code in the owning repository; the original business actor validates its own result on the actually running repair version.
+
+Account creation, team setup, consent, authorization and all live business actions use only publicly supported UI, documented public APIs or public MCP capabilities. Do not call internal/undocumented endpoints, administrator bootstrap helpers, SQL or server files to fill a missing workflow, even for these synthetic actors. Report the missing public capability as a blocker. Normal client tools and documented local harness operations remain available.
+
+| ID | Observable acceptance |
+| --- | --- |
+| ANT01 | Bilingual manifests/instructions define exactly three campaigns and nine persistent business actors, the selected models, normal tools, application boundaries and unresolved investment inputs. |
+| ANT02 | Durable dispatch reservation permits one worker across campaigns and processes, survives coordinator restart, and never expires into automatic duplicate execution. Uncertain Paseo outcomes require reconciliation. |
+| ANT03 | Dispatch binds the intended host/workspace/session. Existing actor sessions are resumed, with observed model and idle-state checks. Dispatch failures and ambiguous receipts remain recoverable without blind retry. |
+| ANT04 | Maintenance cannot dispatch before the corresponding Paseo question has an explicit human approval for the unchanged packet. Missing/denied/stale confirmations reject; an accepted confirmation is consumed before dispatch and cannot authorize another invocation. |
+| ANT05 | Maintenance requests contain an allowlisted synthetic technical packet only; approval and repair output remain separate from business evidence and worker prompts. |
+| ANT06 | Attempts retain evidence, version, scenario draw and history. Failed cases block until explicit retry or repair; repair-linked retries require a deployed version, resume the original actor and take priority over new exploration. |
+| ANT07 | Coverage distinguishes applicable, attempted, passed, failed, pending and N/A cells, with a versioned denominator and reasons. Report autonomous completion and repair recovery separately; agent claims alone cannot pass verification. |
+| ANT08 | Pause stops new dispatch without forgetting active work; resume/reconciliation does not release a still-running or uncertain slot. No ordinary `npm test`, import, initialization or report operation starts an agent or schedule. |
+| ANT09 | State, OAuth credentials, conversation-confirmation receipts and raw evidence stay outside Git. Operators configure independent business and maintenance workspaces/identities. Tests start without approval keys, and business setup uses public product interfaces only. |
+| ANT10 | Synthetic controller/adapter checks and bilingual workbench PRD reads pass. Actual external-client business acceptance, periodic scheduling, production deployment and load claims are recorded separately and never inferred from those checks. |
+
+Implementation and operations: [English](../tests/ai-native/README.md) · [简体中文](../tests/ai-native/README.zh-CN.md).
 
 ## Public product homepage
 
@@ -226,6 +259,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.134 | 2026-11-20 | Replace the repeated homepage footer tagline with 55AA Security Lab copyright attribution |
 | v0.1.135 | 2026-11-20 | Preserve card text selection and restrict swipe navigation to primary touch gestures |
 | v0.1.136 | 2026-11-20 | Fit the card deck to the page viewport and keep paging controls stationary |
+| v0.1.137 | 2026-11-20 | Merge persistent AI-native campaigns and document version updates for cross-branch integration |
 
 ### Letters and Profiles
 

@@ -1,8 +1,15 @@
 # Praxis roadmap
 
-Version: 0.1.136
+Version: 0.1.137
 
 [简体中文](ROADMAP.md)
+
+## Long-lived AI-native testing
+
+1. Define ANT01–ANT10 in the platform PRD before implementation; keep English and Simplified Chinese in sync.
+2. Deliver three campaign manifests, stable personas, repeatable scenario draws, a durable controller, coverage evidence and a Paseo adapter. Apply configured full access before the initial prompt (OpenCode auto_accept, Codex full-access), retaining interactive human questions. Route inter-agent assignments and reports through Paseo send message. Enforce one global worker slot and explicit human confirmation in Paseo for every technical-only Maintenance invocation.
+3. Verify restart, ambiguous dispatch, missing/denied/replayed confirmations and scope changes, original-actor repair retries, pause and truthful coverage with synthetic fixtures; open both PRD editions through the workbench reader. Deliver without creating campaign agents, schedules or business records.
+4. After explicit launch direction, provision isolated business identities/workspaces and a separate maintenance environment, verify public-only account/team/consent paths, choose the investor market/horizon and verify actual MCP capabilities. Start the coordinator and actors through Paseo, then collect actual client evidence. Recurrence, load acceptance and any production rollout remain separately assigned.
 
 ## Public product homepage design
 
@@ -251,6 +258,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.134 | 2026-11-20 | Replace the repeated homepage footer tagline with 55AA Security Lab copyright attribution |
 | v0.1.135 | 2026-11-20 | Preserve card text selection and restrict swipe navigation to primary touch gestures |
 | v0.1.136 | 2026-11-20 | Fit the card deck to the page viewport and keep paging controls stationary |
+| v0.1.137 | 2026-11-20 | Merge persistent AI-native campaigns and document version updates for cross-branch integration |
 
 ### Public applications with private collections
 
