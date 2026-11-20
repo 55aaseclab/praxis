@@ -1,6 +1,6 @@
 # Praxis 产品需求
 
-版本：0.1.128 · [English](PRD.en.md)
+版本：0.1.129 · [English](PRD.en.md)
 
 Praxis 是一个可自托管的平台，为 agent 执行工作和人使用结果设计应用。用户表达想要的结果，授权 agent 完成日常操作。应用校验操作、保存结果，并以适合人阅读、观看或收听的方式呈现。每款应用负责自己的业务对象、可对这些对象执行的操作，以及让人理解结果的界面。
 
@@ -268,6 +268,7 @@ Praxis 将维护中的应用作为独立版本的内置组件发布。目录包�
 | v0.1.126 | 2026-11-20 | 作者与实现代理 | Serve the public product homepage at the canonical origin and retire the About Praxis pages |
 | v0.1.127 | 2026-11-20 | 作者与实现代理 | Default the workbench to the card view and return to the public homepage after sign-out |
 | v0.1.128 | 2026-11-20 | 作者与实现代理 | Make the For you card deck the workbench home without a view switch |
+| v0.1.129 | 2026-11-20 | 作者与实现代理 | Refine the public homepage: sticky header, autoplaying hero demo, authorize-ask-review order and a card design preview |
 
 ## 零、需求体检与澄清
 

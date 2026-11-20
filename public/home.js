@@ -1,6 +1,10 @@
 const demo = document.querySelector('.demo-toggle');
 const image = document.querySelector('#product-demo');
-if (demo && image) {
+const reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (image && image.dataset.animation && !reducedMotion) {
+  image.src = image.dataset.animation;
+  demo?.remove();
+} else if (demo && image) {
   demo.hidden = false;
   demo.addEventListener('click', () => {
     const playing = demo.getAttribute('aria-pressed') !== 'true';

@@ -10,7 +10,7 @@ Implementation decision (2026-11-20): the homepage is served from the existing c
 
 ## Visual direction
 
-Use the native product's quiet system typography and recognizable app artwork. The distinctive content is the existing real Paseo / Praxis four-frame example with synthetic Reminder content, not a fabricated chat UI. Show a static poster first, with explicit play/pause and a reduced-motion default. No fake customer logos, usage metrics, star counts or decorative dashboard replicas.
+Use the native product's quiet system typography and recognizable app artwork. The distinctive content is the existing real Paseo / Praxis four-frame example with synthetic Reminder content, not a fabricated chat UI. Revision (2026-11-20, applied): the header is sticky; the hero drops the supporting paragraphs and shows the animated workbench example beside the H1, playing automatically (static poster with an explicit play control under `prefers-reduced-motion`; the poster remains the no-JavaScript and share-card image); the connection steps read Authorize → Ask → Review; and a result-card design preview follows the app directory. No fake customer logos, usage metrics, star counts or decorative dashboard replicas.
 
 | Token | Value and purpose |
 | --- | --- |
@@ -29,17 +29,16 @@ The first pass considered a conventional three-benefit card row. Remove it: a re
 ## Content and flow
 
 ```text
-Praxis       Apps / Get started / GitHub / Language / Open workbench
+Praxis       Apps / Get started / GitHub / Language / Open workbench   (sticky)
 
-A self-hosted workbench              Ask for an outcome. Choose access.
-for your AI agent.                  Review and use the result.
-Try with your agent / Self-host Praxis
+A self-hosted workbench              Animated real example, autoplay
+for your AI agent.
 
-Actual Paseo + Praxis example, poster / play control
-
-Ask / Authorize / Review: three actual steps
+Authorize / Ask / Review: three actual steps
 
 Fourteen published components: icons, names, brief purposes, source links
+
+Result-card design preview: what changed, why it appeared, one tap to source
 
 Keep the work yours: data ownership, trace evidence, build your own apps
 
@@ -49,7 +48,7 @@ Self-host: full Compose command, credentials command, local connection
 Visible FAQ / source and documentation links
 ```
 
-Lead copy: “A self-hosted workbench for your AI agent.” Supporting copy explains that people ask for an outcome, choose access and review/use results. Protecting attention is the intent; do not promise every workflow already achieves zero clicks. Individuals, families, teams and organizations are all included without an employee-monitoring pitch.
+Lead copy: “A self-hosted workbench for your AI agent.” Supporting paragraphs were removed in the applied revision; the animated product example sits beside the H1. Protecting attention is the intent; do not promise every workflow already achieves zero clicks. Individuals, families, teams and organizations are all included without an employee-monitoring pitch.
 
 The fourteen components use app-owned icons and names. Source links are public repository links, not anonymous links to private app records. Polaris is labelled as runtime observations and contributes no app card. Future production rendering should generate this release directory from the reviewed app registry rather than maintain another canonical app table.
 

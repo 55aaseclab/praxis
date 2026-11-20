@@ -41,6 +41,12 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.match(html, /property="og:image" content="https:\/\/public-home\.synthetic\.test\/home-images\/workbench-en\.png"/);
   assert.doesNotMatch(html, /noindex/);
   assert.doesNotMatch(html, /About Praxis/);
+  assert.doesNotMatch(html, /Ask for an outcome\. Choose what your agent can access\./);
+  assert.match(html, /<header class="site-header wrap"/);
+  assert.match(html, /Authorize\. Ask\. Review\./);
+  assert.match(html, /id="cards" class="cards-section wrap"/);
+  assert.match(html, /class="result-card"/);
+  assert.match(html, /data-animation="\/home-images\/workbench-en\.gif"/);
   for (const id of ['reminder', 'knowledge', 'lattice-slides', 'travel', 'tingproof', 'memo', 'finance', 'intelligence', 'polaris', 'letters', 'profiles', 'projects', 'calendar', 'matrix-reader']) {
     assert.match(html, new RegExp(`github\\.com/55aaseclab/${id === 'lattice-slides' ? 'lattice' : id}"`));
   }
@@ -54,6 +60,8 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.match(zhHtml, /<html lang="zh-CN">/);
   assert.match(zhHtml, new RegExp(`<link rel="canonical" href="${canonical}/zh-cn/">`));
   assert.match(zhHtml, /为你的 AI 智能体，<br>准备一个自己的工作台。/);
+  assert.match(zhHtml, /授权。提问。查看结果。/);
+  assert.match(zhHtml, /class="result-card"/);
   assert.match(zhHtml, /\/home-images\/workbench-zh\.png/);
   assert.equal((await request('/zh-cn', null)).status, 308);
 

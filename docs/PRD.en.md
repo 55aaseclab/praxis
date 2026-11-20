@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.128 · [简体中文](PRD.md)
+Version: 0.1.129 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -206,6 +206,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.126 | 2026-11-20 | Serve the public product homepage at the canonical origin and retire the About Praxis pages |
 | v0.1.127 | 2026-11-20 | Default the workbench to the card view and return to the public homepage after sign-out |
 | v0.1.128 | 2026-11-20 | Make the For you card deck the workbench home without a view switch |
+| v0.1.129 | 2026-11-20 | Refine the public homepage: sticky header, autoplaying hero demo, authorize-ask-review order and a card design preview |
 
 ### Letters and Profiles
 

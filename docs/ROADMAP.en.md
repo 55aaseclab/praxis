@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.128
+Version: 0.1.129
 
 [简体中文](ROADMAP.md)
 
@@ -243,6 +243,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.126 | 2026-11-20 | Serve the public product homepage at the canonical origin and retire the About Praxis pages |
 | v0.1.127 | 2026-11-20 | Default the workbench to the card view and return to the public homepage after sign-out |
 | v0.1.128 | 2026-11-20 | Make the For you card deck the workbench home without a view switch |
+| v0.1.129 | 2026-11-20 | Refine the public homepage: sticky header, autoplaying hero demo, authorize-ask-review order and a card design preview |
 
 ### Public applications with private collections
 
