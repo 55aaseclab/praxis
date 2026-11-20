@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.132
+Version: 0.1.133
 
 [简体中文](ROADMAP.md)
 
@@ -247,6 +247,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.130 | 2026-11-20 | Restore the full-width homepage demo and refine navigation, spacing and result-card hierarchy |
 | v0.1.131 | 2026-11-20 | Version homepage assets by content to prevent mixed cached layouts after deployment |
 | v0.1.132 | 2026-11-20 | Refocus homepage cards on attention and simplify content with documentation and contribution navigation |
+| v0.1.133 | 2026-11-20 | Restore the homepage ownership section to a left-heading and right-copy layout |
 
 ### Public applications with private collections
 

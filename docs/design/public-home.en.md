@@ -12,6 +12,10 @@ Implementation decision (2026-11-20): the homepage is served from the existing c
 
 The latest approved layout places the H1 and its two actions together above a full-width product example, replacing the side-by-side hero. Keep the actual GIF at a readable size and preserve autoplay, reduced-motion controls and no-JavaScript poster. Use a full-viewport sticky header with a compact content row, a consistent section rhythm and a result-card preview on the native workbench canvas. The card separates app identity, reason, title, due time, evidence and primary/secondary actions instead of squeezing them into one header. Keep all existing content sections, authorization/ask/review order and SEO endpoints.
 
+## Ownership layout correction
+
+Restore Keep the work yours to its original left/right composition: heading on the left, the two shortened data/access and trace entries stacked on the right. Phones retain a single column. Keep the removed agent-choice entry removed and leave the other homepage revisions intact.
+
 ## Content revision — attention and concise sections
 
 Remove both visible demo caption lines; normal autoplay leaves no empty caption strip. Reduced-motion users retain the play/pause control, and no-JavaScript visitors retain the animation link. Position cards as **Your attention, on your terms.**: focus now, defer or hide, with reading kept separate from acceptance/read receipts. Stack the app-directory heading above its description. Under Keep the work yours, show only two concise columns for data/access and recorded actions; remove Your agent, your choice. Add Documentation and Contribute to the sticky header, preserving mobile wrapping and anchor clearance. English and Simplified Chinese change together.
