@@ -29,32 +29,8 @@ COPY --chown=node:node config ./config/
 COPY --chown=node:node scripts ./scripts/
 COPY --chown=node:node docs ./docs/
 COPY --chown=node:node skills ./skills/
-COPY --chown=node:node third_party/reminder/docs/ ./third_party/reminder/docs/
-COPY --chown=node:node third_party/travel/docs/ ./third_party/travel/docs/
-COPY --chown=node:node third_party/knowledge/docs/ ./third_party/knowledge/docs/
-COPY --chown=node:node third_party/projects/docs/ ./third_party/projects/docs/
-COPY --chown=node:node third_party/finance/docs/ ./third_party/finance/docs/
-COPY --chown=node:node third_party/intelligence/docs/ ./third_party/intelligence/docs/
-COPY --chown=node:node third_party/memo/docs/ ./third_party/memo/docs/
-COPY --chown=node:node third_party/tingproof/docs/ ./third_party/tingproof/docs/
-COPY --chown=node:node third_party/lattice/docs/ ./third_party/lattice/docs/
-COPY --chown=node:node third_party/lattice/src/business/schema.mjs ./third_party/lattice/src/business/schema.mjs
-COPY --chown=node:node third_party/reminder/praxis-provider.mjs ./third_party/reminder/
-COPY --chown=node:node third_party/knowledge/praxis-provider.mjs ./third_party/knowledge/
-COPY --chown=node:node third_party/travel/praxis-provider.mjs ./third_party/travel/
-COPY --chown=node:node third_party/projects/praxis-provider.mjs ./third_party/projects/
-COPY --chown=node:node third_party/memo/praxis-provider.mjs ./third_party/memo/
-COPY --chown=node:node third_party/tingproof/praxis-provider.mjs ./third_party/tingproof/
-COPY --chown=node:node third_party/lattice/praxis-provider.mjs ./third_party/lattice/
-COPY --chown=node:node third_party/finance/praxis-provider.mjs ./third_party/finance/
-COPY --chown=node:node third_party/intelligence/praxis-provider.mjs ./third_party/intelligence/
-COPY --chown=node:node third_party/matrix-reader/praxis-provider.mjs ./third_party/matrix-reader/
-COPY --chown=node:node third_party/polaris/praxis-provider.mjs ./third_party/polaris/
-COPY --chown=node:node third_party/letters ./third_party/letters/
-COPY --chown=node:node third_party/profiles ./third_party/profiles/
-COPY --chown=node:node third_party/calendar ./third_party/calendar/
-COPY --chown=node:node third_party/polaris/apps/docs/site/development/prd.md third_party/polaris/apps/docs/site/development/prd.zh-CN.md ./third_party/polaris/apps/docs/site/development/
-COPY --chown=node:node third_party/matrix-reader/PRD.md ./third_party/matrix-reader/
+# The context allowlist includes reviewed app metadata, public assets and docs.
+COPY --chown=node:node third_party/ ./third_party/
 COPY --from=matrix-reader-build --chown=node:node /build/dist/ ./third_party/matrix-reader/dist/
 USER node
 EXPOSE 4321

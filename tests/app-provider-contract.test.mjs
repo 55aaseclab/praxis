@@ -1,3 +1,4 @@
+import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -75,7 +76,7 @@ async function providerFixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'praxis-provider-contract-')); t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'config'));
   const apps = [];
-  async function catalog() { await writeFile(join(root, 'config/apps.json'), JSON.stringify(apps)); }
+  async function catalog() { await writeInstalledAppsFixture(root, apps); }
   async function add(id, { name = id, version = 1, label = `${id} owned records`, env = `${id.toUpperCase()}_DATA`, altered = false } = {}) {
     const app = { id, name, builtin: true, kind: 'app', source: `third_party/${id}` }; apps.push(app);
     const directory = join(root, app.source); await mkdir(directory, { recursive: true });

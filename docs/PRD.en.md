@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.117 · [简体中文](PRD.md)
+Version: 0.1.118 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -48,6 +48,14 @@ Overview → Trace defaults to actual MCP tool calls. Show the registered tool, 
 Trace metadata must remain readable while a tool invocation is queued or running. Read-only administrative monitoring does not wait behind unrelated business-operation route gates; business execution still holds its policy lease and serialization gate.
 
 Polaris contributes already-recorded workflow context as a supplementary trace source. Runtime history, historical authorization rows and app change events must not stand in for evidence of current MCP calls. Keep usage/experience clues expanded. Record allowlisted metadata without raw arguments, outputs, credentials, arbitrary tool names or private browsing history, and preserve current administrative and business-reference authorization.
+
+## App-owned registration and release identity
+
+Each app owns its `praxis-app.json`, icon, localized presentation, default entry, documentation locations and registration example in its own repository. The application release version is part of that declaration. Praxis discovers and validates installed declarations; it must not maintain a second hand-authored app catalog or central copy of all app examples. Replace `config/apps.json` and `config/apps.example.json` with a source-reference-only installation index. Deployment origins, mounts, installation selection and authorization remain installation/platform responsibilities. App metadata never grants access, installs a backend or expands business capabilities.
+
+Use three numeric components, `MAJOR.MINOR.PATCH`, for app release versions. Apps keep independent version values and release cycles. A declared release matches the app's package and root lockfile where they exist; static apps declare it in their manifest. Runtime health/version responses and workbench/PRD release labels use that same release identity. Requirements revisions are labelled separately. Preserve historical meaning when expanding an app release shorthand such as `0.1` to `0.1.0`; schema numbers, protocol versions, algorithm revisions and business-record revisions are separate contracts and are not renumbered.
+
+Keep fourteen installed entries, thirteen non-runtime card providers, data inventory, bilingual PRDs, local examples and the existing protected native routes working from app-owned metadata. Fresh anonymous bootstrap must be able to fetch the source references before app manifests are present. Reject duplicate identities, missing or invalid declarations, unsafe paths and version mismatches rather than silently falling back to a stale built-in table. Preserve private deployment overrides and publish app-owned changes before pinning their reviewed public commits.
 
 ## Application publication
 
@@ -155,6 +163,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.115 | 2026-11-19 | Honor private reader ownership in card discovery and preferences |
 | v0.1.116 | 2026-11-19 | Prioritize actual MCP calls, outcomes and latency in Overview Trace |
 | v0.1.117 | 2026-11-20 | Keep MCP Trace monitoring responsive during in-flight business calls |
+| v0.1.118 | 2026-11-20 | Move app registration ownership to app manifests and standardize release versions |
 
 ### Letters and Profiles
 

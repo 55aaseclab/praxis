@@ -1,3 +1,4 @@
+import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 // HTTP wiring fixtures only: native app behavior is verified in each owning repo.
 // Never contact installed native services, including a default Finance port.
 import test, { after } from 'node:test';
@@ -34,7 +35,7 @@ async function fixture(t, { nativeFinance = false, privateReaders = false } = {}
   const root = await mkdtemp(join(tmpdir(), 'praxis-provider-http-'));
   const state = join(root, 'state'); await mkdir(join(root, 'config')); await mkdir(state, { mode: 0o700 });
   const catalog = ['reminder', 'finance', 'calendar', ...(privateReaders ? ['matrix-reader', 'letters', 'profiles'] : [])].map(id => ({ id, kind: 'app', builtin: true, name: id, source: `third_party/${id}`, path: '/', icon: `/${id}-icon.svg`, ...(['letters', 'profiles'].includes(id) && { adminOnly: true }) }));
-  async function saveCatalog() { await writeFile(join(root, 'config/apps.json'), JSON.stringify(catalog)); }
+  async function saveCatalog() { await writeInstalledAppsFixture(root, catalog); }
   async function writeProvider(id, options = {}) { await mkdir(join(root, `third_party/${id}`), { recursive: true }); await writeFile(join(root, `third_party/${id}/praxis-provider.mjs`), syntheticProvider(id, { browser: ['calendar', 'matrix-reader', 'letters', 'profiles'].includes(id), ...options })); }
   await saveCatalog(); for (const { id } of catalog) await writeProvider(id);
   const reserved = createServer(); reserved.listen(0, '127.0.0.1'); await once(reserved, 'listening'); const webPort = reserved.address().port; await new Promise(resolve => reserved.close(resolve));
@@ -68,7 +69,7 @@ async function fixture(t, { nativeFinance = false, privateReaders = false } = {}
   await openCore();
   const request = (path, { user = 'owner-a', csrf, ...options } = {}) => networkFetch(coreOrigin + path, { redirect: 'manual', ...options, headers: { Host: new URL(issuer).host, Connection: 'close', ...(user && { Cookie: `${SESSION_COOKIE}=${sessions[user]}` }), ...(csrf && { 'X-CSRF-Token': csrf }), ...options.headers } });
   const csrf = async user => (await (await request('/api/business/account/session', { user })).json()).csrfToken;
-  const f = { root, config, catalog, sessions, issuer, webPort, request, csrf, sourceCalls, permission, writeProvider, saveCatalog, users, get auth() { return auth; }, get core() { return core; }, get coreOrigin() { return coreOrigin; }, set respond(value) { respond = value; }, hold() { const gate = deferred(); releases.add(gate.release); return gate; }, async reopen() { const port = core.address().port; await closeCore(); auth.close(); auth = new AuthStore({ file: config.database, issuer }); await openCore(port); }, async openWeb({ privateDocumentOwnerId } = {}) { web = createPraxisServer({ root, publicDir: resolve('public'), observationsFile: null, publicUrlsFile: null, businessUrl: null, consoleUpstream: null, webGateway: { enabled: true, canonicalUrl: issuer, coreUrl: coreOrigin, privateDocumentOwnerId } }); web.listen(webPort, '127.0.0.1'); await once(web, 'listening'); return (path, user = 'owner-a') => networkFetch(issuer + path, { redirect: 'manual', headers: user ? { Cookie: `${SESSION_COOKIE}=${sessions[user]}` } : {} }); } };
+  const f = { root, config, catalog, sessions, issuer, webPort, request, csrf, sourceCalls, permission, writeProvider, saveCatalog, users, get auth() { return auth; }, get core() { return core; }, get coreOrigin() { return coreOrigin; }, set respond(value) { respond = value; }, hold() { const gate = deferred(); releases.add(gate.release); return gate; }, async reopen() { const port = core.address().port; await closeCore(); auth.close(); auth = new AuthStore({ file: config.database, issuer }); await openCore(port); }, async openWeb({ privateDocumentOwnerId } = {}) { web = createPraxisServer({ root, publicDir: resolve('public'), observationsFile: null, publicUrlsFile: null, businessUrl: null, consoleUpstream: null, webGateway: { enabled: true, canonicalUrl: issuer, coreUrl: coreOrigin, privateDocumentOwnerId } }); web.listen(webPort, '127.0.0.1'); await once(web, 'listening'); return (path, user = 'owner-a', headers = {}) => networkFetch(issuer + path, { redirect: 'manual', headers: { ...(user && { Cookie: `${SESSION_COOKIE}=${sessions[user]}` }), ...headers } }); } };
   t.after(async () => { for (const release of releases) release(); if (web) { web.closeAllConnections(); await new Promise(resolve => web.close(resolve)); } await closeCore(); auth.close(); await rm(root, { recursive: true, force: true }); });
   return f;
 }
@@ -145,7 +146,7 @@ test('HTTP browser manifests/modules require current entry access, use code hash
   const next = await (await web('/api/workbench/providers')).json(); assert.notEqual(next.providers[0].moduleUrl, first.providers[0].moduleUrl);
   f.auth.setWebAccess({ userId: 'owner-a', apps: ['reminder'], workbench: true, prds: false }); assert.deepEqual((await (await web('/api/workbench/providers')).json()).providers, []); assert.equal((await web(next.providers[0].moduleUrl)).status, 403);
   f.auth.setWebAccess({ userId: 'owner-a', apps: ['calendar'], workbench: true, prds: false }); f.catalog.find(app => app.id === 'calendar').source = 'https://outside.example.test/module.mjs'; await f.saveCatalog();
-  assert.deepEqual((await (await web('/api/workbench/providers')).json()).providers, []); assert.equal(ambientRequests.length, 0);
+  assert.equal((await web('/api/workbench/providers')).status, 500); assert.equal(ambientRequests.length, 0);
 });
 
 test('HTTP private reader cards/modules and Later use the configured native administrator owner rather than ordinary apps membership', { timeout: 15000 }, async t => {
@@ -164,7 +165,17 @@ test('HTTP private reader cards/modules and Later use the configured native admi
     assert.equal((await web(module, 'administrator')).status, 200);
     assert.equal((await web(module, 'owner-b')).status, 403);
     assert.equal((await web(module, 'owner-a')).status, 403);
+    const iconPath = `/app-icons/${appId}.svg`, icon = await web(iconPath, 'administrator'); assert.equal(icon.status, 200); const etag = icon.headers.get('etag'); assert.ok(etag);
+    assert.equal((await web(iconPath, 'administrator', { 'If-None-Match': etag })).status, 304);
+    assert.equal((await web(iconPath, 'owner-b', { 'If-None-Match': etag })).status, 403);
+    assert.equal((await web(iconPath, 'owner-a')).status, 403); assert.equal((await web(iconPath, null)).status, 401);
+    assert.equal((await web(`/${appId}-icon.svg`, 'administrator')).status, 200);
+    assert.equal((await web(`/${appId}-icon.svg`, 'owner-b')).status, 403);
   }
+  f.catalog.push({ id: 'polaris', kind: 'app', builtin: true, name: 'Runtime', source: 'third_party/polaris', path: '/', icon: '/polaris-icon.svg', adminOnly: true }); await f.writeProvider('polaris'); await f.saveCatalog();
+  assert.equal((await web('/app-icons/polaris.svg', 'owner-b')).status, 200);
+  assert.equal((await web('/app-icons/polaris.svg', 'owner-a')).status, 403);
+  assert.equal((await web('/app-icons/polaris.svg', null)).status, 401);
   const ownerCards = await (await f.request(cardPath, { user: 'administrator' })).json();
   assert.ok(ownerCards.sources.some(source => source.appId === 'letters' && source.status === 'browser'));
   assert.ok(ownerCards.sources.some(source => source.appId === 'profiles' && source.status === 'browser'));

@@ -3,11 +3,16 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { PRD_SOURCES, loadPrd, listPrds } from '../src/prd-catalog.mjs';
+import { getPrdSources, loadPrd, listPrds } from '../src/prd-catalog.mjs';
+import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 
 async function workspace(t) {
   const root = await mkdtemp(join(tmpdir(), 'prd-catalog-'));
   t.after(() => rm(root, { recursive: true, force: true }));
+  await writeInstalledAppsFixture(root, metadata.filter(item => item.group === 'third-party').map(item => {
+    const source = item.source.split('/').slice(0, 2).join('/'), prd = item.source.slice(source.length + 1);
+    return { id: item.id, source, name: item.project, labels: { zh: { name: item.project, description: 'Synthetic app requirements' } }, documents: { prd: { en: prd, zh: prd } } };
+  }));
   async function put(source, content) {
     const file = join(root, source);
     await mkdir(dirname(file), { recursive: true });
@@ -35,10 +40,10 @@ const metadata = [
   { id: 'polaris', group: 'third-party', project: 'Polaris', source: 'third_party/polaris/apps/docs/site/development/prd.zh-CN.md' },
 ];
 
-test('fixed catalog classifies Praxis and independent app PRDs', async (t) => {
+test('installed app declarations classify Praxis and independent app PRDs', async (t) => {
   const { root, put } = await workspace(t);
   const ordered = values => [...values].sort((a, b) => a.id.localeCompare(b.id));
-  assert.deepEqual(ordered(PRD_SOURCES.map(({ id, group, project, source }) => ({ id, group, project, source }))), ordered(metadata));
+  assert.deepEqual(ordered((await getPrdSources({ root })).map(({ id, group, project, source }) => ({ id, group, project, source }))), ordered(metadata));
   for (const source of metadata) await put(source.source, `# **${source.project}** PRD\n\n版本：v0.1.0\n\nSynthetic ${source.id} content.\n`);
   const list = await listPrds({ root, locale: 'zh' });
   assert.equal(list.length, metadata.length);
@@ -59,6 +64,7 @@ test('Chinese source paths use the explicit current version rather than the file
   const file = await put(source, original);
   const document = await loadPrd('tingproof', { root, locale: 'zh' });
   assert.equal(document.version, 'V1.1.4');
+  assert.equal(document.appVersion, '1.2.3');
   assert.equal(document.title, '听校（TingProof）产品需求文档');
   assert.equal(document.content, original);
   assert.equal(await readFile(file, 'utf8'), original);
@@ -72,7 +78,7 @@ test('version tables use semantic ordering and never infer a version from the fi
   assert.equal((await loadPrd('tingproof', { root, locale: 'zh' })).version, null);
 });
 
-test('missing files and uninitialized projects degrade one entry without failing the catalog', async (t) => {
+test('missing declared PRD files degrade one entry without failing the catalog', async (t) => {
   const { root, put } = await workspace(t);
   await put('docs/PRD.md', '# Available main PRD\n');
   const list = await listPrds({ root, locale: 'zh' });
@@ -122,8 +128,8 @@ test('source symlinks and symlinked parent directories are unavailable even insi
   const fileLink = await loadPrd('praxis', { root, locale: 'zh' });
   assert.equal(fileLink.status, 'unavailable');
   assert.equal(fileLink.content, '');
-  await mkdir(join(root, 'third_party'));
-  await symlink(join(root, 'alternate'), join(root, 'third_party/reminder'));
+  await mkdir(join(root, 'third_party/reminder'), { recursive: true });
+  await symlink(join(root, 'alternate'), join(root, 'third_party/reminder/docs'));
   const parentLink = await loadPrd('reminder', { root, locale: 'zh' });
   assert.equal(parentLink.status, 'unavailable');
   assert.equal(parentLink.content, '');
@@ -153,4 +159,21 @@ test('English is the default reader edition and has its own fixed source allowli
   assert.equal(first.source, 'docs/PRD.en.md');
   assert.equal((await loadPrd('praxis', { root, locale: 'zh' })).title, '中文需求');
   assert.equal((await loadPrd('praxis', { root, locale: '../../secret' })).source, 'docs/PRD.en.md');
+});
+
+
+test('app release and PRD location refresh from the app declaration without a platform entry edit', async t => {
+  const { root, put } = await workspace(t);
+  await put('third_party/reminder/docs/PRD.md', '# First requirements\n\nVersion: 9.8.7\n');
+  const before = await loadPrd('reminder', { root, locale: 'zh' });
+  assert.equal(before.appVersion, '1.2.3'); assert.equal(before.version, '9.8.7');
+  const manifestFile = join(root, 'third_party/reminder/praxis-app.json');
+  const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
+  manifest.version = '1.2.4'; manifest.documents.prd.zh = 'docs/current.md';
+  await writeFile(manifestFile, JSON.stringify(manifest));
+  await put('third_party/reminder/docs/current.md', '# App-owned updated requirements\n\nVersion: 2.0.0\n');
+  const after = await loadPrd('reminder', { root, locale: 'zh' });
+  assert.equal(after.appVersion, '1.2.4'); assert.equal(after.version, '2.0.0');
+  assert.equal(after.title, 'App-owned updated requirements');
+  assert.equal(after.source, 'third_party/reminder/docs/current.md');
 });

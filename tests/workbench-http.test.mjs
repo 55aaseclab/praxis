@@ -1,3 +1,4 @@
+import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
@@ -47,13 +48,13 @@ test('fresh checkout serves the workbench without revealing an owner collection'
   assert.equal((await health.json()).status, 'ok');
 });
 
-test('a standalone workbench discovers a local app while keeping an owner-only app private', async t => {
+test('a standalone installed directory keeps owner-only entries private and reports an unstarted native app', async t => {
   const root = await mkdtemp(join(tmpdir(), 'praxis-launcher-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'config'));
   const sample = { id: 'sample', kind: 'app', name: 'Sample app', icon: '/sample.svg', path: '/', port: 5567 };
   const hidden = { ...sample, id: 'private-app', adminOnly: true };
-  await writeFile(join(root, 'config/apps.json'), JSON.stringify([sample, hidden]));
+  await writeInstalledAppsFixture(root, [sample, hidden]);
 
   const request = await start(t, { root });
   const result = await request('/api/apps');
@@ -61,7 +62,8 @@ test('a standalone workbench discovers a local app while keeping an owner-only a
   const { apps } = await result.json();
   assert.equal(apps.length, 1);
   assert.equal(apps[0].id, 'sample');
-  assert.equal(apps[0].port, 5567);
+  assert.equal(apps[0].unavailable, 'managed');
+  assert.equal(apps[0].port, undefined);
   assert.equal((await request('/api/apps', { method: 'POST' })).status, 405);
 });
 
@@ -72,11 +74,14 @@ test('installed Calendar serves its page, navigation and named assets only', asy
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, 'index.html'), '<html><head><title>Calendar</title></head><body></body></html>');
   await writeFile(join(directory, 'calendar.js'), '// synthetic');
+  await writeFile(join(directory, 'calendar-events.js'), '// synthetic browser event helper');
+  await writeInstalledAppsFixture(root, [{ id: 'calendar', name: 'Calendar', source: 'third_party/calendar' }]);
   const request = await start(t, { root, publicDir: new URL('../public/', import.meta.url).pathname });
   const page = await request('/apps/calendar/');
   assert.equal(page.status, 200);
   assert.match(await page.text(), /data-app-id="calendar"/);
   assert.equal((await request('/apps/calendar/calendar.js')).status, 200);
+  assert.equal((await request('/apps/calendar/calendar-events.js')).status, 200);
   assert.equal((await request('/apps/calendar/api/records')).status, 404);
   assert.equal((await request('/praxis-nav.js')).status, 200);
   assert.equal((await request('/')).status, 200);

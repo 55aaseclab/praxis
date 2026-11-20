@@ -9,21 +9,72 @@ import { promisify } from 'node:util';
 import { AppProviderRegistry } from '../src/business/app-providers.mjs';
 import { createDataSourceResolver } from '../src/business/provider-data.mjs';
 import { builtinProviderDefaults } from '../scripts/builtin-install.mjs';
+import { readApps } from '../src/apps.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
 const read = path => readFile(join(root, path), 'utf8');
 
 test('platform image receives all fourteen installed provider modules through its reviewed build context', async () => {
-  const catalog = JSON.parse(await read('config/apps.json')).filter(app => app.builtin && app.kind === 'app');
+  const catalog = (await readApps(root, { publicUrlsFile: null })).filter(app => app.builtin && app.kind === 'app');
   const dockerfile = await read('Dockerfile'), ignore = await read('.dockerignore');
   assert.equal(catalog.length, 14); assert.match(ignore, /^!third_party\/\*\/praxis-provider\.mjs$/m);
+  assert.match(dockerfile, /^COPY --chown=node:node third_party\/ \.\/third_party\/$/m);
+  for (const pattern of ['!config/installed-apps.json', '!third_party/*/praxis-app.json', '!third_party/*/apps.example.json', '!third_party/*/package.json', '!third_party/*/package-lock.json', '!third_party/*/public/*.svg', '!third_party/**/*.md']) {
+    assert.ok(ignore.split(/\r?\n/).includes(pattern), `${pattern} must reach the reviewed build context`);
+  }
   for (const app of catalog) {
     assert.ok((await lstat(join(root, app.source, 'praxis-provider.mjs'))).isFile(), app.id);
-    const moduleCopied = dockerfile.includes(`${app.source}/praxis-provider.mjs ./${app.source}/`);
-    const appCopied = dockerfile.includes(`${app.source} ./${app.source}/`);
-    assert.ok(moduleCopied || appCopied, `${app.id} provider must reach the platform image`);
+    assert.ok((await lstat(join(root, app.source, 'praxis-app.json'))).isFile(), app.id);
   }
+  const calendar = await read('third_party/calendar/public/calendar.js');
+  assert.match(calendar, /from ['"]\.\/calendar-events\.js['"]/);
+  assert.match(ignore, /^!third_party\/calendar\/public\/calendar-events\.js$/m);
+  assert.ok((await lstat(join(root, 'third_party/calendar/public/calendar-events.js'))).isFile());
+});
+
+// Opt in only after the release image exists; no production volumes or networks are used.
+if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the complete app-owned catalog, providers, PRDs and Calendar module closure', { timeout: 60_000 }, async () => {
+  const image = process.env.PRAXIS_TEST_IMAGE;
+  assert.match(image, /^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/);
+  const script = `
+    import assert from 'node:assert/strict';
+    import { readFile, lstat } from 'node:fs/promises';
+    import { resolve, dirname, relative } from 'node:path';
+    import { readApps, resolveAppIcon } from './src/apps.mjs';
+    import { AppProviderRegistry } from './src/business/app-providers.mjs';
+    import { loadPrd } from './src/prd-catalog.mjs';
+    const root = process.cwd(), apps = await readApps(root, { publicUrlsFile: null });
+    assert.equal(apps.length, 14); assert.equal(new Set(apps.map(app => app.id)).size, 14);
+    for (const app of apps) {
+      assert.match(app.version, /^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/);
+      const icon = await resolveAppIcon(root, app.icon, { apps });
+      assert.ok(icon?.info.isFile(), app.id); assert.ok(icon.content.length, app.id);
+      for (const locale of ['en', 'zh']) {
+        const prd = await loadPrd(app.id, { root, locale });
+        assert.equal(prd?.status, 'ready', app.id + ':' + locale); assert.equal(prd.appVersion, app.version);
+      }
+    }
+    const providers = await new AppProviderRegistry({ root }).providers();
+    assert.equal(providers.length, 14); assert.ok(providers.every(provider => !provider.error));
+    assert.equal(providers.filter(provider => provider.descriptor.cards.supported).length, 13);
+    assert.equal(providers.find(provider => provider.app.id === 'polaris').descriptor.cards.supported, false);
+    const base = resolve(root, 'third_party/calendar/public'), visited = new Set();
+    async function moduleClosure(file) {
+      assert.ok(!relative(base, file).startsWith('..')); if (visited.has(file)) return;
+      visited.add(file); assert.ok((await lstat(file)).isFile());
+      const source = await readFile(file, 'utf8');
+      for (const match of source.matchAll(/(?:from\\s*|import\\s*\\()(['"])(\\.[^'"]+)\\1/g)) await moduleClosure(resolve(dirname(file), match[2]));
+    }
+    await moduleClosure(resolve(base, 'calendar.js'));
+    assert.ok(visited.has(resolve(base, 'calendar-events.js')));
+    console.log(JSON.stringify({ apps: apps.length, providers: providers.length, cardProviders: 13, icons: apps.length, prdEditions: apps.length * 2, calendarModules: visited.size }));
+  `;
+  const quote = value => "'" + String(value).replaceAll("'", "'\\''") + "'";
+  const command = ['docker', 'run', '--rm', '--pull=never', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--entrypoint', 'node', image, '--input-type=module', '-e', script].map(quote).join(' ');
+  const { stdout } = await execute('sg', ['docker', '-c', command], { maxBuffer: 1024 * 1024 });
+  const result = JSON.parse(stdout.trim());
+  assert.deepEqual(result, { apps: 14, providers: 14, cardProviders: 13, icons: 14, prdEditions: 28, calendarModules: 2 });
 });
 test('native image targets copy their own module after dependency installation and keep video pruning', async () => {
   const dockerfile = await read('Dockerfile.builtins');

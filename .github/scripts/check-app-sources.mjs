@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { readApps, readInstalledApps } from '../../src/apps.mjs';
 
 const execute = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -17,8 +18,9 @@ const git = async (args, options = {}) => (await execute('git', args, {
 const samePaths = (actual, expected) => actual.length === expected.length &&
   [...actual].sort().every((path, index) => path === [...expected].sort()[index]);
 
-const apps = JSON.parse(await readFile(join(root, 'config/apps.json'), 'utf8')).filter(app => app.builtin);
-const sources = apps.map(app => app.source);
+// Source references must be readable before submodules have been populated.
+const installed = await readInstalledApps(root);
+const sources = installed.map(app => app.source);
 if (!sources.length || sources.some(source => !/^third_party\/[a-z][a-z0-9-]*$/.test(source)) || new Set(sources).size !== sources.length) {
   throw new Error('Built-in apps must have unique third_party source paths.');
 }
@@ -85,10 +87,16 @@ try {
     }
     const tree = await git(['-C', destination, 'ls-tree', '-r', sha], { env });
     if (/^160000 /m.test(tree)) throw new Error(`Nested submodules need an explicit source review: ${module.path}`);
-    if (populate) await git(['-C', destination, 'checkout', '--quiet', '--detach', sha], { env });
+    await git(['-C', destination, 'checkout', '--quiet', '--detach', sha], { env });
     console.log(`${module.path} ${sha} anonymously retrievable and released in ${releaseRef}${populate ? ' and checked out' : ''}`);
   }
-  console.log(`Public app source check passed: ${apps.length} fixed revisions.`);
+  const auditRoot = populate ? root : temporary;
+  if (!populate) {
+    await mkdir(join(auditRoot, 'config'));
+    await writeFile(join(auditRoot, 'config/installed-apps.json'), JSON.stringify({ schemaVersion: 1, apps: installed }));
+  }
+  const apps = await readApps(auditRoot, { publicUrlsFile: null });
+  console.log(`Public app source check passed: ${apps.length} fixed revisions with app-owned manifests and matching release versions.`);
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

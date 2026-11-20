@@ -45,7 +45,7 @@ flowchart LR
   A --> D[(App-owned data)]
 ```
 
-The launcher registry is `config/apps.json`. The PRD collection reads only documents listed by `src/prd-catalog.mjs`. Use `git submodule update --init third_party/<app>` for a required app. The fourteen pinned app commits are publicly fetchable. [Source inventory](REPOSITORIES.md)
+The installation index `config/installed-apps.json` contains only reviewed app source references; each app owns its presentation and release version in `praxis-app.json`. The PRD collection reads only documents listed by the app-owned `praxis-app.json` document declaration. Use `git submodule update --init third_party/<app>` for a required app. The fourteen pinned app commits are publicly fetchable. [Source inventory](REPOSITORIES.md)
 
 ## Operations
 

@@ -1,26 +1,24 @@
 import { lstat, readFile, realpath, stat } from 'node:fs/promises';
 import { resolve, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readApps } from './apps.mjs';
 
 export const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const MAX_PRD_BYTES = 2 * 1024 * 1024;
-export const PRD_SOURCES = Object.freeze([
-  { id: 'praxis', group: 'main', project: 'Praxis', source: 'docs/PRD.md', en: 'docs/PRD.en.md' },
-  { id: 'reminder', group: 'third-party', project: 'Reminder', source: 'third_party/reminder/docs/PRD.md', en: 'third_party/reminder/docs/PRD.en.md' },
-  { id: 'memo', group: 'third-party', project: 'Memo', source: 'third_party/memo/docs/Memo_PRD.md', en: 'third_party/memo/docs/PRD.en.md' },
-  { id: 'tingproof', group: 'third-party', project: '听校（TingProof）', source: 'third_party/tingproof/docs/听校_PRD_V1.0.0.md', en: 'third_party/tingproof/docs/PRD.en.md' },
-  { id: 'lattice-slides', group: 'third-party', project: 'Lattice', source: 'third_party/lattice/docs/Slides-Platform_PRD.md', en: 'third_party/lattice/docs/PRD.en.md' },
-  { id: 'travel', group: 'third-party', project: 'Travel', source: 'third_party/travel/docs/PRD.md', en: 'third_party/travel/docs/PRD.en.md' },
-  { id: 'knowledge', group: 'third-party', project: 'Knowledge', source: 'third_party/knowledge/docs/PRD.md', en: 'third_party/knowledge/docs/PRD.en.md' },
-  { id: 'finance', group: 'third-party', project: 'Finance', source: 'third_party/finance/docs/PRD.md', en: 'third_party/finance/docs/PRD.en.md' },
-  { id: 'intelligence', group: 'third-party', project: 'Intelligence', source: 'third_party/intelligence/docs/PRD.md', en: 'third_party/intelligence/docs/PRD.en.md' },
-  { id: 'projects', group: 'third-party', project: 'Projects', source: 'third_party/projects/docs/PRD.md', en: 'third_party/projects/docs/PRD.en.md' },
-  { id: 'matrix-reader', group: 'third-party', project: 'Matrix Reader', source: 'third_party/matrix-reader/PRD.md', zhHeading: '# Matrix Reader 产品需求' },
-  { id: 'letters', group: 'third-party', project: 'Letters', source: 'third_party/letters/PRD.md', zhHeading: '## 简体中文' },
-  { id: 'profiles', group: 'third-party', project: 'Profiles', source: 'third_party/profiles/PRD.md', zhHeading: '## 简体中文' },
-  { id: 'calendar', group: 'third-party', project: 'Calendar', source: 'third_party/calendar/PRD.md', zhHeading: '# 日历' },
-  { id: 'polaris', group: 'third-party', project: 'Polaris', source: 'third_party/polaris/apps/docs/site/development/prd.zh-CN.md', en: 'third_party/polaris/apps/docs/site/development/prd.md' },
-].map(Object.freeze));
+export const PLATFORM_PRD_SOURCE = Object.freeze({ id: 'praxis', group: 'main', project: 'Praxis', source: 'docs/PRD.md', en: 'docs/PRD.en.md' });
+
+export async function getPrdSources({ root = REPO_ROOT } = {}) {
+  const apps = await readApps(root, { publicUrlsFile: null });
+  return [PLATFORM_PRD_SOURCE, ...apps.filter(app => app.documents?.prd).map(app => {
+    if (app.id === 'praxis') throw new Error('The platform document ID is reserved.');
+    const prd = app.documents.prd;
+    return { id: app.id, group: 'third-party', project: app.name,
+      projectZh: app.labels?.zh?.name || app.name, appVersion: app.version,
+      source: `${app.source}/${prd.zh}`, en: `${app.source}/${prd.en}`,
+      ...(prd.zhHeading ? { zhHeading: prd.zhHeading } : {}),
+    };
+  })];
+}
 
 function compareVersions(a, b) {
   const left = a.replace(/^v/i, '').split('.').map(Number);
@@ -42,11 +40,17 @@ export function prdMetadata(content, fallback) {
 
 // A document ID selects a fixed source; callers cannot supply a filesystem path.
 export async function loadPrd(id, { root = REPO_ROOT, locale = 'en' } = {}) {
-  const entry = PRD_SOURCES.find(entry => entry.id === id);
+  if (typeof id !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(id)) return null;
+  const entry = id === 'praxis' ? PLATFORM_PRD_SOURCE : (await getPrdSources({ root })).find(entry => entry.id === id);
   if (!entry) return null;
+  return loadPrdSource(entry, { root, locale });
+}
+
+async function loadPrdSource(entry, { root = REPO_ROOT, locale = 'en' } = {}) {
   const source = {
-    id, group: entry.group,
-    project: id === 'tingproof' && locale !== 'zh' ? 'TingProof' : entry.project,
+    id: entry.id, group: entry.group,
+    project: locale === 'zh' ? entry.projectZh || entry.project : entry.project,
+    ...(entry.appVersion ? { appVersion: entry.appVersion } : {}),
     source: locale === 'zh' ? entry.source : entry.en || entry.source,
   };
   const result = { ...source, title: `${source.project} PRD`, version: null, status: 'missing', content: '' };
@@ -78,7 +82,8 @@ export async function loadPrd(id, { root = REPO_ROOT, locale = 'en' } = {}) {
   }
 }
 
-export async function listPrds(options) {
-  const documents = await Promise.all(PRD_SOURCES.map(source => loadPrd(source.id, options)));
+export async function listPrds(options = {}) {
+  const sources = await getPrdSources(options);
+  const documents = await Promise.all(sources.map(source => loadPrdSource(source, options)));
   return documents.map(({ content, ...metadata }) => metadata);
 }

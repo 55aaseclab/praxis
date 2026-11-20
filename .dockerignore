@@ -9,7 +9,7 @@
 !public/*.webmanifest
 !public/*.svg
 !public/praxis-*.png
-!config/apps.json
+!config/installed-apps.json
 !scripts/*.mjs
 !docs/PRD*.md
 !docs/APP-STANDARD.md
@@ -60,3 +60,12 @@
 !third_party/polaris/apps/docs/site/development/prd.zh-CN.md
 !packaging/builtins/start-lattice.mjs
 !packaging/builtins/prune-video-engines.mjs
+
+# App-owned registration, versions, examples and public artwork.
+!third_party/*/praxis-app.json
+!third_party/*/apps.example.json
+!third_party/*/package.json
+!third_party/*/package-lock.json
+!third_party/*/public/*.svg
+!third_party/**/*.md
+!third_party/calendar/public/calendar-events.js

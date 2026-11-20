@@ -6,7 +6,7 @@ const copy = {
     skip: 'Skip to document', navigation: 'Document navigation', requirements: 'Product requirements',
     all: 'All documents', main: 'Platform', apps: 'Apps', missing: 'Document unavailable',
     unspecified: 'Unspecified', contents: 'Contents', outline: 'Document outline', project: 'Project',
-    version: 'Version', body: 'Document body', empty: 'This document is empty.',
+    version: 'Version', appVersion: 'App release', documentVersion: 'Requirements revision', body: 'Document body', empty: 'This document is empty.',
     retry: 'This document is unavailable. Reload or choose another document.', unknown: 'Document not found.',
     browse: 'Browse all documents',
   },
@@ -15,7 +15,7 @@ const copy = {
     skip: '跳到文档内容', navigation: '需求文档导航', requirements: '产品需求',
     all: '全部文档', main: '本项目', apps: '第三方项目', missing: '文档暂不可用',
     unspecified: '未标注', contents: '目录', outline: '文档目录', project: '项目',
-    version: '版本', body: 'PRD正文', empty: '文档内容为空。',
+    version: '版本', appVersion: '应用发行版', documentVersion: '需求修订', body: 'PRD正文', empty: '文档内容为空。',
     retry: '文档暂不可用，请稍后重新加载或阅读其他文档。', unknown: '文档不存在。',
     browse: '浏览全部文档',
   },
@@ -38,7 +38,7 @@ function prdShell(title, documents, currentId, body, { systemNavigation = false,
 export function catalogPage(documents, options = {}) {
   const labels = copy[options.locale || 'en'];
   const groups = [{ id: 'main', title: labels.main }, { id: 'third-party', title: labels.apps }];
-  return prdShell(labels.catalog, documents, null, `<h1 id="_top">${labels.catalog}</h1>${groups.map(group => `<section class="prd-group" aria-labelledby="prd-group-${group.id}"><h2 id="prd-group-${group.id}">${group.title}</h2><ul class="prd-list">${documents.filter(doc => doc.group === group.id).map(doc => `<li><a class="prd-entry" href="/prds/${doc.id}/"><span><strong>${escapeHtml(doc.project)}</strong><span class="entry-title">${escapeHtml(doc.title)}</span>${doc.status !== 'ready' ? `<span class="unavailable">${labels.missing}</span>` : ''}</span><span class="prd-version">${escapeHtml(doc.version || labels.unspecified)}</span></a></li>`).join('')}</ul></section>`).join('')}`, options);
+  return prdShell(labels.catalog, documents, null, `<h1 id="_top">${labels.catalog}</h1>${groups.map(group => `<section class="prd-group" aria-labelledby="prd-group-${group.id}"><h2 id="prd-group-${group.id}">${group.title}</h2><ul class="prd-list">${documents.filter(doc => doc.group === group.id).map(doc => `<li><a class="prd-entry" href="/prds/${doc.id}/"><span><strong>${escapeHtml(doc.project)}</strong><span class="entry-title">${escapeHtml(doc.title)}</span>${doc.status !== 'ready' ? `<span class="unavailable">${labels.missing}</span>` : ''}</span><span class="prd-version">${escapeHtml(doc.appVersion || doc.version || labels.unspecified)}</span></a></li>`).join('')}</ul></section>`).join('')}`, options);
 }
 
 export function documentPage(document, rendered, documents = [], options = {}) {
@@ -46,5 +46,5 @@ export function documentPage(document, rendered, documents = [], options = {}) {
   const readable = document.status === 'ready' && rendered;
   const headings = (rendered?.headings || []).filter(heading => heading.depth === 2);
   const outline = headings.length > 2 ? `<details class="prd-outline"><summary>${labels.contents}</summary><nav aria-label="${labels.outline}"><ul>${headings.map(heading => `<li><a href="#${escapeHtml(heading.slug)}">${escapeHtml(heading.text)}</a></li>`).join('')}</ul></nav></details>` : '';
-  return prdShell(document.title, documents, document.id || '', `<h1 id="_top">${escapeHtml(document.title)}</h1>${document.id ? `<dl class="prd-metadata"><div><dt>${labels.project}</dt><dd>${escapeHtml(document.project)}</dd></div><div><dt>${labels.version}</dt><dd>${escapeHtml(document.version || labels.unspecified)}</dd></div></dl>` : ''}${readable ? document.content.trim() ? `${outline}<article class="prd-document" aria-label="${labels.body}">${rendered.html}</article>` : `<p class="prd-empty">${labels.empty}</p>` : `<p class="prd-empty">${document.id ? labels.retry : labels.unknown}</p><a class="prd-back" href="/prds/">${labels.browse}</a>`}`, options);
+  return prdShell(document.title, documents, document.id || '', `<h1 id="_top">${escapeHtml(document.title)}</h1>${document.id ? `<dl class="prd-metadata"><div><dt>${labels.project}</dt><dd>${escapeHtml(document.project)}</dd></div><div><dt>${document.appVersion ? labels.appVersion : labels.version}</dt><dd>${escapeHtml(document.appVersion || document.version || labels.unspecified)}</dd></div>${document.appVersion && document.version && document.version.replace(/^[vV]/, '') !== document.appVersion ? `<div><dt>${labels.documentVersion}</dt><dd>${escapeHtml(document.version)}</dd></div>` : ''}</dl>` : ''}${readable ? document.content.trim() ? `${outline}<article class="prd-document" aria-label="${labels.body}">${rendered.html}</article>` : `<p class="prd-empty">${labels.empty}</p>` : `<p class="prd-empty">${document.id ? labels.retry : labels.unknown}</p><a class="prd-back" href="/prds/">${labels.browse}</a>`}`, options);
 }

@@ -1,8 +1,8 @@
 import { posix } from 'node:path';
 import { createMarkdownProcessor } from '@astrojs/markdown-remark';
-import { PRD_SOURCES } from './prd-catalog.mjs';
+import { getPrdSources } from './prd-catalog.mjs';
 
-function safeLink(value, source) {
+function safeLink(value, source, sources) {
   if (typeof value !== 'string') return null;
   const href = value.trim().replace(/[\u0000-\u0020\u007f]/g, '');
   if (href.startsWith('#')) return { href };
@@ -19,10 +19,10 @@ function safeLink(value, source) {
   let path;
   try { path = decodeURIComponent((hashIndex < 0 ? href : href.slice(0, hashIndex)).split('?')[0]); }
   catch { return null; }
-  if (path === '/prds/' || PRD_SOURCES.some(entry => path === `/prds/${entry.id}/`)) return { href: `${path}${fragment}` };
+  if (path === '/prds/' || sources.some(entry => path === `/prds/${entry.id}/`)) return { href: `${path}${fragment}` };
   if (path.startsWith('/')) return null;
   const target = posix.normalize(posix.join(posix.dirname(source || ''), path));
-  const entry = PRD_SOURCES.find(candidate => candidate.source === target || candidate.en === target);
+  const entry = sources.find(candidate => candidate.source === target || candidate.en === target);
   if (!entry) return null;
   const edition = entry.en ? (entry.en === target ? '?lang=en' : '?lang=zh') : '';
   return { href: `/prds/${entry.id}/${edition}${fragment}` };
@@ -46,6 +46,7 @@ function stripActiveContent() {
 function sanitizeLinks() {
   return (tree, file) => {
     const source = file.data.astro?.frontmatter?.prdSource;
+    const sources = file.data.astro?.frontmatter?.prdSources || [];
     function visit(node) {
       if (node.type === 'element') {
         if (['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'img', 'form', 'input'].includes(node.tagName)) {
@@ -53,7 +54,7 @@ function sanitizeLinks() {
           return;
         }
         if (node.tagName === 'a') {
-          const properties = safeLink(node.properties?.href, source);
+          const properties = safeLink(node.properties?.href, source, sources);
           node.properties = properties || {};
           if (!properties) node.tagName = 'span';
         } else if (node.properties) {
@@ -67,7 +68,8 @@ function sanitizeLinks() {
 }
 
 let processor;
-export async function renderPrdMarkdown(document) {
+export async function renderPrdMarkdown(document, { root, sources } = {}) {
+  sources ??= await getPrdSources(root ? { root } : {});
   processor ??= createMarkdownProcessor({
     syntaxHighlight: false,
     smartypants: false,
@@ -78,6 +80,6 @@ export async function renderPrdMarkdown(document) {
   });
   const renderer = await processor;
   const content = String(document.content || '').replace(/^\uFEFF/, '').replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '');
-  const result = await renderer.render(content, { frontmatter: { prdSource: document.source } });
+  const result = await renderer.render(content, { frontmatter: { prdSource: document.source, prdSources: sources } });
   return { html: result.code, headings: result.metadata.headings };
 }

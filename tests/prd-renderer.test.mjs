@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderPrdMarkdown } from '../src/prd-renderer.mjs';
+import { renderPrdMarkdown as renderDocument } from '../src/prd-renderer.mjs';
+
+
+const registeredSources = [
+  {id:'praxis',source:'docs/PRD.md',en:'docs/PRD.en.md'},
+  {id:'reminder',source:'third_party/reminder/docs/PRD.md',en:'third_party/reminder/docs/PRD.en.md'},
+  {id:'memo',source:'third_party/memo/docs/Memo_PRD.md',en:'third_party/memo/docs/PRD.en.md'},
+  {id:'tingproof',source:'third_party/tingproof/docs/PRD.md',en:'third_party/tingproof/docs/PRD.en.md'},
+];
+const renderPrdMarkdown = document => renderDocument(document, { sources: registeredSources });
 
 function document(content, source = 'docs/PRD.md', id = 'praxis') {
   return { id, group: id === 'praxis' ? 'main' : 'third-party', project: id, source, title: 'Synthetic PRD', version: 'v0.1.0', status: 'ready', content };

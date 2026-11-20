@@ -14,6 +14,35 @@ An app owns its source, typed data and standalone entry. A maintained app has a 
 
 Managed entry permissions cover the HTML, scripts and app endpoints. Resource grants apply to every business read or write. Handle revoked access, transient failures, empty state, retry and navigation back. Gateway-managed pages receive the shared Home control at the bottom left. Keep controls above the safe area and reserve space for it. Verify an actual workbench → app → Home round trip at desktop and phone widths. Use synthetic data for writes. See the [UI/UX design guide](../skills/praxis-operator/references/ui-style-guide.en.md) and [first-release record](DOCKER.en.md#new-app-release-record).
 
+### Own registration metadata and release versions
+
+Keep `praxis-app.json`, the referenced icon and a registration example in the owning app repository. The version-1 declaration owns canonical app ID, English and Simplified Chinese names/descriptions, relative icon and PRD paths, default entry, launch presentation and the app release version. Examples reference that declaration instead of copying a platform-wide catalog. Praxis keeps only installed source references and private deployment overrides; it derives launcher, provider and documentation metadata from the reviewed app declaration. Metadata does not enable a backend, assign a role or grant a business operation.
+
+App release versions use exactly three numeric components (`MAJOR.MINOR.PATCH`). Package/lock metadata, manifest and runtime version responses must agree for that app release. Static readers use the manifest as their release source. Apps are independently versioned. Clearly distinguish a requirements-document revision from the app release, and preserve schema, protocol, algorithm and record revisions. Publication checks reject missing declarations and release mismatches.
+
+A declaration has this shape (the icon and documents are app-relative files):
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "lab-notes",
+  "version": "0.1.0",
+  "kind": "app",
+  "name": "Lab notes",
+  "description": "A local notebook",
+  "labels": {
+    "en": {"name": "Lab notes", "description": "A local notebook"},
+    "zh": {"name": "实验笔记", "description": "本地笔记本"}
+  },
+  "icon": "public/praxis-icon.svg",
+  "path": "/",
+  "port": 8000,
+  "documents": {"prd": {"en": "docs/PRD.en.md", "zh": "docs/PRD.md"}}
+}
+```
+
+The platform's `config/installed-apps.json` contains only `{"schemaVersion":1,"apps":[{"source":"third_party/lab-notes"}]}` references. `source` and `builtin` are injected by installation discovery. Optional app-owned `iconAliases` preserve reviewed icon addresses without platform artwork copies. Installed source selection is not a permission grant.
+
 ### Supply read-only workbench cards
 
 Maintain a reviewed `praxis-provider.mjs` at the app repository root. Its version-1 `describe`, `getCards` and `getDataInventory` exports own the card projection and storage descriptors; Praxis discovers them from the installed catalog. The current distribution has thirteen card sources. Polaris is classified as a runtime component and supplies inventory metadata, without contributing workbench cards. All fourteen apps remain in the data inventory. [Provider contract](APP-PROVIDERS.md#english)
@@ -30,21 +59,23 @@ Preserve `applicationPath` when only the app namespace is known. Report host pat
 
 ### Run your own app locally
 
-Use the manifest to preview the entry for an independently running app in your local workbench. The official registry keeps the English name and description in the default fields and the Chinese pair in `labels.zh`. The local manifest below supplies both languages and is normalized to the same launcher representation.
+Use the app's own declaration and `apps.example.json` to preview an independently running app. Examples refer to the declaration so names, icon and version cannot drift into a second catalog. Private records and deployment overrides stay outside Git.
 
-1. Serve your app separately, for example on `http://127.0.0.1:8000/`. Keep your private data and manifest outside the Praxis repository.
-2. Save this JSON array as `~/my-praxis-apps.json`.
+1. Serve the app separately, for example on `http://127.0.0.1:8000/`. Keep its `praxis-app.json`, declared public icon and documentation in its own repository.
+2. Create `apps.example.json` beside that declaration:
 
 ```json
-[{
-  "id": "lab-notes",
-  "name": {"en": "Lab notes", "zh": "实验笔记"},
-  "description": {"en": "My local notebook", "zh": "我的本地笔记"},
-  "url": "http://127.0.0.1:8000/"
-}]
+{
+  "schemaVersion": 1,
+  "apps": [{
+    "manifest": "./praxis-app.json",
+    "id": "lab-notes-local",
+    "url": "http://127.0.0.1:8000/"
+  }]
+}
 ```
 
-3. In the Praxis checkout, run `npm ci`, then `npm run apps:dev -- ~/my-praxis-apps.json`. Open `http://127.0.0.1:4180/`. Your entry appears in that local workbench. Stop with Ctrl+C. The local launcher opens a separate loopback origin and grants no production session, data or agent tools.
+3. In the Praxis checkout, run `npm ci`, then `npm run apps:dev -- /path/to/your-app/apps.example.json`. Open `http://127.0.0.1:4180/`. The explicit local alias cannot replace an official app. Stop with Ctrl+C. The separate loopback entry grants no production session, business data or agent tools. Existing ad hoc bilingual launcher arrays remain a local preview input; they do not become reviewed app releases.
 
 ### Integrate and deploy a managed app
 
@@ -68,6 +99,12 @@ For inclusion in the maintained distribution, document the user task, screenshot
 
 交互细则与首次发布的验收项目见 [UI/UX 设计指南](../skills/praxis-operator/references/ui-style-guide.md)和[新增应用首发记录](DOCKER.md#新增应用首发)。
 
+### 拥有登记元数据与发行版本
+
+在应用自己的仓库维护 `praxis-app.json`、引用的图标和登记示例。版本 1 的声明负责正式应用 ID、英中名称及描述、相对图标与 PRD 路径、默认入口、启动展示及应用发行版本。示例引用该声明，不复制平台应用总表。Praxis 仅维护已安装源码引用与私有部署覆盖，从经审核的声明导出启动器、供数和文档元数据。元数据不启用后端、不分配角色，也不授予业务操作。
+
+应用发行版本严格使用三段数字 `MAJOR.MINOR.PATCH`。同一应用发行版的 package／lock、清单和运行时版本响应须一致；静态阅读器以自身清单为发行版本来源。各应用独立升版。明确区分需求文档修订与应用发行版本，保留 schema、协议、算法及记录的独立版本。发布检查拒绝缺失声明和发行版本冲突。
+
 ### 提供只读工作台卡片
 
 在应用仓库根目录维护经审核的 `praxis-provider.mjs`，通过版本 1 的 `describe`、`getCards`、`getDataInventory` 导出应用自己的卡片投影与存储描述；Praxis 从已安装目录发现这些合同。当前发行版有十三个卡片来源。Polaris 归为运行时组件，仅提供数据清单元数据，不生成工作台卡片；十四款应用均保留在数据清单中。[供数合同](APP-PROVIDERS.md#简体中文)
@@ -84,11 +121,11 @@ For inclusion in the maintained distribution, document the user task, screenshot
 
 ### 本地开发自己的应用
 
-用清单在本机工作台预览独立运行的应用入口。正式目录在默认名称和描述字段填写英文，`labels.zh` 填写中文。本地清单使用上方示例中的双语字段，启动时转换为相同的入口格式。
+使用应用自己的声明及 `apps.example.json` 预览独立运行的应用。示例只引用声明，名称、图标和版本不会再分叉成第二份目录。私有记录与部署覆盖项留在 Git 之外。
 
-1. 在独立端口启动自己的应用，例如 `http://127.0.0.1:8000/`。私有数据和清单放在 Praxis 仓库之外。
-2. 将上方示例保存为 `~/my-praxis-apps.json`，填写唯一 ID、英中名称和描述以及本机回环地址。
-3. 在主仓运行 `npm ci` 和 `npm run apps:dev -- ~/my-praxis-apps.json`，打开 `http://127.0.0.1:4180/`。入口只出现在本地工作台，Ctrl+C 停止。它使用独立来源，且不会获得生产会话、数据或工具权限。
+1. 独立启动应用，例如 `http://127.0.0.1:8000/`。在应用自己的仓库保存上方结构的 `praxis-app.json`、声明的公共图标及文档。安装侧仅在 `config/installed-apps.json` 记录 `{schemaVersion:1,apps:[{source:"third_party/lab-notes"}]}`；`source`、`builtin` 由安装发现时注入，不代表授权。可选的应用自有 `iconAliases` 保留已审核图标地址，不在平台复制图稿。
+2. 在声明旁保存上方引用结构的 `apps.example.json`，填写唯一的本地别名和回环 URL。
+3. 在 Praxis 检出执行 `npm ci` 和 `npm run apps:dev -- /path/to/your-app/apps.example.json`，打开 `http://127.0.0.1:4180/`。明确的本地别名不能替换正式应用，Ctrl+C 停止。独立回环入口不获得生产会话、业务数据或智能体工具。旧的临时双语启动器数组仍可用于本机预览，但不成为已审核应用发行版。
 
 ### 接入和部署受管应用
 

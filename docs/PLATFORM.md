@@ -53,7 +53,7 @@ flowchart LR
   A --> D[(应用事实源)]
 ```
 
-`config/apps.json`是启动器注册表；PRD集合仅读取`src/prd-catalog.mjs`明确列出的文档，不开放任意文件。代码、运行配置与私人记录分开；初始化所需子模块使用`git submodule update --init third_party/<app>`，应用归属不因进入工作台而改变。
+`config/installed-apps.json` 仅保存已审核应用的源码引用；各应用在自己的 `praxis-app.json` 维护展示与发行版本。PRD集合仅读取应用自有 `praxis-app.json` 文档声明明确列出的文档，不开放任意文件。代码、运行配置与私人记录分开；初始化所需子模块使用`git submodule update --init third_party/<app>`，应用归属不因进入工作台而改变。
 
 ## 运行与专题导航
 

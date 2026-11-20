@@ -1,8 +1,15 @@
 # Praxis roadmap
 
-Version: 0.1.117
+Version: 0.1.118
 
 [简体中文](ROADMAP.md)
+
+## App manifest ownership and version audit
+
+1. Define the app-owned manifest/example and three-component release contract in PRD and App Standard before implementation. Keep installation references and authorization separate from app presentation.
+2. Publish reviewed declarations, icons and examples from each owning app repository. Correct release mismatches without renumbering schemas or unrelated versions; preserve unpublished work.
+3. Resolve catalog, providers, inventory and PRD metadata from installed declarations; update bootstrap, assets, packaging and local registration. Remove the duplicate central catalogs.
+4. Verify all fourteen public pins, package/manifest consistency, anonymous empty-checkout bootstrap, invalid-input rejection and private overrides. Check thirteen card sources, data inventory, both PRD languages and native/Home navigation, then deploy affected services and read back versions.
 
 ## MCP-first Trace acceptance
 
@@ -214,6 +221,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.115 | 2026-11-19 | Honor private reader ownership in card discovery and preferences |
 | v0.1.116 | 2026-11-19 | Prioritize actual MCP calls, outcomes and latency in Overview Trace |
 | v0.1.117 | 2026-11-20 | Keep MCP Trace monitoring responsive during in-flight business calls |
+| v0.1.118 | 2026-11-20 | Move app registration ownership to app manifests and standardize release versions |
 
 ### Public applications with private collections
 

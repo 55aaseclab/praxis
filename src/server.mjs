@@ -6,7 +6,7 @@ import { resolve, relative, sep, extname } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { imageCacheHeaders, imageNotModified } from './image-cache.mjs';
-import { readApps } from './apps.mjs';
+import { readApps, resolveAppIcon } from './apps.mjs';
 import { listPrds, loadPrd } from './prd-catalog.mjs';
 import { renderPrdMarkdown } from './prd-renderer.mjs';
 import { catalogPage, documentPage } from './pages.mjs';
@@ -55,12 +55,11 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       return createManagedStaticHandler(app.directory,app.assets)(request,response,pathname,navigation,reauthorize);
     }]));
   async function localEntry(app) {
-    if (!app.builtin || app.url) return app;
-    if (!app.adminOnly && demoApp?.id === app.id) {
-      return { ...app, launcher: true, url: `http://127.0.0.1:${demoApp.port}/` };
-    }
-    const { id, kind, name, description, labels, icon } = app;
-    const entry = { id, kind, name, description, labels, icon, ...(app.launcher === false && { launcher: false }) };
+    const { id, kind, name, description, labels, icon, version } = app;
+    const entry = { id, kind, name, description, labels, icon, version, ...(app.launcher === false && { launcher: false }) };
+    if (app.url) return { ...entry, url: app.url };
+    if (!app.builtin) return { ...entry, path: app.path, ...(app.port !== undefined && { port: app.port }) };
+    if (!app.adminOnly && demoApp?.id === app.id) return { ...entry, launcher: true, url: `http://127.0.0.1:${demoApp.port}/` };
     if (Object.hasOwn(localStatic, id)) {
       const index = await stat(resolve(localStatic[id].directory, 'index.html')).catch(() => null);
       if (index?.isFile() && index.size) return { ...entry, path: `/apps/${id}/` };
@@ -69,6 +68,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
     return { ...entry, unavailable: 'managed' };
   }
   const gateway = webGateway?.enabled ? createWebGateway({
+    readAppCatalog: () => readApps(root, { publicUrlsFile: null }),
     ...webGateway,
     staticApps: {
       ...privateApps,
@@ -105,6 +105,17 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       }
       if (path.includes('\0') || path.includes('\\') || path.split('/').some(part => part.startsWith('.'))) return send(request, response, 404, 'Not found.', 'text/plain; charset=utf-8');
       if (path === '/health') return send(request, response, 200, '{"status":"ok"}', 'application/json');
+      if (/^\/app-icons\/[a-z][a-z0-9-]*\.svg$/.test(path) || /^\/[a-z][a-z0-9-]*-icon\.svg$/.test(path)) {
+        const apps = [...await readApps(root, { publicUrlsFile: null }), ...developmentApps];
+        const icon = await resolveAppIcon(root, path, { apps });
+        if (!icon || !gateway && icon.app.adminOnly) return send(request, response, 404, 'Not found.', 'text/plain; charset=utf-8');
+        const headers = imageCacheHeaders('image/svg+xml', icon.info);
+        headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+        headers['Referrer-Policy'] = 'no-referrer';
+        if (gateway) { headers['Cache-Control'] = 'private, no-cache, must-revalidate'; headers.Vary = 'Cookie'; }
+        if (imageNotModified(request, headers)) { response.writeHead(304, { ...headers, 'X-Content-Type-Options': 'nosniff' }); return response.end(); }
+        return send(request, response, 200, icon.content, 'image/svg+xml', headers);
+      }
       if (path === '/api/workbench/providers' || /^\/app-providers\/[a-z][a-z0-9-]*\.mjs$/.test(path)) {
         if(!['GET','HEAD'].includes(request.method))return send(request,response,405,'Method not allowed.','text/plain',{Allow:'GET, HEAD'});
         const available=(await appProviders.providers()).filter(value=>!value.error&&value.descriptor.cards.supported&&value.descriptor.cards.execution==='browser'&&(gateway?canOpenApp(request.webAccess,value.app.id):!value.app.adminOnly));
@@ -145,7 +156,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
         if (!document) return await sendPrd(404, documentPage({ title: locale === 'zh' ? '文档不存在' : 'Document not found', status: 'missing' }, null, await listPrds({ root, locale }), options));
         let rendered;
         if (document.status === 'ready') {
-          try { rendered = await renderPrdMarkdown(document); } catch { /* Render errors affect only this document. */ }
+          try { rendered = await renderPrdMarkdown(document, { root }); } catch { /* Render errors affect only this document. */ }
         }
         return await sendPrd(200, documentPage(document, rendered, await listPrds({ root, locale }), options));
       }

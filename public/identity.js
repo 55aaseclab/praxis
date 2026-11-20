@@ -7,7 +7,9 @@ let permissionExpiry;
 let revision = 0;
 let identityRevision = 0;
 let pendingRefresh;
-const appIds = new Set(['reminder', 'travel', 'knowledge', 'memo', 'lattice-slides', 'tingproof', 'projects', 'finance', 'intelligence', 'matrix-reader', 'calendar']);
+export function validIdentityApps(apps) {
+  return Array.isArray(apps) && apps.length <= 128 && new Set(apps).size === apps.length && apps.every(id => typeof id === 'string' && /^[a-z][a-z0-9-]{0,79}$/.test(id));
+}
 const node = typeof document !== 'undefined' ? document.querySelector('#account') : null;
 
 export function hasIdentity() { return node ? Boolean(identity && !ended && identity.expiresAt > Date.now()) : typeof document !== 'undefined' && document.body?.dataset.websiteAuth === 'unmanaged'; }
@@ -115,7 +117,7 @@ async function readIdentity() {
     if (!response.ok) { clear(response.status); return false; }
     const value = await response.json();
     if (current !== revision) return false;
-    if (ended || typeof value.username !== 'string' || !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= Date.now() || typeof value.csrfToken !== 'string' || !Array.isArray(value.apps) || value.apps.some(id => !appIds.has(id)) || value.permissionsExpireAt !== null && value.permissionsExpireAt !== undefined && !Number.isSafeInteger(value.permissionsExpireAt)) { clear(); return false; }
+    if (ended || typeof value.username !== 'string' || !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= Date.now() || typeof value.csrfToken !== 'string' || !validIdentityApps(value.apps) || value.permissionsExpireAt !== null && value.permissionsExpireAt !== undefined && !Number.isSafeInteger(value.permissionsExpireAt)) { clear(); return false; }
     const permissionsCurrent = value.permissionsExpireAt == null || value.permissionsExpireAt > Date.now();
     const next = Object.freeze({ ...value, apps: Object.freeze(permissionsCurrent ? [...value.apps] : []), prds: permissionsCurrent && value.prds === true, canViewPlatform: value.canViewPlatform === true, platformAdmin: value.platformAdmin === true, permissionsExpireAt: permissionsCurrent ? value.permissionsExpireAt ?? null : null });
     const changed = !identity || JSON.stringify([identity.username, identity.apps, identity.prds, identity.platformAdmin, identity.canViewPlatform, identity.permissionsExpireAt]) !== JSON.stringify([next.username, next.apps, next.prds, next.platformAdmin, next.canViewPlatform, next.permissionsExpireAt]);

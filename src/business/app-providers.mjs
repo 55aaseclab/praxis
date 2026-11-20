@@ -1,6 +1,7 @@
-import { readFile, lstat, realpath } from 'node:fs/promises';
+import { lstat, realpath } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readApps } from '../apps.mjs';
 
 export const PROVIDER_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const kinds = new Set(['reminder', 'result', 'decision']);
@@ -85,7 +86,7 @@ export function normalizeProviderLocation(value) {
 export class AppProviderRegistry {
   constructor({ root = PROVIDER_ROOT, catalog } = {}) { this.root = resolve(root); this.fixedCatalog = catalog; this.cache = new Map(); }
   async catalog() {
-    const value = this.fixedCatalog ?? JSON.parse(await readFile(resolve(this.root,'config/apps.json'),'utf8'));
+    const value = this.fixedCatalog ?? await readApps(this.root, { publicUrlsFile: null });
     if (!Array.isArray(value) || value.length > 128) throw invalid();
     return value.filter(app => app?.builtin && app.kind === 'app');
   }

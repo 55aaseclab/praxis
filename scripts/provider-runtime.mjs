@@ -1,11 +1,12 @@
 import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readFile, realpath, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
+import { readApps } from '../src/apps.mjs';
 
 const executeFile = promisify(execFile);
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -74,7 +75,7 @@ function sanitizedMounts(values) {
 
 /** Load only installed, app-owned descriptors. No business stores are opened. */
 export async function loadProviderDescriptors({ root = repositoryRoot, catalog, importProvider } = {}) {
-  const apps = catalog ?? JSON.parse(await readFile(resolve(root, 'config/apps.json'), 'utf8'));
+  const apps = catalog ?? await readApps(root, { publicUrlsFile: null });
   if (!Array.isArray(apps)) throw problem('INVALID_APP_CATALOG');
   const providers = [];
   for (const app of apps.filter(value => value.builtin)) {

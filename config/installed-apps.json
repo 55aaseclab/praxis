@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "apps": [
+    {
+      "source": "third_party/reminder"
+    },
+    {
+      "source": "third_party/knowledge"
+    },
+    {
+      "source": "third_party/lattice"
+    },
+    {
+      "source": "third_party/travel"
+    },
+    {
+      "source": "third_party/tingproof"
+    },
+    {
+      "source": "third_party/memo"
+    },
+    {
+      "source": "third_party/finance"
+    },
+    {
+      "source": "third_party/intelligence"
+    },
+    {
+      "source": "third_party/polaris"
+    },
+    {
+      "source": "third_party/letters"
+    },
+    {
+      "source": "third_party/profiles"
+    },
+    {
+      "source": "third_party/projects"
+    },
+    {
+      "source": "third_party/calendar"
+    },
+    {
+      "source": "third_party/matrix-reader"
+    }
+  ]
+}

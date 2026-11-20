@@ -1,3 +1,4 @@
+import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -17,7 +18,7 @@ async function fixture(t, { configured = true } = {}) {
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'config'));
   const registeredApps = apps.map(id => ({ id, kind: 'app', name: id, path: '/', icon: '/' + id + '.svg', adminOnly: true }));
-  await writeFile(join(root, 'config/apps.json'), JSON.stringify(registeredApps));
+  await writeInstalledAppsFixture(root, registeredApps);
   const roots = {};
   for (const app of apps) {
     roots[app] = join(root, 'private-' + app);

@@ -8,6 +8,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { validateDataInventory } from '../src/business/data-inventory.mjs';
+import { readApps } from '../src/apps.mjs';
 
 const repository = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
 const exec = promisify(execFile);
@@ -187,8 +188,8 @@ export async function main(args = [], options = {}) {
   const business = await readMetadata(businessFile, { optional: true }) || {};
   const storageFile = parsed['--storage-config'] || options.storageConfigFile || business.console?.storageConfigFile || join(base, 'storage.json');
   const polarisFile = parsed['--polaris-config'] || options.polarisConfigFile || join(base, 'polaris.json');
-  const registryFile = join(sourceRoot, 'config/apps.json');
-  const registry = await readMetadata(registryFile, { privateFile: false });
+  const registryFile = join(sourceRoot, 'config/installed-apps.json');
+  const registry = await readApps(sourceRoot, { publicUrlsFile: null });
   const storage = await readMetadata(storageFile, { optional: true }) || {};
   const polaris = await readMetadata(polarisFile, { optional: true });
   const reminderFile = business.apps?.reminder?.spacesFile, slidesFile = business.apps?.slides?.spacesFile;

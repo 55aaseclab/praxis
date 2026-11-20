@@ -1,3 +1,4 @@
+import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, lstat, rm, symlink } from 'node:fs/promises';
@@ -78,7 +79,7 @@ async function fixture(t) {
   const sourceRoot = join(root, 'source'), home = join(root, 'home'), base = join(home, '.config/praxis');
   await mkdir(join(sourceRoot, 'config'), { recursive: true }); await mkdir(base, { recursive: true, mode: 0o700 });
   const save = async (path, value, mode = 0o600) => { await writeFile(path, JSON.stringify(value), { mode }); return path; };
-  await save(join(sourceRoot, 'config/apps.json'), [app('reminder'), app('finance'), app('memo')], 0o644);
+  await writeInstalledAppsFixture(sourceRoot, [app('reminder'), app('finance'), app('memo')]);
   const spacesFile = await save(join(base, 'spaces.json'), { spaces: { one: join(root, 'nonexistent-records/one.json') } });
   const businessFile = await save(join(base, 'business.json'), { apps: { reminder: { spacesFile }, memo: { dataDir: join(root, 'nonexistent-memo') } } });
   const storageFile = await save(join(base, 'storage.json'), { workspaceId: 'example', appSources: [] });

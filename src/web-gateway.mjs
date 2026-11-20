@@ -1,6 +1,8 @@
 import { request as httpRequest } from 'node:http';
 import { authorizeTravelShare } from './travel-share.mjs';
 import { collectNavigationBody, injectSystemNavigation, isNavigationHtml, navigationContext, navigationHeaders } from './system-navigation.mjs';
+import { fileURLToPath } from 'node:url';
+import { readApps, appIconEntry } from './apps.mjs';
 
 export const WEB_APPS = Object.freeze({
   reminder: { slug: 'reminder', port: 4322 },
@@ -27,7 +29,7 @@ const blockedParts = new Set(['node_modules', '@fs', '@id', '@vite', 'src', 'ser
 const portalRequestHeaders = new Set(['accept', 'accept-encoding', 'accept-language', 'content-type', 'content-length', 'origin', 'range', 'if-range', 'if-none-match', 'if-modified-since', 'last-event-id', 'idempotency-key', 'x-polaris-expected-version']);
 const sessionPattern = /^praxis_business_session=[a-zA-Z0-9_-]{16,512}$/;
 const installAssets = new Set(['/manifest.webmanifest', '/praxis-180.png', '/praxis-192.png', '/praxis-512.png']);
-const desktopPaths = new Set(['/', '/index.html', '/api/apps', '/api/observations', '/app.js', '/identity.js', '/experience.js', '/install.js', '/styles.css', '/praxis.svg', '/praxis-nav.js', '/praxis-nav.css', '/reminder-icon.svg', '/knowledge-icon.svg', '/slides-icon.svg', '/travel-icon.svg', '/tingproof-icon.svg', '/memo-icon.svg', '/projects-icon.svg', '/finance-icon.svg', '/intelligence-icon.svg', '/matrix-reader-icon.svg', '/calendar-icon.svg', '/letters-icon.svg', '/profiles-icon.svg', '/i18n.js', '/attention.js', '/attention.css', '/app-providers.js', '/api/workbench/providers', '/polaris-icon.svg']);
+const desktopPaths = new Set(['/', '/index.html', '/api/apps', '/api/observations', '/app.js', '/identity.js', '/experience.js', '/install.js', '/styles.css', '/praxis.svg', '/praxis-nav.js', '/praxis-nav.css', '/i18n.js', '/attention.js', '/attention.css', '/app-providers.js', '/api/workbench/providers']);
 const platformPaths = new Set(['/api/platform/status', '/api/platform/observations', '/api/platform/traces']);
 
 function fail(status, code) { return Object.assign(new Error('Gateway request rejected.'), { status, code }); }
@@ -97,14 +99,14 @@ export function canOpenApp(identity, id) {
 }
 export function gatewayApps(apps, access, origin) {
   return apps.filter(app => canOpenApp(access, app.id)).map(app => {
-    const { id: appId, kind, name, description, icon } = app;
+    const { id: appId, kind, name, description, icon, version } = app;
     const slug = WEB_APPS[appId]?.slug ?? appId;
     const url = new URL(`/apps/${slug}${app.path}`, origin);
-    return { id: appId, kind, name, description, icon, ...(app.labels && { labels: app.labels }), ...(app.adminOnly === true ? { adminOnly: true } : {}), ...(app.launcher !== undefined ? { launcher: app.launcher } : {}), url: url.href };
+    return { id: appId, kind, name, description, icon, ...(version && { version }), ...(app.labels && { labels: app.labels }), ...(app.adminOnly === true ? { adminOnly: true } : {}), ...(app.launcher !== undefined ? { launcher: app.launcher } : {}), url: url.href };
   });
 }
 
-export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:4326', originHost = 'localhost', appTargets = {}, travelSharesFile, staticApps = {}, privateDocumentOwnerId, requireTingproofNativeScope = false, timeoutMs = 3000, revalidateMs = 5000, clock = Date.now } = {}) {
+export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:4326', originHost = 'localhost', appTargets = {}, travelSharesFile, staticApps = {}, privateDocumentOwnerId, readAppCatalog = () => readApps(fileURLToPath(new URL('../', import.meta.url)), { publicUrlsFile: null }), requireTingproofNativeScope = false, timeoutMs = 3000, revalidateMs = 5000, clock = Date.now } = {}) {
   const canonical = canonicalOrigin(canonicalUrl);
   const core = localOrigin(coreUrl);
   if (!/^[a-zA-Z0-9.-]+$/.test(originHost)) throw new Error('Legacy origin Host must be a fixed hostname.');
@@ -362,12 +364,17 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
         }
         await proxy(request, response, { target: targets[route.id], ...route, search, initial: identity, permitted, navigation: navigationContext(request, route.pathname, route.id) }); return true;
       }
-      if (pathname === '/polaris-icon.svg' && !canOpenApp(identity, 'polaris')) throw fail(403, 'FORBIDDEN');
+      const iconPath = /^\/app-icons\/[a-z][a-z0-9-]*\.svg$/.test(pathname) || /^\/[a-z][a-z0-9-]*-icon\.svg$/.test(pathname);
+      if (iconPath) {
+        const app = appIconEntry(await readAppCatalog(), pathname);
+        if (!app) throw fail(404, 'NOT_FOUND');
+        if (!canOpenApp(identity, app.id)) throw fail(403, 'FORBIDDEN');
+      }
       const prd = pathname === '/prds' || pathname.startsWith('/prds/');
       if (prd && !identity.prds || platformPaths.has(pathname) && !identity.canViewPlatform) throw fail(403, 'FORBIDDEN');
       const providerModule=/^\/app-providers\/([a-z][a-z0-9-]*)\.mjs$/.exec(pathname);
       if(providerModule&&!canOpenApp(identity,providerModule[1]))throw fail(403,'FORBIDDEN');
-      if (!prd && !desktopPaths.has(pathname) && !platformPaths.has(pathname) && !providerModule) throw fail(404, 'NOT_FOUND');
+      if (!prd && !desktopPaths.has(pathname) && !platformPaths.has(pathname) && !providerModule && !iconPath) throw fail(404, 'NOT_FOUND');
       if (/^Basic\s/i.test(request.headers.authorization || '')) delete request.headers.authorization;
       request.webAccess = identity;
       return false;
