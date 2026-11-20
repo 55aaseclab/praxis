@@ -23,9 +23,10 @@ test('the managed frontend serves public guidance before the private gateway wit
   const guide=await client.callTool({name:'praxis_use_guide',arguments:{platform:'other'}});
   assert.equal(guide.structuredContent.homeScreen.automaticInstallation,false);
   assert.equal(coreCalls,0);
-  for(const path of ['/','/api/apps','/apps/travel/']){
+  for(const path of ['/api/apps','/apps/travel/']){
     const response=await fetch(origin+path,{redirect:'manual'});assert.equal(response.status,401);await response.body?.cancel();
   }
+  const home=await fetch(origin+'/',{redirect:'manual'});assert.equal(home.status,200);assert.match(await home.text(),/A self-hosted workbench/);
   assert.equal(coreCalls,0);
   const protectedResponse=await fetch(origin+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'})});
   assert.equal(protectedResponse.status,401);await protectedResponse.body?.cancel();assert.equal(coreCalls,1);

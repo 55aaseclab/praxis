@@ -6,7 +6,7 @@ Design proposal · 2026-11-20 · [简体中文](public-home.md) · [English prot
 
 A person arriving from search should understand what Praxis is, see actual agent-to-app behavior and choose either trying the hosted service or running a private instance. Existing users can open the workbench directly. This is a public product surface, separate from authenticated daily work.
 
-This proposal adds no production route or domain. The public origin is undecided; the existing hosted workbench and login continue at their current origin. Prototype HTML is deliberately `noindex`; its final indexable counterpart requires a confirmed production origin.
+Implementation decision (2026-11-20): the homepage is served from the existing canonical workbench origin. Anonymous visitors opening the origin root or `/zh-cn/` receive the public homepage; signed-in sessions keep the workbench at `/`. The former workbench About Praxis link and its `/about/` pages are removed; this homepage replaces that content. Prototype HTML is superseded by the server-rendered edition in `src/public-home.mjs` with assets from `public/`.
 
 ## Visual direction
 

@@ -15,6 +15,10 @@
 !docs/PRD*.md
 !docs/APP-STANDARD.md
 !docs/APP-PROVIDERS.md
+!docs/images/workbench-en.png
+!docs/images/workbench-en.gif
+!docs/images/workbench-zh.png
+!docs/images/workbench-zh.gif
 !skills/*/SKILL.md
 
 # Dependency caches and Git metadata never belong in a release context.

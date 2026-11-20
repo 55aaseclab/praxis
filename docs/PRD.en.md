@@ -1,14 +1,14 @@
 # Praxis product requirements
 
-Version: 0.1.125 · [简体中文](PRD.md)
+Version: 0.1.126 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
-## Public product homepage — design
+## Public product homepage
 
 Design an anonymous, indexable product homepage for people discovering Praxis through search. Explain the self-hosted platform, the user's chosen external agent, app-owned results and user-controlled authorization. Lead with a real product example and offer both trying the hosted service and running the complete local Compose stack. Present all fourteen published components, distinguishing Polaris runtime observations from app cards, and describe custom app development without claiming planned workflow execution or account registration is available. Keep technical setup below the product explanation.
 
-Provide complete English and Simplified Chinese HTML editions with ordinary navigation links. Production acceptance requires readable content without JavaScript, explicit canonical/language URLs, truthful search/share metadata, accessible desktop/phone layouts and no private records. This phase delivers the design and local prototype; it does not replace the deployed workbench, change its origin or publish a new route. Set the public site's canonical origin before implementation/deployment. [Design](design/public-home.en.md)
+Provide complete English and Simplified Chinese HTML editions with ordinary navigation links. Production acceptance requires readable content without JavaScript, explicit canonical/language URLs, truthful search/share metadata, accessible desktop/phone layouts and no private records. Implemented on the existing canonical workbench origin: anonymous visitors opening the origin root or `/zh-cn/` receive the public homepage while signed-in sessions keep the workbench at `/`; the pages carry canonical/hreflang/OG metadata, JSON-LD and a sitemap with a robots policy that permits only these public pages. The former workbench About Praxis link and its `/about/` pages are removed; the homepage replaces that content. The component directory renders from the reviewed app registry, not a separate app table. [Design](design/public-home.en.md)
 
 ## External agent tools and authorization
 
@@ -203,6 +203,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.119 | 2026-11-20 | Read explicit app-owned requirements revisions separately from app releases |
 | v0.1.120 | 2026-11-20 | Load app-owned integration contracts and deliver Projects planning |
 | v0.1.125 | 2026-11-20 | Remove per-app language toggles; apps follow the workbench language preference |
+| v0.1.126 | 2026-11-20 | Serve the public product homepage at the canonical origin and retire the About Praxis pages |
 
 ### Letters and Profiles
 

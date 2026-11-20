@@ -18,7 +18,7 @@ import { createPublicMcpHandler } from './public-mcp.mjs';
 import { injectSystemNavigation, navigationContext } from './system-navigation.mjs';
 import { createPrivateDocumentHandler } from './private-documents.mjs';
 import { createManagedStaticHandler } from './managed-static-app.mjs';
-import { createPublicProjectHandler } from './public-project.mjs';
+import { createPublicHomeHandler } from './public-home.mjs';
 
 export const WORKSPACE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const mimeTypes = { '.webmanifest': 'application/manifest+json; charset=utf-8', '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif', '.ico': 'image/x-icon' };
@@ -71,7 +71,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       ...staticReaders,
     },
   }) : null;
-  const projectInfo = gateway && createPublicProjectHandler(gateway.origin);
+  const publicHome = gateway ? createPublicHomeHandler({ canonicalUrl: webGateway.canonicalUrl, root }) : null;
   const publicGuide = webGateway?.enabled ? createPublicMcpHandler({ origin: webGateway.canonicalUrl }) : null;
   const observations = new ObservationStore({ file: observationsFile, registry });
   const browserIngress = createBrowserIngress({ store: observations, origin: observationsOrigin });
@@ -80,15 +80,11 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
     observeResponse(observations, request, response);
     try {
       if (canonicalUrl) return canonicalRedirect(request, response, canonicalUrl);
-      if (projectInfo?.(request, response)) return;
+      if (publicHome && await publicHome(request, response)) return;
       if (gateway) response.setHeader('X-Robots-Tag', 'noindex, nofollow');
       if (publicGuide && await publicGuide(request, response)) return;
       if (gateway && await gateway.handle(request, response)) return;
       const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
-      if (!gateway && ['/about/', '/about/zh-cn/', '/sitemap.xml', '/robots.txt'].includes(url.pathname)) {
-        const overview = createPublicProjectHandler(url.origin);
-        if (overview(request, response)) return;
-      }
       if (url.pathname.startsWith('/api/platform/')) return await platformProxy(request, response, url);
       if (url.pathname === '/api/observations') return await browserIngress(request, response);
       if (!['GET', 'HEAD'].includes(request.method)) return send(request, response, 405, 'Method not allowed.', 'text/plain; charset=utf-8', { Allow: 'GET, HEAD' });
