@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.123 · [简体中文](PRD.md)
+Version: 0.1.124 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 

@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.123
+Version: 0.1.124
 
 [简体中文](ROADMAP.md)
 
