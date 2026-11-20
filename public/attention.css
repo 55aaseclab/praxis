@@ -1,5 +1,8 @@
 .desktop-board.show-attention > :is(#apps-section, #projects-section, #desktop-empty) { display: none !important; }
-#attention-program { width: 100%; max-width: 740px; margin: 0 auto; min-width: 0; }
+.desktop-body .desktop-board.show-attention { height: 100%; min-height: 0; gap: 0; }
+#attention-program { display: flex; flex-direction: column; flex: 1; width: 100%; max-width: 740px; margin: 0 auto; min-width: 0; min-height: 0; }
+#attention-program > :not(.attention-deck):not(.attention-empty) { flex-shrink: 0; }
+#attention-program > :is(.attention-deck, .attention-empty) { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; }
 .attention-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
 .desktop-body .attention-heading h1 { margin: 0; color: var(--muted); font-size: 17px; font-weight: 600; }
 .attention-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 14px; }

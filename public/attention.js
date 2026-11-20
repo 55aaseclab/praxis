@@ -51,12 +51,12 @@ function describeUntil(value) {
 function saveReturn(item) {
   const identity = getIdentity();
   if (!identity?.userId) return;
-  try { sessionStorage.setItem(returnKey, JSON.stringify({ userId: identity.userId, cardId: item.id, evidenceOpen: opened.has(item.id), scrollTop: contentArea()?.scrollTop || 0 })); } catch {}
+  try { sessionStorage.setItem(returnKey, JSON.stringify({ userId: identity.userId, cardId: item.id, evidenceOpen: opened.has(item.id), scrollTop: contentArea()?.scrollTop || 0, cardScrollTop: root?.querySelector('#result-card')?.scrollTop || 0 })); } catch {}
 }
 function readReturn(identity) {
   let value;
   try { value = JSON.parse(sessionStorage.getItem(returnKey) || 'null'); sessionStorage.removeItem(returnKey); } catch { return null; }
-  return value?.userId === identity?.userId && typeof value.cardId === 'string' && Number.isFinite(value.scrollTop) && value.scrollTop >= 0 ? value : null;
+  return value?.userId === identity?.userId && typeof value.cardId === 'string' && Number.isFinite(value.scrollTop) && value.scrollTop >= 0 && (value.cardScrollTop === undefined || Number.isFinite(value.cardScrollTop) && value.cardScrollTop >= 0) ? value : null;
 }
 function clearReturn() { try { sessionStorage.removeItem(returnKey); } catch {} }
 function reset(value) {
@@ -80,7 +80,7 @@ function sourceNotice() {
 }
 function preservePosition() {
   const active = document.activeElement;
-  return { focus: root?.contains(active) && (active.id || active.dataset.focus), scrollTop: contentArea()?.scrollTop || 0 };
+  return { focus: root?.contains(active) && (active.id || active.dataset.focus), scrollTop: contentArea()?.scrollTop || 0, cardScrollTop: root?.querySelector('#result-card')?.scrollTop || 0 };
 }
 function restorePosition(previous) {
   if (previous.focus) {
@@ -88,6 +88,7 @@ function restorePosition(previous) {
     node?.focus({ preventScroll: true });
   }
   const area = contentArea(); if (area) area.scrollTop = previous.scrollTop;
+  const card = root?.querySelector('#result-card'); if (card) card.scrollTop = previous.cardScrollTop || 0;
 }
 function render({ preserve = false, focusCard = false } = {}) {
   if (!root) return;
@@ -328,10 +329,10 @@ async function refresh() {
     else { items = next.items; pendingCards = null; }
     if (restoring) {
       selected = visibleItems().some(item => item.id === restoring.cardId) ? restoring.cardId : visibleItems()[0]?.id || '';
-      program = 'attention'; const position = restoring.scrollTop;
+      program = 'attention'; const position = restoring.scrollTop, cardPosition = restoring.cardScrollTop || 0;
       if (selected === restoring.cardId && restoring.evidenceOpen === true) opened.add(selected);
       restoring = null; render();
-      requestAnimationFrame(() => { if (owner === key && contentArea()) contentArea().scrollTop = position; });
+      requestAnimationFrame(() => { if (owner !== key) return; if (contentArea()) contentArea().scrollTop = position; const card = root?.querySelector('#result-card'); if (card) card.scrollTop = cardPosition; });
     } else render({ preserve: true });
     if (listDialog?.open) renderList();
   } catch (error) {
@@ -352,7 +353,7 @@ if (root) {
   document.addEventListener('keydown', event => {
     if (menu) {
       const current = menu, choices = [...root.querySelectorAll(`#${current}-menu button`)];
-      if (event.key === 'Escape') { event.preventDefault(); menu = ''; render(); document.getElementById(current)?.focus({ preventScroll: true }); return; }
+      if (event.key === 'Escape') { event.preventDefault(); menu = ''; render({ preserve: true }); document.getElementById(current)?.focus({ preventScroll: true }); return; }
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         event.preventDefault(); const index = choices.indexOf(document.activeElement);
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : event.key === 'ArrowDown' ? (index + 1) % choices.length : (index - 1 + choices.length) % choices.length;

@@ -43,6 +43,14 @@ Reading, deferral and personal display preferences stay separate from shared bus
 
 The real mouse-selection release reproduced the previous-card bug before the fix. The synthetic browser regression now covers retained selection and native clipboard copy, selection/modifier-key protection, primary-touch navigation in both directions (including browser-generated touch events), cancellation, interactive controls and keyboard navigation in English/Chinese at1440px and390px. Run `tests/browser/attention-selection.mjs` with `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` pointing to the installed browser tooling; optional `PRAXIS_BROWSER_EVIDENCE_DIR` selects an external evidence directory. No private records are used.
 
+## Viewport-sized deck
+
+Verified with unequal short/long records, expanded evidence, desktop/phone resize, menu dismissal and native app → Home return. Paging coordinates remain unchanged between cards; internal scroll is restored independently. The selection/copy/touch/keyboard regression still passes in both languages. The full platform suite passes443 checks.
+
+
+
+Use the available page area for a consistent card frame, with its previous/next row below it. Record length and expanded evidence must not move that row; long content scrolls inside the card. Keep the existing top alignment, bottom system bar, responsive padding and accessible controls. Preserve inner scroll when opening menus, refreshing and returning from the native app. The saved inner reading offset is separate from the existing outer-page offset.
+
 ## Visual and interaction language
 
 Use the current gray workbench canvas, white cards, native system typography and pine-green actions. A single source accent identifies context. Dates use ordinary text; the interface does not turn every deadline into an alarm. Preserve existing navigation and the app-owned result view.
