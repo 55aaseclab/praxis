@@ -1,6 +1,6 @@
 # Praxis 路线图
 
-版本：0.1.127
+版本：0.1.128
 
 [English](ROADMAP.en.md)
 
@@ -522,6 +522,7 @@ Preserve the native Travel renderer, stable route and relative assets. Serve the
 | v0.1.125 | 2026-11-20 | Remove per-app language toggles; apps follow the workbench language preference |
 | v0.1.126 | 2026-11-20 | Serve the public product homepage at the canonical origin and retire the About Praxis pages |
 | v0.1.127 | 2026-11-20 | Default the workbench to the card view and return to the public homepage after sign-out |
+| v0.1.128 | 2026-11-20 | Make the For you card deck the workbench home without a view switch |
 
 交接：按 PRD 明确的七文件清单实施；先读原文能力，再联调图标与阅读页，最后验证安全和一致性。本次操作技能实现仅改主仓技能和发现入口；PRD 集合不得读取私人运行数据或在界面展示调试实现信息。当前角色以 F30 为准：维护 agent 只交付代码/文档，外部业务执行者通过获准 API/MCP 操作数据；两者不能互代。私有运行数据不提交。实现代码注释与内部错误英文，UI 与产品文档中文。
 
