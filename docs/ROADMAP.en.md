@@ -4,6 +4,10 @@ Version: 0.1.124
 
 [简体中文](ROADMAP.md)
 
+## Public product homepage design
+
+Define public-search intent, bilingual content, real product imagery and the try/self-host journeys. Deliver a responsive static prototype and SEO/interaction acceptance before changing routing. Confirm the public site's origin, implement crawlable language editions and metadata, then verify and deploy the public surface separately from the protected workbench. Current phase: design only.
+
 ## External-client acceptance correction
 
 Keep normal client shell/file/network and MCP/OAuth setup tools. Verify identity, consent, discovery and server-enforced denial/revocation; do not require a tool-disabled client. Historical restricted-environment evidence remains historical and does not set a launch default.

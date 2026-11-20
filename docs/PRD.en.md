@@ -4,6 +4,12 @@ Version: 0.1.124 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
+## Public product homepage — design
+
+Design an anonymous, indexable product homepage for people discovering Praxis through search. Explain the self-hosted platform, the user's chosen external agent, app-owned results and user-controlled authorization. Lead with a real product example and offer both trying the hosted service and running the complete local Compose stack. Present all fourteen published components, distinguishing Polaris runtime observations from app cards, and describe custom app development without claiming planned workflow execution or account registration is available. Keep technical setup below the product explanation.
+
+Provide complete English and Simplified Chinese HTML editions with ordinary navigation links. Production acceptance requires readable content without JavaScript, explicit canonical/language URLs, truthful search/share metadata, accessible desktop/phone layouts and no private records. This phase delivers the design and local prototype; it does not replace the deployed workbench, change its origin or publish a new route. Set the public site's canonical origin before implementation/deployment. [Design](design/public-home.en.md)
+
 ## External agent tools and authorization
 
 External content agents retain their normal harness tools, including shell, local files, browser/network access and MCP/OAuth configuration. Separate business identity and grants from platform maintenance privileges; do not disable client tools to stand in for authorization. Praxis and each app enforce account, resource and action permissions at their service boundary, including when a client sends arbitrary HTTP requests. The client may use its own working files and credentials; platform administrator credentials, server data and recovery keys are not supplied as business access.
