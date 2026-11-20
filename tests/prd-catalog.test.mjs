@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { getPrdSources, loadPrd, listPrds } from '../src/prd-catalog.mjs';
+import { getPrdSources, loadPrd, listPrds, prdMetadata } from '../src/prd-catalog.mjs';
 import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 
 async function workspace(t) {
@@ -39,6 +39,10 @@ const metadata = [
   { id: 'calendar', group: 'third-party', project: 'Calendar', source: 'third_party/calendar/PRD.md' },
   { id: 'polaris', group: 'third-party', project: 'Polaris', source: 'third_party/polaris/apps/docs/site/development/prd.zh-CN.md' },
 ];
+
+test('explicit requirements revisions stay separate from English and Chinese app release headings', () => {
+  for (const content of ['App release: 0.1.7\nRequirements revision: V1.1.12', '应用发行版本：0.1.7\n需求文档修订：V1.1.12', '应用发行版本：0.1.7\n需求修订：V1.1.12']) assert.equal(prdMetadata(content, 'Synthetic app').version, 'V1.1.12');
+});
 
 test('installed app declarations classify Praxis and independent app PRDs', async (t) => {
   const { root, put } = await workspace(t);
