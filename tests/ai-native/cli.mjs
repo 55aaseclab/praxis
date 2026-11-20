@@ -21,6 +21,7 @@ init --input CONFIG.json [--lang en|zh] [--seed TEXT]
 round --campaign ID [--destination TEXT]
 advance-investment --as-of ISO
 status | report [--lang en|zh] | next | pause | resume
+configure-runtime
 dispatch --task ID | coordinator
 collect --dispatch ID | reconcile --dispatch ID
 resolve --input PASEO-RESOLUTION.json
@@ -44,6 +45,7 @@ init --input 配置.json [--lang en|zh] [--seed 文本]
 round --campaign 场景ID [--destination 目的地]
 advance-investment --as-of ISO
 status | report [--lang en|zh] | next | pause | resume
+configure-runtime
 dispatch --task ID | coordinator
 collect --dispatch ID | reconcile --dispatch ID
 resolve --input Paseo人工核对结果.json
@@ -71,6 +73,8 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === 'help') return help[lang];
   if (command === 'catalog') return { models, campaigns };
   if (command === 'config-example') return {
+    fullAccess: true,
+    communication: 'paseo-send-message',
     origin: 'https://your-public-praxis.example',
     coordinator: { workspaceId: '<coordinator workspace>', cwd: '/private/coordinator' },
     maintenance: { workspaceId: '<maintenance source workspace>', cwd: '/source/praxis' },
@@ -83,6 +87,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (command === 'init') { const s = c.init(readJson(v.input), { locale: lang, ...(v.seed ? { seed: v.seed } : {}) }); return { runId: s.runId, paused: s.paused }; }
     switch (command) {
       case 'status': return c.read();
+      case 'configure-runtime': return c.configureRuntime();
       case 'round': return c.round(v.campaign, { destination: v.destination });
       case 'advance-investment': c.advanceInvestment(v['as-of']); return { asOf: v['as-of'] };
       case 'next': return c.next() || labels[v.lang || c.read().locale].empty;

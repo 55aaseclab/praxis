@@ -13,6 +13,8 @@ CLI 与证据格式见[操作说明](../../tests/ai-native/README.zh-CN.md)。�
 
 所有派发经框架 CLI：发现精确模型，在调用 Paseo 前持久预留全局 worker 单槽。主控用 GLM-5.3-Flash main，worker 用 GLM-5.3-Flash worker，Maintenance 用 GPT-6.1-Sol ultra 和默认上下文。保留正常客户端工具，应用服务边界的 grants 约束业务权限。不直接启动 agent、另开并行助手或限制 worker token。串行执行不能证明多用户负载能力。
 
+配置固定 `fullAccess: true`、`communication: "paseo-send-message"`。OpenCode 用 build+auto_accept，Codex 用 full-access；普通工具权限不重复问人工，真正的问题和逐次 Maintenance 确认仍须问。派单、汇报和追问使用 Paseo send_agent_prompt/agent.send/公开 paseo send，不读其他角色工作文件或反复拉日志/时间线代替通信。业务结果留在所属应用，新任务/恢复执行前仍须占 worker 槽。
+
 先检查状态、未完成派发与覆盖。回收已确认派发的空闲会话，但空闲不等于成功。独立回读授权结果或取得服务断言后提交验收证据。保留失败尝试、原角色和随机情境。修复复测优先，必须对应实际运行的修复版本。完整重演另用独立配置的合成测试状态，不能删除长期团队历史来重置。
 
 验收通过后安排下一轮。目标和带种子的情境变化引导自主操作，不逐步编排或制造同意。应用记录保持权威。发现真实能力和操作技能，缺失操作如实报告，不用聊天/文件替代。Polaris 是经授权只读观察器，不是调度器；Calendar 本地状态不等于共享后端。情报与投资保留来源及发布时间证据。

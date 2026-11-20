@@ -38,7 +38,7 @@ class FakePaseo {
   async start(d, prompt) {
     this.calls.push(['start', d, prompt]);
     const id = d.agentId || `agent-${d.id}`;
-    this.agents.set(id, { agentId: id, provider: d.model.provider, model: d.model.model, thinking: d.model.thinking, cwd: d.binding.cwd, mode: d.model.mode, status: 'running', dispatchId: d.id });
+    this.agents.set(id, { agentId: id, provider: d.model.provider, model: d.model.model, thinking: d.model.thinking, cwd: d.binding.cwd, mode: d.model.mode, features: d.model.features, status: 'running', dispatchId: d.id });
     if (this.loseReceipt) throw Error('Synthetic lost receipt.');
     return id;
   }
@@ -66,6 +66,8 @@ test('campaigns retain nine actors, exact models, bilingual roles and seeded var
 test('initialization and reports never dispatch; investor prerequisites remain explicit in both languages', async t => {
   const { c, file } = fixture(t);
   assert.equal(c.read().paused, true);
+  assert.equal(c.read().config.fullAccess, true);
+  assert.equal(c.read().config.communication, 'paseo-send-message');
   assert.equal(c.next(), null);
   assert.throws(() => c.round('stock-investor'), /market, horizon/);
   assert.deepEqual(c.read().dispatches, {});
@@ -127,7 +129,7 @@ test('an idle queued recipient cannot release the global slot before this turn h
   const { c } = fixture(t); c.round('family-travel'); c.pause(false);
   const paseo = new FakePaseo(), id = c.next().id, d = c.reserve('worker', id);
   c.acknowledge(d.id, 'queued-recipient');
-  paseo.agents.set('queued-recipient', { agentId: 'queued-recipient', provider: d.model.provider, model: d.model.model, mode: d.model.mode, cwd: d.binding.cwd, status: 'idle' });
+  paseo.agents.set('queued-recipient', { agentId: 'queued-recipient', provider: d.model.provider, model: d.model.model, mode: d.model.mode, features: d.model.features, cwd: d.binding.cwd, status: 'idle' });
   assert.equal((await collect(c, paseo, d.id)).status, 'awaiting_start_evidence');
   assert.equal(c.next(), null);
   paseo.agents.get('queued-recipient').status = 'running';
@@ -252,21 +254,35 @@ test('coverage records failed attempts, pending verification and explicit N/A de
   assert.equal(m.loadAcceptance, 'pending');
 });
 
-test('Paseo adapter uses exact argument vectors, identity checks and sanitized errors without starting real agents', async () => {
-  const calls = [], d = { id: 'opaque-dispatch', kind: 'maintenance', binding: { workspaceId: 'space-id', cwd: '/synthetic/source', host: 'operator-host' }, model: models.maintenance, agentId: null };
-  const p = new Paseo({ execute: async (binary, args) => {
-    calls.push({ binary, args });
-    return { stdout: JSON.stringify(args[0] === 'provider' ? [{ id: 'gpt-6.1-sol', thinkingOptionIds: ['ultra'] }] : { agentId: 'new-agent' }) };
-  } });
+test('public Paseo SDK applies full access before the first prompt and sends literal messages with steer', async () => {
+  const calls = [], d = { id: 'opaque-dispatch', kind: 'worker', binding: { workspaceId: 'space-id', cwd: '/synthetic/client', host: 'ws://operator-host:6767' }, model: models.worker, agentId: null };
+  const observed = { id: 'new-agent', provider: 'opencode', runtimeInfo: { model: models.worker.model }, currentModeId: 'build', cwd: d.binding.cwd, status: 'idle', features: [{ id: 'auto_accept', value: true }] };
+  const client = {
+    connect: async () => calls.push(['connect']), close: async () => calls.push(['close']),
+    workspaces: { ref: id => ({ agents: { create: async options => { calls.push(['create', id, options]); return { id: 'new-agent' }; } } }) },
+    agents: { ref: id => ({ refresh: async () => ({ agent: observed, project: null }), send: async (body, options) => calls.push(['send', id, body, options]) }) },
+  };
+  const p = new Paseo({ createClient: options => { calls.push(['client', options]); return client; }, execute: async () => ({ stdout: JSON.stringify([{ id: models.worker.model }]) }) });
   await p.preflight(d.model, d.binding);
-  assert.equal(await p.start(d, 'literal $(not-a-shell) `payload`'), 'new-agent');
-  const args = calls[1].args;
-  assert.ok(args.includes('literal $(not-a-shell) `payload`'));
-  assert.equal(args[args.indexOf('--thinking') + 1], 'ultra');
-  assert.equal(args[args.indexOf('--workspace') + 1], 'space-id');
-  assert.equal(args[args.indexOf('--host') + 1], 'operator-host');
-  assert.ok(!args.some(a => /context_window|permission.*deny/.test(a)));
-  assert.throws(() => p.assertIdentity({ agentId: 'a', provider: 'codex', model: 'wrong' }, { ...d, agentId: 'a' }), /does not match/);
+  const literal = 'literal $(not-a-shell) `payload`';
+  assert.equal(await p.start(d, literal), 'new-agent');
+  const create = calls.find(c => c[0] === 'create');
+  assert.equal(create[1], 'space-id'); assert.equal(create[2].prompt, undefined);
+  assert.equal(calls.find(c => c[0] === 'send')[2], literal);
+  assert.deepEqual(create[2].config.featureValues, { auto_accept: true });
+  assert.equal(create[2].config.modeId, 'build');
+  assert.equal(create[2].config.options, undefined);
+  const snapshot = await p.inspect('new-agent', d.binding);
+  p.assertIdentity(snapshot, { ...d, agentId: 'new-agent' });
+  assert.throws(() => p.assertIdentity({ ...snapshot, features: { auto_accept: false } }, { ...d, agentId: 'new-agent' }), /features/);
+  await p.start({ ...d, agentId: 'new-agent' }, literal);
+  const send = calls.filter(c => c[0] === 'send').at(-1);
+  assert.equal(send[1], 'new-agent'); assert.equal(send[2], literal); assert.equal(send[3].activeTurnBehavior, 'steer'); assert.ok(send[3].messageId);
+  await p.start({ ...d, kind: 'maintenance', model: models.maintenance }, 'Technical reproduction only.');
+  const maintenance = calls.filter(c => c[0] === 'create').at(-1)[2];
+  assert.equal(maintenance.config.modeId, 'full-access'); assert.equal(maintenance.config.thinkingOptionId, 'ultra');
+  assert.equal(maintenance.config.options, undefined);
+  assert.equal(calls.filter(c => c[0] === 'connect').length, calls.filter(c => c[0] === 'close').length);
   const bad = new Paseo({ execute: async () => { throw Error('private-business-body and credential'); } });
   await assert.rejects(bad.preflight(d.model, d.binding), e => !/private-business-body|credential/.test(e.message));
 });

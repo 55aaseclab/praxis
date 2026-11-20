@@ -1,12 +1,16 @@
 # Praxis product requirements
 
-Version: 0.1.127 · [简体中文](PRD.md)
+Version: 0.1.128 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
 ## Long-lived AI-native testing
 
 Deliver an opt-in external-agent test harness under `tests/ai-native/`, with English and Simplified Chinese instructions and reports. Paseo manages agent sessions; a separate GLM-5.3-Flash main coordinator advances durable campaigns. Business actors use GLM-5.3-Flash worker with one globally enforced worker inference slot. Maintenance uses GPT-6.1-Sol, ultra reasoning and the provider's default context window. Discover exact provider models at launch; never substitute free/fp8 models or disable normal client tools. No worker token budget or fixed end date applies. Concurrency/load acceptance remains pending.
+
+The test configuration sets `fullAccess: true` for all roles. OpenCode coordinator/workers use their discovered `auto_accept: true` feature in build mode, applied before the first prompt; Codex Maintenance uses full-access mode. Ordinary file, shell and network tool permissions do not interrupt the human. Keep explicit human questions interactive, including per-invocation Maintenance approval; automatic tool permission acceptance must never answer those questions. Use supported Paseo SDK/MCP/CLI controls only, and verify the observed runtime setting. This grants harness tools, not additional business permissions or internal API access.
+
+The test configuration sets `communication: "paseo-send-message"`. Agents use Paseo's public send-message operation for assignments, reports, questions and coordination, including worker→coordinator and coordinator→parent reports. Do not read another agent's working files or repeatedly pull logs/timelines as a message transport. Reading harness state and independently verifying app outcomes remains necessary; app records remain authoritative. New/resumed business tasks still reserve the global worker slot before sending; communication does not authorize extra parallel workers.
 
 Three synthetic campaigns retain identities and accumulated records: a three-person travelling family; a research organization studying **A new paradigm for vulnerability management in the AI era**, with Research (mentor/student), Productization (engineer), Marketing and Finance/support; and a full-time simulated investor starting with CNY 1,000,000 and targeting 10% net return. The investor's market and horizon must be supplied before trading. Research uses Reminder, Knowledge, Lattice, Memo, Polaris, Calendar, Projects and Intelligence; investment uses Reminder, Memo, Finance, Intelligence and Polaris. Campaign application use follows actual discovered capabilities. Polaris remains a read-only authorized observer and Calendar retains its device-local boundary; missing capabilities are recorded rather than fabricated. Keep all teams and personal/shared scopes separate. Real public information may be researched; orders, money and organizational operations remain synthetic.
 
@@ -235,6 +239,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.125 | 2026-11-20 | Remove per-app language toggles; apps follow the workbench language preference |
 | v0.1.126 | 2026-11-20 | Add bilingual persistent AI-native testing with human-approved maintenance |
 | v0.1.127 | 2026-11-20 | Use human confirmation in Paseo and public-only business workflows |
+| v0.1.128 | 2026-11-20 | Persist full access and Paseo message communication for test agents |
 
 ### Letters and Profiles
 

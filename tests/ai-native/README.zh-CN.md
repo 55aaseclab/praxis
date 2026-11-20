@@ -6,7 +6,7 @@
 
 ## 结构与角色
 
-`campaigns.mjs` 保存三个双语场景、九位稳定角色、有限覆盖矩阵及带种子的情境变化；`controller.mjs` 用私有 SQLite 保存状态、派发和审批；`adapters/paseo.mjs` 不经 shell 插值调用已安装的 Paseo CLI；`runner.mjs` 先预留再外部执行。`prompts.mjs` 分离业务与维护输入。主控读取[技能](../../skills/ai-native-testing/SKILL.zh-CN.md)。
+`campaigns.mjs` 保存三个双语场景、九位稳定角色、有限覆盖矩阵及带种子的情境变化；`controller.mjs` 用私有 SQLite 保存状态、派发和审批；`adapters/paseo.mjs` 用公开 Paseo SDK 创建会话、读取元数据及发送消息，并通过不经 shell 插值的 CLI 做发现/核对；`runner.mjs` 先预留再外部执行。`prompts.mjs` 分离业务与维护输入。主控读取[技能](../../skills/ai-native-testing/SKILL.zh-CN.md)。
 
 | 场景 | 人员 | 应用与连续性 |
 | --- | --- | --- |
@@ -15,6 +15,8 @@
 | 专职模拟投资者 | 一人 | Reminder、Memo、Finance、Intelligence、Polaris；初始模拟本金100万元、争取10%净收益，开始前必须明确 market/horizon/asOf，交易、成交、费用和资金均为合成。 |
 
 精确模型：主控 `opencode/hexhive005-main/zai-org/GLM-5.3-Flash`；worker `opencode/hexhive005-work/zai-org/GLM-5.3-Flash`；Maintenance `codex/gpt-6.1-sol`、`ultra`，不覆盖默认 context window。发现失败不替换模型。主控与 Maintenance 独立于全局 worker 单槽；Maintenance 预留/执行期间阻止新业务任务，避免边改环境边测试。每次介入均须人工确认。worker 不设 token 预算、场景不设固定到期时间。额度或 provider 故障保留进度，不因此盲目重试。
+
+测试配置包含 `fullAccess: true`、`communication: "paseo-send-message"`。OpenCode 在 build mode 下、首条任务开始前应用已发现的 `auto_accept: true`，Codex 用 full-access。普通工具权限不打断人工，真正的问题及逐次 Maintenance 确认仍须交互。先配置空闲会话，再经公开 SDK `agent.send` 发送首条任务，后续也用 send message。agent 间汇报、追问和协调统一用公开 SDK/MCP 发送消息或 `paseo send`，不读对方文件、不轮询日志代替通信；应用回读/状态检查仍用于验收，不当消息传输。不得绕开占槽唤醒额外空闲 worker。远程 binding 的 host 须为可达 ws/wss/tcp URL 或 host:port（SSH 先建立转发），不嵌入凭据。既有安装可运行 `configure-runtime --state /private/testing/campaign.sqlite` 持久保存默认值，不重置角色或历史；已经运行的 OpenCode 会话通过公开 Paseo Auto Accept 设置启用一次。
 
 Personality 影响选择，不是固定剧本。情境抽样种子和结果按任务持久化，可复现输入刺激，不承诺模型输出完全相同。角色只接收自己的性格、目标和本轮新信息，不接收其他角色私有讨论。保留正常 shell、本地文件、浏览器/联网及 OAuth/MCP 配置工具。可研究真实公开资料，业务账户、数据及操作使用隔离的合成夹具，并由真实服务端执行授权。
 

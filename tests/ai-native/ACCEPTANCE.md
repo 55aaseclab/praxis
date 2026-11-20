@@ -1,8 +1,8 @@
 # AI-native testing acceptance evidence
 
-Current checkpoint: **0.1.127**. The 0.1.126 section below is historical; its signing-key workflow is superseded by explicit human questions/replies in Paseo.
+Current checkpoint: **0.1.128**. The 0.1.126 section below is historical; its signing-key workflow is superseded by explicit human questions/replies in Paseo.
 
-当前验收点：**0.1.127**。下方0.1.126为历史记录，其中密钥签名流程已被 Paseo 人工提问/回复替代。
+当前验收点：**0.1.128**。下方0.1.126为历史记录，其中密钥签名流程已被 Paseo 人工提问/回复替代。
 
 English · 简体中文 below. Contract: [PRD ANT01–ANT10](../../docs/PRD.en.md#long-lived-ai-native-testing), [roadmap](../../docs/ROADMAP.en.md#long-lived-ai-native-testing), [external-client verification](../../docs/VERIFICATION.en.md).
 
@@ -68,3 +68,18 @@ Paseo 浏览器主机不能访问构建主机回环 URL，因此使用本机无�
 | Actual launch and business acceptance / 实际启动与业务验收 | Pending | Authorized next step; runtime evidence is kept outside Git and must not be inferred from controller tests. 已获授权继续启动，运行证据留在 Git 外，不从控制器检查推断。 |
 
 Conversation receipts are auditable workflow records, not cryptographic verification of a hostile client. The human is asked directly in Paseo and does not configure keys or sign files. Provider-native question tools are preferred; if unavailable, ask in the Paseo conversation and end the turn until the human replies. 会话回执用于审计流程，不是对恶意客户端的密码学验身；直接在 Paseo 问你，不配置密钥或签文件，优先用 provider 的 question 工具，否则在会话中提问并等待。
+
+
+## 0.1.128 — Full access and Paseo messages / 完整工具权限与 Paseo 消息
+
+| Scope / 范围 | Status | Evidence / 证据 |
+| --- | --- | --- |
+| Test configuration / 测试配置 | Pass | `fullAccess: true`, `communication: "paseo-send-message"` are persisted defaults, including the live runtime configuration; investor/identity data and task history are unchanged. 默认值已保存到源码配置及当前运行配置，不改投资/身份数据或任务历史。 |
+| Public SDK creation / 公开 SDK 创建 | Pass | Synthetic adapter checks prove idle-session creation receives OpenCode auto_accept before agent.send sends the first prompt; follow-ups use agent.send with steer and message ID. Maintenance retains Codex full-access/ultra/default context. 合成检查证明先设置权限，再通过 agent.send 发首条及后续消息；维护保持 full-access/ultra/默认上下文。 |
+| Current live settings / 当前会话设置 | Pass | Public Paseo update_agent enabled auto_accept on the coordinator and first worker; actual public SDK refresh independently read both values as true. No provider/server internal API was used. 通过公开 update_agent 设置，公开 SDK refresh 回读两者均为true，不用内部API。 |
+| Actual coordination / 实际通信 | Pass | Worker sent its redacted result to coordinator using Paseo send; coordinator sent the verified summary to its parent via Paseo message. Message references remain in the private runtime ledger. worker→主控→父级已实际通过 Paseo 消息汇报，私有台账保存引用。 |
+| Source/browser regressions / 源码与浏览器 | Pass | npm test456/456 with15 harness cases; bilingual0.1.128 workbench PRDs show fullAccess and paseo-send-message. Skill validation and diff checks pass. 456项含15项框架检查、中英工作台PRD、技能与差异检查均通过。 |
+| First business onboarding / 首个业务接入 | Fail | The real worker reaches the public OAuth login gate but cannot obtain a new business account through the offered public flow. No private admin/SQL fallback, credentials borrowed from another actor or business writes were used. 真实worker到达公开OAuth登录闸门，缺少可用公开建号流程；未使用内部管理/SQL补流程、借用身份或写业务记录。 |
+| Account workflow repair / 账号流程修复 | Pending | Needs a separate explicit human decision on its technical scope before Maintenance. This configuration change does not approve that repair. 维护前须人工另行明确范围；此次配置修改不授权修账号。 |
+
+Runtime-setting verification used existing sessions, not extra synthetic live workers. SDK creation behavior is covered by the injected-client check; no new SDK-created business session is claimed at this checkpoint. 实际权限回读使用既有会话，没有额外启动业务worker；SDK新建行为由注入客户端的检查覆盖，不声称此验收点另有真实SDK新建业务会话。

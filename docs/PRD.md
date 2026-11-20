@@ -1,12 +1,16 @@
 # Praxis 产品需求
 
-版本：0.1.127 · [English](PRD.en.md)
+版本：0.1.128 · [English](PRD.en.md)
 
 Praxis 是一个可自托管的平台，为 agent 执行工作和人使用结果设计应用。用户表达想要的结果，授权 agent 完成日常操作。应用校验操作、保存结果，并以适合人阅读、观看或收听的方式呈现。每款应用负责自己的业务对象、可对这些对象执行的操作，以及让人理解结果的界面。
 
 ## 长期 AI-native testing
 
 在 `tests/ai-native/` 交付显式启动的外部 agent 测试框架，提供英文、简体中文说明与报告。Paseo 管理会话，独立的 GLM-5.3-Flash main 主控推进持久化测试；业务角色使用 GLM-5.3-Flash worker，所有团队全局强制一个 worker 推理槽。Maintenance 使用 GPT-6.1-Sol、ultra 与 provider 默认上下文窗口。启动时发现并核对精确模型，不替换为免费/fp8 模型，不禁用客户端正常工具。worker 不设 token 预算，长期测试不设固定结束日期；多用户并发/负载验收待定。
+
+测试配置为所有角色设置 `fullAccess: true`。OpenCode 主控/worker 在 build mode 下使用已发现的 `auto_accept: true`，首条提示词执行前即应用；Codex Maintenance 使用 full-access mode。普通文件、shell 与联网权限不再打断人工。人工提问仍须交互，包括逐次 Maintenance 确认，自动接受工具权限不得替人回答问题。只用支持的 Paseo SDK/MCP/CLI 配置并回读实际状态。工具 full access 不扩大业务授权，也不允许内部 API。
+
+测试配置设置 `communication: "paseo-send-message"`。agent 间派单、汇报、追问和协调统一走 Paseo 公开发送消息能力，包括 worker→主控及主控→父级汇报；不读对方工作文件、不反复拉日志/时间线代替消息。仍需读取框架状态、独立验证应用结果，应用记录继续权威。新任务/恢复业务任务在发消息前仍先预留全局 worker 槽，通信不授权额外并行 worker。
 
 三个合成场景持续保留身份和历史：三人旅行家庭；研究《AI 时代的漏洞管理新范式》的组织，包含 Research（导师、学生）、Productization（工程师）、Marketing 和 Finance/支持；初始模拟本金100万元、争取10%净收益的专职投资者。交易前须明确市场和期限。研究组织使用 Reminder、Knowledge、Lattice、Memo、Polaris、Calendar、Projects、Intelligence；投资者使用 Reminder、Memo、Finance、Intelligence、Polaris。应用使用以实际发现的能力为准，Polaris 仍是经授权的只读观察器，Calendar 保留设备本地边界；缺失能力明确记录，不伪造成果。团队及个人/共享范围隔离。可查询真实公开资料，交易、资金及组织操作均为合成。
 
@@ -297,6 +301,7 @@ Praxis 将维护中的应用作为独立版本的内置组件发布。目录包�
 | v0.1.125 | 2026-11-20 | 作者与实现代理 | Remove per-app language toggles; apps follow the workbench language preference |
 | v0.1.126 | 2026-11-20 | 作者与实现代理 | 增加双语持久 AI-native 测试与人工审批维护 |
 | v0.1.127 | 2026-11-20 | 作者与实现代理 | 改用 Paseo 人工确认并限定业务操作走公开接口 |
+| v0.1.128 | 2026-11-20 | 作者与实现代理 | 测试配置持久启用 full access 与 Paseo 消息通信 |
 
 ## 零、需求体检与澄清
 

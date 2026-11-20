@@ -38,8 +38,10 @@ function binding(value) {
   return structuredClone(value);
 }
 export function validateConfig(input) {
-  requireValue(exact(input, ['coordinator', 'maintenance', 'maintenanceTargets', 'actors', 'origin', 'investment']), 'Invalid campaign configuration.');
-  const config = { coordinator: binding(input.coordinator), maintenance: binding(input.maintenance), actors: {} };
+  requireValue(exact(input, ['coordinator', 'maintenance', 'maintenanceTargets', 'actors', 'origin', 'investment', 'fullAccess', 'communication']), 'Invalid campaign configuration.');
+  requireValue(input.fullAccess === undefined || input.fullAccess === true, 'This campaign uses fullAccess: true; business grants and human Maintenance confirmation remain separate.');
+  requireValue(input.communication === undefined || input.communication === 'paseo-send-message', 'Agent communication uses Paseo send message.');
+  const config = { fullAccess: true, communication: 'paseo-send-message', coordinator: binding(input.coordinator), maintenance: binding(input.maintenance), actors: {} };
   requireValue(input.maintenanceTargets === undefined || Array.isArray(input.maintenanceTargets), 'maintenanceTargets must be an array of owning-repository bindings.');
   config.maintenanceTargets = (input.maintenanceTargets || []).map(binding);
   requireValue(new Set([config.maintenance, ...config.maintenanceTargets].map(b => b.cwd)).size === config.maintenanceTargets.length + 1, 'Maintenance repository paths must be unambiguous.');
@@ -100,6 +102,13 @@ export class Controller {
   }
   event(s, type, reference) { s.events.push({ at: new Date().toISOString(), type, reference }); }
   pause(paused) { return this.change(s => { s.paused = paused; this.event(s, paused ? 'paused' : 'resumed', s.runId); }); }
+  configureRuntime() {
+    return this.change(s => {
+      s.config.fullAccess = true; s.config.communication = 'paseo-send-message';
+      this.event(s, 'runtime_policy_configured', s.runId);
+      return { fullAccess: true, communication: s.config.communication };
+    });
+  }
   advanceInvestment(asOf) {
     return this.change(s => {
       requireValue(s.config.investment && Number.isFinite(Date.parse(asOf)) && Date.parse(asOf) > Date.parse(s.config.investment.asOf) && Date.parse(asOf) <= Date.now(), 'Advance to a later, already elapsed information cutoff.');

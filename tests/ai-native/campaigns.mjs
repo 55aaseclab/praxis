@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 
 export const text = (en, zh) => ({ en, zh });
 export const models = Object.freeze({
-  coordinator: { provider: 'opencode', model: 'hexhive005-main/zai-org/GLM-5.3-Flash', mode: 'build' },
-  worker: { provider: 'opencode', model: 'hexhive005-work/zai-org/GLM-5.3-Flash', mode: 'build' },
+  coordinator: { provider: 'opencode', model: 'hexhive005-main/zai-org/GLM-5.3-Flash', mode: 'build', features: { auto_accept: true } },
+  worker: { provider: 'opencode', model: 'hexhive005-work/zai-org/GLM-5.3-Flash', mode: 'build', features: { auto_accept: true } },
   maintenance: { provider: 'codex', model: 'gpt-6.1-sol', thinking: 'ultra', mode: 'full-access' },
 });
 
