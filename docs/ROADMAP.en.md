@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.121
+Version: 0.1.122
 
 [简体中文](ROADMAP.md)
 
@@ -239,3 +239,7 @@ Register Letters and Profiles in the workbench, bind private sources only at run
 ## 0.1.121 · Storage startup metadata
 
 Separate backup metadata validation from Core signing-key validation. Prove an intentionally absent service key is never opened by the coordinator, while Core still rejects that runtime configuration. Validate the real mounted configuration without running a job, then gracefully drain/recreate only the affected worker and verify unchanged bindings, identity and durable pending queue. Preserve the failed rollout/rollback diagnosis and honest replica status.
+
+## 0.1.122 · Stable data previews and copy feedback
+
+Use consistent pointer/focus/touch previews and fixed-slot copy outcomes in Settings Data. Preserve raw clipboard values, no layout shift, long-value containment, keyboard/manual recovery and unchanged-refresh DOM/focus/scroll. Verify synthetic desktop/phone scenes and both PRD editions, then deploy only the affected workbench/Core image.

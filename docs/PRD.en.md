@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.121 · [简体中文](PRD.md)
+Version: 0.1.122 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -32,6 +32,12 @@ The requirements below describe the current platform contract.
 The public checkout supplies the complete built-in Docker Compose stack. A fresh clone starts the native services for all fourteen apps, the authenticated workbench and scoped business interface. First-start initialization creates a private owner account, workspace, service keys and persistent stores. Existing identities, configuration and records survive restarts and retries. Verify every native entry, protected resource, write/read-back flow and restart from an isolated clean installation. Preserve the original stack-management and recovery workflows during migration.
 
 Check these contracts with synthetic data. Third-party services are provisioned separately for managed operation.
+
+## Stable hover and copy feedback
+
+In Settings → Data, location values and the workspace alias are consistent preview/copy controls. Hovering shows a pointer cursor across the control and its text, then reveals the full value in an anchored overlay. Keyboard focus and touch also reveal it; Escape dismisses it. Keep long values inside the viewport and allow their text to be selected. Copy the exact original value, including the resolved full path behind `$WORKSPACE`.
+
+Show copying/success/failure in an existing fixed icon slot, with a visually hidden live announcement. Never insert a “Copied” line below a value or change row, table or page geometry. Keep the full value readable during feedback; repeated copies, error/recovery and returning to idle must not flash or move the content. Clipboard failure must remain truthful and expose manual selection. Preserve focus and scroll in clipboard fallback. An unchanged inventory refresh updates its timestamp without replacing the controls, closing a preview or clearing copy feedback; changed/cleared data and identity changes remove stale previews. Verify both languages, mouse hover, keyboard and touch at desktop and phone widths using synthetic values.
 
 ## App cards, live data inventory and business traces
 

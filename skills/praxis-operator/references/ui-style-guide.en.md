@@ -177,3 +177,7 @@ Before delivery, review desktop and narrow layouts with representative content a
 
 When a section has an internal heading outline, opening that section expands its outline inside the left navigation. Selecting the current section title opens that outline; its disclosure control may still collapse it. Derive the outline and anchors from the current body after content edits, including transitions from no headings to headings, while preserving sibling sections in the chapter or part. Do not require content agents to maintain navigation text or hardcode a business document title. Preserve the existing mobile navigation disclosure.
 A chapter is a container; its landing section is not the chapter itself. When adding a peer section, store chapter membership through the controlled data layer and reuse the reader, rather than appending the new section body to the landing page or cloning a page implementation. Keep stable section links, sibling navigation and independent document versions.
+
+### Hover previews and copy feedback
+
+A preview/copy control shows the pointer cursor over its complete hit area and text. Reveal full values in a bounded overlay on hover/focus and provide touch access. Keep copy, success and failure in the same reserved icon slot; use a hidden live region for announcements. Avoid inserting feedback rows, replacing the visible value, moving focus/scroll or animating text. Stable background refreshes retain the trigger DOM and active preview. Clear protected previews on identity/navigation changes.

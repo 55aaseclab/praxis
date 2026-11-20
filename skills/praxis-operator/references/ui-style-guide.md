@@ -182,3 +182,7 @@ Before delivery, review desktop and narrow layouts with representative content a
 
 When a section has an internal heading outline, opening that section expands its outline inside the left navigation. Selecting the current section title opens that outline; its disclosure control may still collapse it. Derive the outline and anchors from the current body after content edits, including transitions from no headings to headings, while preserving sibling sections in the chapter or part. Do not require content agents to maintain navigation text or hardcode a business document title. Preserve the existing mobile navigation disclosure.
 A chapter is a container; its landing section is not the chapter itself. When adding a peer section, store chapter membership through the controlled data layer and reuse the reader, rather than appending the new section body to the landing page or cloning a page implementation. Keep stable section links, sibling navigation and independent document versions.
+
+### 悬停预览与复制反馈
+
+预览/复制控件的完整命中区域与文字均显示小手，悬停/聚焦时以视口内浮层展示完整值，并提供触屏入口。复制、成功及失败使用同一预留图标位置，以隐藏 live region 播报状态；避免插入反馈行、替换原值、移动焦点/滚动或给文字加动画。后台数据相同时保留控件 DOM 和当前预览，身份/导航变化时清除受保护预览。
