@@ -69,3 +69,7 @@
 !third_party/*/public/*.svg
 !third_party/**/*.md
 !third_party/calendar/public/calendar-events.js
+# Dependency caches and Git metadata never belong in a release context.
+**/node_modules/**
+**/.git
+**/.git/**
