@@ -95,6 +95,12 @@ Design basis: [Google SEO starter guide](https://developers.google.com/search/do
 
 ## Verified implementation checks
 
+### v0.1.132 content revision
+
+All six requested changes are deployed in English and Chinese. The full suite passes **443/443** checks; focused homepage/navigation checks pass20/20. Actual server-rendered browser checks cover1440/390px and320px navigation wrapping, stacked app headings, two ownership columns, removed captions, attention copy, Documentation/Contribute links and all existing motion/no-JavaScript/cache behavior. Live readback matches the versioned CSS/JS bytes. All35 non-slot containers remain unchanged; blue132 is active and green131 is healthy for rollback. Live screenshots below are updated. Local commits only; no public push.
+
+
+
 ### v0.1.131 cache regression
 
 A browser retaining v0.1.129 CSS reproduced the reported block-layout header and zero gap below the hero actions. Without clearing that browser cache, the content-addressed stylesheet restored the flex header and 40px desktop / 30px phone gap. Source integration and the full platform suite pass **443/443** checks; English/Chinese desktop/phone and both PRD readers also pass.
