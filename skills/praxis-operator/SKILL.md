@@ -60,9 +60,11 @@ Every exposed MCP tool must map to a real business skill with operation-specific
 
 ### External-client acceptance
 
-Read [the verification plan](../../docs/VERIFICATION.en.md) for business API, authorization or MCP work. The required live proof uses a real, separate Paseo Codex business agent with effective isolation, plus an independent physical-phone third-party agent App. A documentation helper, a full-access coding subagent, direct CLI/curl calls, mocked MCP responses, model API requests or the agent's prose do not satisfy that proof.
+External content agents retain their normal harness tools, including shell, local files, browser/network access and MCP/OAuth configuration. Separate business identity and grants from platform maintenance privileges; do not disable client tools to stand in for authorization. Praxis and each app enforce account, resource and action permissions at their service boundary, including when a client sends arbitrary HTTP requests. The client may use its own working files and credentials; platform administrator credentials, server data and recovery keys are not supplied as business access.
 
-Keep protocol and business-authorization checks outside the external agent's control. Ordinary business tools never expose shell, SQL, arbitrary file/code access, deployment or backup keys. Record actual provider/client identity and redacted committed outcomes. Mark unavailable or unexecuted checks honestly; documentation delivery alone does not implement the service or connect a phone.
+Read [the verification plan](../../docs/VERIFICATION.en.md) for business API, authorization or MCP work. Live proof uses an actual external business client with its own user consent and scoped credentials. Use the provider/model requested for the case; a Codex-specific or physical-phone case still needs that actual client. Maintenance helpers, mock responses, model-only requests and prose do not replace real client invocation and service readback. Normal client shell/file/network tools are allowed and do not invalidate acceptance.
+
+Keep protocol and business-authorization checks outside the external agent's control. Praxis business MCP tools do not expose server-side shell, SQL, arbitrary server file/code access, deployment or backup keys; this does not disable the client harness's own tools. Record actual provider/client identity and redacted committed outcomes. Mark unavailable or unexecuted checks honestly; documentation delivery alone does not implement the service or connect a phone.
 
 ### UI/UX design and changes
 

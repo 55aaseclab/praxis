@@ -8,6 +8,8 @@ Administrators and maintainers can implement, verify, commit and push directly w
 
 Map acceptance criteria to actual evidence and Pass, Fail, Pending or N/A with a reason in the task delivery or PR. External PRs require maintainer or administrator review. Sensitive authorization, storage, migration and production changes require administrator acceptance within the task's authorization. Publish app changes in their owning repository first; the platform pins their final publicly retrievable release SHA and verifies the combination.
 
+External content agents retain their normal harness tools, including shell, local files, browser/network access and MCP/OAuth configuration. Separate business identity and grants from platform maintenance privileges; do not disable client tools to stand in for authorization. Praxis and each app enforce account, resource and action permissions at their service boundary, including when a client sends arbitrary HTTP requests. The client may use its own working files and credentials; platform administrator credentials, server data and recovery keys are not supplied as business access.
+
 ## Keep small changes small
 
 Choose the smallest check that exercises the changed behavior. For a PRD edit, open the affected document through the workbench PRD reader in both languages. For navigation changes, run `node --test tests/system-navigation.test.mjs tests/app-launcher.test.mjs` and check the affected workbench → app → Home flow on desktop and at phone width. Run `npm test` for integration changes. Expand coverage when a check fails, a cross-layer risk emerges or the release calls for it.
@@ -31,6 +33,8 @@ Praxis exposes app capabilities to external agents. For an acceptance case that 
 管理员和 maintainer 可在负责范围直接实现、验证、提交并推送。外部贡献者按[贡献指南](CONTRIBUTING.md#简体中文)使用 issue 和 PR，agent 遵循发起者的流程和已有授权。实现前明确适用的 PRD、路线图和 guide 章节及可观察的验收条件，按改动行为选择 UI、存储、授权或部署指南。
 
 在任务交付或 PR 中记录验收条件、实际证据及 Pass、Fail、Pending、N/A 状态和理由。外部 PR 由 maintainer 或管理员评审。授权、存储、迁移和生产敏感变更按任务已有授权由管理员把关。应用改动先在所属仓库发布，平台再固定其最终可公开获取的发布 SHA，并验证实际组合。
+
+外部内容 agent 保留其 harness 的正常工具，包括 shell、本地文件、浏览器/联网及 MCP/OAuth 配置能力。业务身份与授权须和平台维护权限分开，不能以禁用客户端工具代替鉴权。Praxis 及各应用在服务边界校验账号、资源与动作权限，客户端能发送任意 HTTP 请求也不能绕过。客户端可以使用自己的工作文件与凭据；平台管理员凭据、服务端数据及恢复密钥不作为业务接入权限交付。
 
 ### 按改动范围验证
 

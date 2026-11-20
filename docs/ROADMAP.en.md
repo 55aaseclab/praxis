@@ -4,6 +4,10 @@ Version: 0.1.124
 
 [简体中文](ROADMAP.md)
 
+## External-client acceptance correction
+
+Keep normal client shell/file/network and MCP/OAuth setup tools. Verify identity, consent, discovery and server-enforced denial/revocation; do not require a tool-disabled client. Historical restricted-environment evidence remains historical and does not set a launch default.
+
 ## Loaded integrations and Projects planning
 
 1. Record the remaining hardcodes, ownership decisions and behavior/security parity checks; define the reviewed local module contract before implementation.
