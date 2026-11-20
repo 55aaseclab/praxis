@@ -1,4 +1,5 @@
 import { t } from './i18n.js';
+import { clearAppFacts } from './app-registry.js';
 let identity = null;
 let ended = false;
 let controller;
@@ -15,6 +16,7 @@ const node = typeof document !== 'undefined' ? document.querySelector('#account'
 export function hasIdentity() { return node ? Boolean(identity && !ended && identity.expiresAt > Date.now()) : typeof document !== 'undefined' && document.body?.dataset.websiteAuth === 'unmanaged'; }
 export function getIdentity() { return hasIdentity() ? identity : null; }
 function clearRegistry() {
+  clearAppFacts();
   document.querySelector('#apps')?.replaceChildren(); document.querySelector('#projects')?.replaceChildren();
   for (const selector of ['#apps-section', '#projects-section', '#desktop-empty', '#load-error']) { const element = document.querySelector(selector); if (element) element.hidden = true; }
 }
@@ -117,10 +119,10 @@ async function readIdentity() {
     if (!response.ok) { clear(response.status); return false; }
     const value = await response.json();
     if (current !== revision) return false;
-    if (ended || typeof value.username !== 'string' || !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= Date.now() || typeof value.csrfToken !== 'string' || !validIdentityApps(value.apps) || value.permissionsExpireAt !== null && value.permissionsExpireAt !== undefined && !Number.isSafeInteger(value.permissionsExpireAt)) { clear(); return false; }
+    if (ended || typeof value.username !== 'string' || !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= Date.now() || typeof value.csrfToken !== 'string' || !validIdentityApps(value.apps) || value.documentOwners !== undefined && !validIdentityApps(value.documentOwners) || value.permissionsExpireAt !== null && value.permissionsExpireAt !== undefined && !Number.isSafeInteger(value.permissionsExpireAt)) { clear(); return false; }
     const permissionsCurrent = value.permissionsExpireAt == null || value.permissionsExpireAt > Date.now();
     const next = Object.freeze({ ...value, apps: Object.freeze(permissionsCurrent ? [...value.apps] : []), prds: permissionsCurrent && value.prds === true, canViewPlatform: value.canViewPlatform === true, platformAdmin: value.platformAdmin === true, permissionsExpireAt: permissionsCurrent ? value.permissionsExpireAt ?? null : null });
-    const changed = !identity || JSON.stringify([identity.username, identity.apps, identity.prds, identity.platformAdmin, identity.canViewPlatform, identity.permissionsExpireAt]) !== JSON.stringify([next.username, next.apps, next.prds, next.platformAdmin, next.canViewPlatform, next.permissionsExpireAt]);
+    const changed = !identity || JSON.stringify([identity.userId, identity.username, identity.csrfToken, identity.apps, identity.prds, identity.platformAdmin, identity.documentOwner, identity.documentOwners, identity.canViewPlatform, identity.permissionsExpireAt]) !== JSON.stringify([next.userId, next.username, next.csrfToken, next.apps, next.prds, next.platformAdmin, next.documentOwner, next.documentOwners, next.canViewPlatform, next.permissionsExpireAt]);
     identity = next; showNavigation();
     if (changed) { clearRegistry(); notify(); }
     renderAccount();

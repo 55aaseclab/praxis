@@ -39,7 +39,7 @@ test('managed Slides mounts a separate JSON store and only its signing and space
   await writeFile(spacesFile, JSON.stringify({ spaces: { 'space-a': join(dataDir, 'personal.json') } }), { mode: 0o600 });
   f.config.apps.slides = { managed: true, url: 'http://127.0.0.1:4328/api/business', spaces: ['space-a'], keyFile, spacesFile, dataDir }; await f.save();
   const result = await plan(f), service = result.override.services['slides-business'];
-  assert.equal(service.build.target, 'lattice'); assert.equal(service.network_mode, 'host'); assert.equal(service.read_only, true);
+  assert.equal(service.build.dockerfile, 'Dockerfile.praxis'); assert.equal(service.network_mode, 'host'); assert.equal(service.read_only, true);
   assert.deepEqual(service.volumes.filter(volume => !volume.read_only).map(volume => volume.source), [dataDir]);
   assert.deepEqual(service.volumes.filter(volume => volume.read_only).map(volume => volume.source).sort(), [keyFile, spacesFile].sort());
   assert.ok(result.ports.includes(4328));
@@ -130,7 +130,7 @@ test('business stack rejects broad or overlapping state and secret mounts', asyn
 test('managed Reminder is explicitly enabled with only data directories writable', async t => {
   const f = await fixture(t, { managed: true }), result = await plan(f), service = result.override.services.reminder;
   assert.equal(service.network_mode, 'host');
-  assert.equal(service.build.target, 'reminder');
+  assert.equal(service.build.dockerfile, 'Dockerfile.praxis');
   assert.equal(service.read_only, true);
   assert.deepEqual(result.ports, [17326, 4322]);
   assert.equal(service.environment.REMINDER_MANAGED, '1');
@@ -411,7 +411,7 @@ test('managed Projects has one private data mount and fixed loopback adapter for
   await f.save();
   const result = await plan(f), service = result.override.services.projects;
   assert.deepEqual(service.command.slice(-4), ['--host', '127.0.0.1', '--port', '4327']);
-  assert.equal(service.build.target, 'projects'); assert.equal(service.read_only, true);
+  assert.equal(service.build.dockerfile, 'Dockerfile.praxis'); assert.equal(service.read_only, true);
   assert.deepEqual(service.volumes.filter(v => !v.read_only).map(v => v.source), [dataDir]);
   assert.deepEqual(service.volumes.filter(v => v.read_only).map(v => v.source).sort(), [keyFile, businessConfigFile].sort());
   assert.ok(result.ports.includes(4327));

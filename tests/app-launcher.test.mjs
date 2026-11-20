@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
+import { setAppFacts, collectionEntries } from '../public/app-registry.js';
 
 async function launchers(apps, origin, options = {}) {
   const groups = new Map([['#apps', []], ['#projects', []]]);
@@ -13,11 +14,11 @@ async function launchers(apps, origin, options = {}) {
     addEventListener() {},
   });
   const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  const launcherSource = source.replace(/^import .* from '\.\/(?:experience|identity|i18n)\.js';\n/gm, '');
+  const launcherSource = source.replace(/^import .* from '\.\/(?:experience|identity|i18n|app-registry)\.js';\n/gm, '');
   const events = new Map(), requests = []; let identity = options.identity || null, enabled = true;
   const controls = { groups, events, setIdentity(value) { identity = value; }, end() { enabled = false; events.get('praxis-session-ended')?.(); } };
   await runInNewContext(`(async () => {${launcherSource}\n})()`, {
-    URL, URLSearchParams, setTimeout, clearTimeout,
+    URL, URLSearchParams, setTimeout, clearTimeout, setAppFacts, collectionEntries,
     setInterval(handler, milliseconds) { groups.interval = { handler, milliseconds }; return 0; },
     performance: { now: () => 0 },
     mountLanguageControls() {}, locale: () => "zh", t: (_en, zh) => zh,
@@ -84,11 +85,12 @@ test('Polaris opens in the administrator’s current tab and stays hidden on ord
   }
 });
 
-const registeredProjects = { id: 'projects', kind: 'app', launcher: false, name: 'Projects', description: 'Project app', path: '/', port: 4327, icon: '/projects-icon.svg' };
+const registeredProjects = { entry: { nativePath: '/apps/projects/', policy: 'grant', workbenchDirectory: { path: '/api/business/workbench/projects', title: { en: 'Projects', zh: '项目' } } }, id: 'projects', kind: 'app', launcher: false, name: 'Projects', description: 'Project app', path: '/', port: 4327, icon: '/projects-icon.svg' };
 const registeredTool = { id: 'tingproof', kind: 'app', name: '听校', description: 'Audio', path: '/', port: 5173, icon: '/tingproof-icon.svg' };
 const summary = (id, name = id) => ({ id, resourceId: id, name, goal: '第一行目标\n第二行目标', owner: null, status: 'active', revision: '1', updatedAt: '2026-11-15T12:00:00.000Z' });
 const projectIdentity = { username: 'synthetic-project-owner', csrfToken: 'synthetic-csrf-token', apps: ['projects', 'tingproof'] };
-const directory = items => ({ spaces: [{ spaceId: 'team', items }], partial: false });
+const projected = (item, spaceId = 'team') => ({ id: spaceId + ':' + item.resourceId, appId: 'projects', resourceId: item.resourceId, kind: 'project', name: item.name, description: item.goal, href: '/apps/projects/#' + new URLSearchParams({ project: item.resourceId, space: spaceId, view: 'overview' }), ...(item.workItems && { workItems: item.workItems }) });
+const directory = items => ({ schemaVersion: 1, appId: 'projects', spaces: [{ spaceId: 'team', items }], entries: items.map(item => projected(item)), partial: false });
 
 test('three authorized project summaries become separate same-tab icons through one hidden application', async () => {
   const groups = await launchers([registeredProjects, registeredTool], 'https://workbench.synthetic.example', {
@@ -112,7 +114,7 @@ test('same project IDs in different spaces have distinct icons and failed spaces
   const groups = await launchers([registeredProjects, registeredTool], 'https://workbench.synthetic.example', {
     identity: projectIdentity,
     respond: () => ({
-      spaces: ['team-a', 'team-b'].map(id => ({ spaceId: id, items: [summary('alpha', id)] })), partial: true,
+      schemaVersion: 1, appId: 'projects', spaces: ['team-a', 'team-b'].map(id => ({ spaceId: id, items: [summary('alpha', id)] })), entries: ['team-a', 'team-b'].map(id => projected(summary('alpha', id), id)), partial: true,
     }),
   });
   assert.equal(groups.get('#apps').length, 1); assert.equal(groups.get('#projects').length, 2);
@@ -182,4 +184,15 @@ test('an unconnected service has a translated status and no launch target', asyn
   const [entry] = result.get('#apps');
   assert.equal(entry.href, undefined);
   assert.equal(entry.children.at(-1).textContent, '需受管授权');
+});
+
+test('an additional app-owned collection works through its registered path, native slug, title and artwork', async () => {
+  const extra = { id: 'field-notes', kind: 'app', launcher: false, name: 'Field notes', icon: '/app-icons/field-notes.svg', entry: { nativePath: '/apps/field-journal/', policy: 'grant', workbenchDirectory: { path: '/api/business/workbench/field-notes', title: { en: 'Field records', zh: '现场记录' } } } };
+  const identity = { userId: 'synthetic-field-reader', username: 'Field reader', csrfToken: 'synthetic', apps: ['field-notes', 'tingproof'] };
+  const groups = await launchers([extra, registeredTool], 'https://workbench.synthetic.example', { identity, respond: path => {
+    assert.equal(path, extra.entry.workbenchDirectory.path);
+    return { schemaVersion: 1, appId: extra.id, partial: false, spaces: [], entries: [{ id: 'demo:one', appId: extra.id, resourceId: 'one', kind: 'note', name: 'Source-authored record', description: 'Preserve source content', href: '/apps/field-journal/#record=one' }] };
+  } });
+  const [record] = groups.get('#projects'); assert.equal(record.dataset.appId, extra.id); assert.equal(record.children[0].src, extra.icon); assert.equal(record.children[1].textContent, 'Source-authored record'); assert.equal(record.href, 'https://workbench.synthetic.example/apps/field-journal/#record=one'); assert.equal(record.target, undefined);
+  assert.deepEqual(groups.requests.map(request => request.path), ['/api/apps', extra.entry.workbenchDirectory.path]);
 });

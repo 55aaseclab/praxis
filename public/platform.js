@@ -1,8 +1,8 @@
+import { appFact, appNames, loadAppFacts } from './app-registry.js';
 import { message as t, locale } from './i18n.js';
 const language = locale() === 'en' ? 'en' : 'zh-CN';
 import { drawBarChart } from './platform-charts.js';
 
-const appNames = { reminder: 'Reminder', knowledge: 'Knowledge', 'lattice-slides': 'Slides', slides: 'Slides', letters: 'Letters', profiles: 'Profiles', travel: 'Travel', tingproof: t("TingProof", "听校"), memo: 'Memo', projects: 'Projects', finance: 'Finance', intelligence: 'Intelligence', polaris: 'Polaris', calendar: 'Calendar', 'matrix-reader': 'Matrix Reader' };
 const capabilityNames = { read: t("Read", "读取"), create: t("Create", "新增"), update: t("Update", "修改"), complete: t("Complete", "完成"), delete: t("Delete", "删除"), record: t("Record activity", "记录执行"), stats: t("Statistics", "统计"), assign: t("Assignment", "任务分配"), submit: t("Submit", "提交"), search: t("Search", "搜索"), share: t("Share", "分享"), import: t("Import", "导入"), export: t("Export", "导出"), schedule: t("Schedule", "计划安排"), other: t("Other capability", "其他能力") };
 const eventNames = { http_request: t("Page and API requests", "页面与接口请求"), business_action: t("Business operations", "业务操作"), adapter_request: t("App adapter requests", "应用适配请求"), mcp_protocol: t("Tool protocol", "工具协议"), page_load: t("Workbench load", "工作台加载"), registry_load: t("App registry load", "应用目录加载"), app_open: t("App icon click", "应用图标点击"), page_error: t("Client-side error", "客户端页面异常") };
 const routeNames = { home: t("Workbench", "工作台"), registry: t("App registry", "应用目录"), prd_catalog: t("Document directory", "需求文档目录"), prd_document: t("Product document", "需求文档"), legacy_redirect: t("Legacy redirect", "旧入口跳转"), static: t("Page asset", "页面资源"), other: t("Other entry", "其他入口"), business_ui: t("App page", "应用界面"), business_static: t("App asset", "应用资源"), business_invoke: t("Business operations", "业务操作"), business_catalog: t("Business capability catalog", "业务能力目录"), business_events: t("Business update", "业务更新"), mcp: t("Agent tools", "智能体工具"), auth: t("Account login and authorization", "账号登录与授权"), oauth: t("External agent authorization", "外部智能体授权"), health: t("Service check", "服务检查"), browser_ingress: t("Experience report", "体验上报"), platform_status: t("Management overview", "管理概览") };
@@ -171,8 +171,9 @@ const traceStages = { validation: t("Validation", "校验"), transport: t("Trans
 const traceStates = { started: t("Outcome not yet recorded", "尚未记录最终结果"), allowed: t("Allowed", "已允许"), denied: t("Denied", "已拒绝"), succeeded: t("Succeeded", "已成功"), failed: t("Failed", "失败"), unknown: t("Outcome unknown", "结果未知"), committed: t("Committed by app", "应用已提交"), not_recorded: t("Not recorded", "未记录"), queued: t("Queued", "排队中"), running: t("Running", "运行中"), waiting: t("Waiting", "等待中"), cancelled: t("Cancelled", "已取消") };
 function appendTraceReference(parent, reference) {
   if (!reference || typeof reference.href !== 'string') return;
-  const runtime = reference.appId === 'polaris' && reference.href.startsWith('/apps/polaris/') && !/[\\\s]|%(?:2e|2f|5c)|(?:^|\/)\.{1,2}(?:\/|$)/i.test(reference.href.split(/[?#]/, 1)[0]);
-  if (!runtime && !/^\/apps\/[a-z][a-z0-9-]*\/$/.test(reference.href)) return;
+  const declared = appFact(reference.appId), nativePath = declared?.entry.nativePath;
+  const runtime = declared?.runtime === true && declared.entry.policy === 'platform-admin' && typeof nativePath === 'string' && reference.href.startsWith(nativePath) && !/[\\\s]|%(?:2e|2f|5c)|(?:^|\/)\.{1,2}(?:\/|$)/i.test(reference.href.split(/[?#]/, 1)[0]);
+  if (!runtime && (!nativePath || reference.href !== nativePath)) return;
   const link = element('a', 'trace-reference', t("Open {0}", "打开{0}", appNames[reference.appId] || reference.appId));
   link.href = reference.href;
   parent.append(link);
@@ -407,7 +408,7 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
     const currentEpoch = ++epoch;
     controller?.abort(); controller = new AbortController(); reading = true; refreshButton.disabled = true; root.setAttribute('aria-busy', 'true');
     try {
-      const response = await request('/api/platform/status', controller);
+      const [response] = await Promise.all([request('/api/platform/status', controller), loadAppFacts({ signal: controller.signal })]);
       let body; try { body = await response.json(); } catch {}
       if (epoch !== currentEpoch) return;
       if ([401, 403].includes(response.status)) return restricted(response.status, body);
@@ -416,7 +417,7 @@ export function startPlatformOverview({ getIdentity = () => null, onSessionRejec
       permissions(groups.permissions, body.sections.permissions); connections(groups.connections, body.sections.connections); storage(groups.storage, body.sections.storage);
       notice.hidden = true; experience.hidden = false; traceSection.hidden = false; updated.textContent = t("Read at {0}", "读取于 {0}", time(body.generatedAt));
       void observations(currentEpoch); void traces(currentEpoch);
-    } catch { if (epoch === currentEpoch) { clear(); message(t("Could not read status. Refresh to retry.", "暂时无法读取状态，请稍后刷新。")); } }
+    } catch (error) { if (epoch === currentEpoch) { if ([401, 403].includes(error.status)) return restricted(error.status); clear(); message(t("Could not read status. Refresh to retry.", "暂时无法读取状态，请稍后刷新。")); } }
     finally { if (epoch === currentEpoch) { reading = false; refreshButton.disabled = false; root.setAttribute('aria-busy', 'false'); } }
   }
   function deactivate() {

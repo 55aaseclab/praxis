@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.119 · [简体中文](PRD.md)
+Version: 0.1.120 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -56,6 +56,14 @@ Each app owns its `praxis-app.json`, icon, localized presentation, default entry
 Use three numeric components, `MAJOR.MINOR.PATCH`, for app release versions. Apps keep independent version values and release cycles. A declared release matches the app's package and root lockfile where they exist; static apps declare it in their manifest. Runtime health/version responses and workbench/PRD release labels use that same release identity. Requirements revisions are labelled separately. The PRD reader recognizes explicit English and Chinese requirements-revision headings and does not mistake an app-release heading for the document revision. Preserve historical meaning when expanding an app release shorthand such as `0.1` to `0.1.0`; schema numbers, protocol versions, algorithm revisions and business-record revisions are separate contracts and are not renumbered.
 
 Keep fourteen installed entries, thirteen non-runtime card providers, data inventory, bilingual PRDs, local examples and the existing protected native routes working from app-owned metadata. Fresh anonymous bootstrap must be able to fetch the source references before app manifests are present. Reject duplicate identities, missing or invalid declarations, unsafe paths and version mismatches rather than silently falling back to a stale built-in table. Preserve private deployment overrides and publish app-owned changes before pinning their reviewed public commits.
+
+## Load app integrations instead of enumerating app behavior
+
+The platform loads a reviewed `praxis-integration.mjs` from each installed pinned app source, alongside the app-owned presentation manifest and provider. The app owns its native routes/assets, typed business operations, tool schemas, operation guidance, request/result normalization, supported actions/scopes, deployment recipe and storage/export semantics. Use one validated registry for discovery, authentication policy, gateway routing, MCP, cards, Settings, observations, installation and recovery. A newly installed synthetic app must integrate through its own declaration/module and explicit installation configuration without adding an app-specific branch or name/port/tool table to Praxis. Preserve the complete native behavior of existing apps while extracting their integration code; a generic reduced reader or a successful import is not acceptance. [Audit and loading contract](APP-LOADING-AUDIT.en.md)
+
+The platform retains account and delegation management, current authorization, source trust, token/key custody, signed assertions, policy leases, serialization, resource checks, safe HTTP/file primitives, trace recording and consistent encrypted storage coordination. App capability declarations never assign roles, grant access, start an unconfigured backend or load code from a caller-provided path/URL. Trusted app hooks receive bounded, app-scoped callbacks and safe identity facts, not tokens, signing keys or an AuthStore. Validate duplicate identities, slugs, tool/scope/action names, unsafe source paths and incompatible hooks before activation. Deactivation removes entries/tools while retaining grants, data and history; inactive stored grants cannot authorize access and do not invalidate unrelated active capabilities.
+
+Implement the complete Projects planning contract from requirements revision 2 (preserved commit `54701f5`), with the resolved role bootstrap in its next owning revision: one project main, four team mains and actual identity-owned personal drafts; structured PRD/Roadmap, target-scoped personal→team→project proposals, comparison, conflicts, immutable decisions/history, recovery and restore-as-new-draft after the P0 loop. No read creates plans, members or agreement. Business space owners/admins with project-scoped role-management authority may explicitly assign planning roles to eligible accounts; acceptance requires the assigned target role and separate current update/accept authorization. Platform-admin status and a free-text owner label confer no business decision authority. New Projects operations are supplied by its loaded app integration and owning service rather than new central schemas or switch branches.
 
 ## Application publication
 
@@ -165,6 +173,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.117 | 2026-11-20 | Keep MCP Trace monitoring responsive during in-flight business calls |
 | v0.1.118 | 2026-11-20 | Move app registration ownership to app manifests and standardize release versions |
 | v0.1.119 | 2026-11-20 | Read explicit app-owned requirements revisions separately from app releases |
+| v0.1.120 | 2026-11-20 | Load app-owned integration contracts and deliver Projects planning |
 
 ### Letters and Profiles
 

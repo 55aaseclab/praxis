@@ -89,7 +89,7 @@ services:
   reminder:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/reminder:local
-    build: { context: ./third_party/reminder, dockerfile: ../../Dockerfile.builtins, target: reminder }
+    build: { context: ./third_party/reminder, dockerfile: Dockerfile.praxis }
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4322:4322"]
     environment:
       HOST: 0.0.0.0
@@ -106,21 +106,21 @@ services:
   travel:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/travel:local
-    build: { context: ./third_party/travel, dockerfile: ../../Dockerfile.builtins, target: travel }
+    build: { context: ./third_party/travel, dockerfile: Dockerfile.praxis }
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4323:4323"]
     environment: { HOST: "0.0.0.0", PORT: "4323", HEALTH_URL: "http://127.0.0.1:4323/" }
 
   knowledge:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/knowledge:local
-    build: { context: ./third_party/knowledge, dockerfile: ../../Dockerfile.builtins, target: knowledge }
+    build: { context: ./third_party/knowledge, dockerfile: Dockerfile.praxis }
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4324:4324"]
     environment: { HOST: "0.0.0.0", PORT: "4324", HEALTH_URL: "http://127.0.0.1:4324/" }
 
   knowledge-public:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/knowledge:local
-    build: { context: ./third_party/knowledge, dockerfile: ../../Dockerfile.builtins, target: knowledge }
+    build: { context: ./third_party/knowledge, dockerfile: Dockerfile.praxis }
     command: [node, src/runtime/server.mjs, --host, "0.0.0.0", --port, "14324"]
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:14324:14324"]
     environment: { HOST: "0.0.0.0", PORT: "14324", HEALTH_URL: "http://127.0.0.1:14324/" }
@@ -128,7 +128,7 @@ services:
   tingproof:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/tingproof:local
-    build: { context: ./third_party/tingproof, dockerfile: ../../Dockerfile.builtins, target: tingproof }
+    build: { context: ./third_party/tingproof, dockerfile: Dockerfile.praxis }
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:5173:5173"]
     environment:
       HOST: 0.0.0.0
@@ -147,9 +147,9 @@ services:
   tingproof-public:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/tingproof:local
-    build: { context: ./third_party/tingproof, dockerfile: ../../Dockerfile.builtins, target: tingproof }
+    build: { context: ./third_party/tingproof, dockerfile: Dockerfile.praxis }
     working_dir: /app
-    command: [node, dist-server/main.js]
+    command: [node, praxis/native-entry.mjs]
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:15173:15173"]
     environment:
       HOST: 0.0.0.0
@@ -168,7 +168,7 @@ services:
   slides:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/slides:local
-    build: { context: ./third_party/lattice, dockerfile: ../../Dockerfile.builtins, target: lattice, additional_contexts: { platform: . } }
+    build: { context: ./third_party/lattice, dockerfile: Dockerfile.praxis }
     read_only: false
     shm_size: 1gb
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4666:4666"]
@@ -178,7 +178,7 @@ services:
   slides-public:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/slides:local
-    build: { context: ./third_party/lattice, dockerfile: ../../Dockerfile.builtins, target: lattice, additional_contexts: { platform: . } }
+    build: { context: ./third_party/lattice, dockerfile: Dockerfile.praxis }
     read_only: false
     shm_size: 1gb
     working_dir: /app
@@ -195,14 +195,14 @@ services:
   memo:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/memo:local
-    build: { context: ./third_party/memo, dockerfile: ../../Dockerfile.builtins, target: memo }
+    build: { context: ./third_party/memo, dockerfile: Dockerfile.praxis }
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4325:4325"]
     environment: { HOST: "0.0.0.0", PORT: "4325", HEALTH_URL: "http://127.0.0.1:4325/health" }
 
   finance:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/finance:local
-    build: { context: ./third_party/finance, dockerfile: ../../Dockerfile.builtins, target: finance }
+    build: { context: ./third_party/finance, dockerfile: Dockerfile.praxis }
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4329:4329"]
     environment:
       HOST: 0.0.0.0
@@ -217,7 +217,7 @@ services:
   intelligence:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/intelligence:local
-    build: { context: ./third_party/intelligence, dockerfile: ../../Dockerfile.builtins, target: intelligence }
+    build: { context: ./third_party/intelligence, dockerfile: Dockerfile.praxis }
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4330:4330"]
     environment:
       HOST: 0.0.0.0

@@ -1,23 +1,23 @@
 import { parse } from 'parse5';
+import { DEFAULT_APP_REGISTRY } from './default-app-registry.mjs';
 import { promisify } from 'node:util';
 import { gunzip, inflate, brotliDecompress } from 'node:zlib';
 
 export const MAX_NAVIGATION_BYTES = 2 * 1024 * 1024;
 const decode = { gzip: promisify(gunzip), deflate: promisify(inflate), br: promisify(brotliDecompress) };
-const APPS = new Set(['reminder', 'knowledge', 'lattice-slides', 'travel', 'tingproof', 'memo', 'projects', 'finance', 'intelligence', 'polaris', 'calendar', 'matrix-reader', 'letters', 'profiles']);
 const HTML = 'http://www.w3.org/1999/xhtml';
 const unavailable = () => Object.assign(new Error('System navigation cannot be added safely.'), { status: 503, code: 'NAVIGATION_UNAVAILABLE' });
 
-export function navigationContext(request, pathname, appId) {
+export function navigationContext(request, pathname, appId, { registry = DEFAULT_APP_REGISTRY } = {}) {
   if (request.method !== 'GET' || request.headers.range || request.headers.upgrade || request.headers['sec-fetch-dest'] && request.headers['sec-fetch-dest'] !== 'document') return null;
   if (appId) {
-    if (!APPS.has(appId) || /^\/(?:api|assets|static|_astro|_workbench)(?:\/|$)/.test(pathname) || /^\/workbench\/api(?:\/|$)/.test(pathname) || /^\/lattice\/portal\/(?:api|decks)(?:\/|$)/.test(pathname)) return null;
+    if (!registry.getApp(appId) || /^\/(?:api|assets|static|_astro|_workbench)(?:\/|$)/.test(pathname) || /^\/workbench\/api(?:\/|$)/.test(pathname) || (registry.getWeb(appId).noNavigationPrefixes || []).some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'))) return null;
     const last = pathname.split('/').at(-1);
     if (last?.includes('.') && !/\.html?$/i.test(last)) return null;
-    return { appId, mode: 'app' };
+    return { appId, mode: 'app', ...(registry !== DEFAULT_APP_REGISTRY ? { registry } : {}) };
   }
-  const focused = /^\/business\/(reminder|tingproof)\/$/.exec(pathname);
-  if (focused) return { appId: focused[1], mode: 'business' };
+  const focused = registry.apps.find(app => app.integration.web.legacyPaths?.includes(pathname));
+  if (focused) return { appId: focused.id, mode: 'business', ...(registry !== DEFAULT_APP_REGISTRY ? { registry } : {}) };
   if (pathname === '/prds/' || /^\/prds\/[a-z\d-]+\/$/.test(pathname)) return { mode: 'prds' };
   return ['/admin', '/admin/'].includes(pathname) ? { mode: 'admin' } : null;
 }
@@ -80,9 +80,9 @@ function checkPolicies(values) {
   }
 }
 
-export async function injectSystemNavigation(bytes, { headers, canonicalOrigin, appId, mode }) {
+export async function injectSystemNavigation(bytes, { headers, canonicalOrigin, appId, mode, registry = DEFAULT_APP_REGISTRY }) {
   const platformMode = ['admin', 'prds'].includes(mode);
-  if (!Buffer.isBuffer(bytes) || bytes.length > MAX_NAVIGATION_BYTES || !['app', 'business', 'admin', 'prds'].includes(mode) || (platformMode ? appId !== undefined : !APPS.has(appId))) throw unavailable();
+  if (!Buffer.isBuffer(bytes) || bytes.length > MAX_NAVIGATION_BYTES || !['app', 'business', 'admin', 'prds'].includes(mode) || (platformMode ? appId !== undefined : !registry.getApp(appId))) throw unavailable();
   const canonical = new URL(canonicalOrigin);
   if (!['http:', 'https:'].includes(canonical.protocol) || canonical.username || canonical.password || canonical.pathname !== '/' || canonical.search || canonical.hash) throw unavailable();
   charset(headers['content-type']);

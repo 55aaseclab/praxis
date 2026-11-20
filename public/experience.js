@@ -1,5 +1,5 @@
+import { appFact } from './app-registry.js';
 const eventNames = new Set(['page_load', 'registry_load', 'app_open', 'page_error']);
-const appIds = new Set(['reminder', 'knowledge', 'lattice-slides', 'travel', 'tingproof', 'memo', 'projects', 'finance', 'intelligence', 'polaris', 'calendar', 'matrix-reader']);
 let observing = false;
 let pageLoadReported = false;
 
@@ -13,7 +13,7 @@ export async function reportExperience(eventName, options = {}) {
       event.duration_ms = Math.round(durationMs);
     }
     if (appId !== undefined) {
-      if (!appIds.has(appId)) return false;
+      if (!appFact(appId)) return false;
       event.app_id = appId;
     }
     const response = await globalThis.fetch('/api/observations', {

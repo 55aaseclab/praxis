@@ -1,8 +1,15 @@
 # Praxis roadmap
 
-Version: 0.1.119
+Version: 0.1.120
 
 [简体中文](ROADMAP.md)
+
+## Loaded integrations and Projects planning
+
+1. Record the remaining hardcodes, ownership decisions and behavior/security parity checks; define the reviewed local module contract before implementation.
+2. Extract current app integration semantics into owning repositories and consume one registry across routing, auth, MCP, skills, cards, observations, deployment and storage. Prove a synthetic extra app works with no parent app-specific edit, including revocation and deactivation.
+3. Implement Projects latest PRD in its repository: resolve D1 explicitly, complete AC01–AC15/P0, then AC16 restore-as-new-draft. Preserve legacy work views and records; use isolated synthetic identities and data.
+4. Publish owning revisions, pin publicly fetchable commits, verify the combined native UI/typed API/MCP flow, migration/rollback and agreed load target, then deploy the affected services with current data and one writer retained. Mark actual external-client/phone evidence separately.
 
 ## App manifest ownership and version audit
 
@@ -223,6 +230,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.117 | 2026-11-20 | Keep MCP Trace monitoring responsive during in-flight business calls |
 | v0.1.118 | 2026-11-20 | Move app registration ownership to app manifests and standardize release versions |
 | v0.1.119 | 2026-11-20 | Read explicit app-owned requirements revisions separately from app releases |
+| v0.1.120 | 2026-11-20 | Load app-owned integration contracts and deliver Projects planning |
 
 ### Public applications with private collections
 

@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 import { constants } from 'node:fs';
 import { lstat, open, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
@@ -7,12 +8,6 @@ import { readDataInventory } from './data-inventory.mjs';
 import { runtimeTraceReport } from './runtime-traces.mjs';
 
 const MAX_BYTES = 128 * 1024, MAX_STORAGE_BYTES = 64 * 1024, FRESH_MS = 90000;
-const APPS = Object.freeze([
-  { id: 'reminder', name: 'Reminder', port: 4322 }, { id: 'knowledge', name: 'Knowledge', port: 4324 },
-  { id: 'lattice-slides', name: 'Lattice', port: 4666 }, { id: 'travel', name: 'Travel', port: 4323 },
-  { id: 'tingproof', name: '听校', port: 5173 }, { id: 'memo', name: 'Memo', port: 4325 },
-  { id: 'projects', name: 'Projects', port: 4327 }, { id: 'finance', name: 'Finance', port: 4329 }, { id: 'intelligence', name: 'Intelligence', port: 4330 },
-]);
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const keys = (value, allowed) => object(value) && Object.keys(value).every(key => allowed.includes(key));
 const iso = value => new Date(value).toISOString();
@@ -66,17 +61,21 @@ export function requireConsoleAdmin(request, { auth, config }) {
   return { ...auth.requirePlatformAdminSession(token), platformAdmin: true };
 }
 
-export function createConsoleHandler({ auth, config, events, observations, fetchImpl = fetch, clock = () => Date.now(), readInventory = readDataInventory, getRuntimeTraces }) {
+export function createConsoleHandler({ auth, config, events, observations, fetchImpl = fetch, clock = () => Date.now(), readInventory = readDataInventory, getRuntimeTraces, registry = auth.registry || DEFAULT_APP_REGISTRY }) {
+  const apps=registry.apps.map(app=>({id:app.id,name:app.name,adapterId:registry.businessId(app.id),web:app.integration.web}));
   const cache = new Map(), pending = new Map();
   const requireAdmin = request => requireConsoleAdmin(request, { auth, config });
   async function probe(app) {
+    if(app.web.kind!=='proxy')return {state:'not_required',checkedAt:iso(clock())};
     const previous = cache.get(app.id), now = clock();
     if (previous && now >= previous.at && now - previous.at < 30000) return previous.value;
     if (pending.has(app.id)) return pending.get(app.id);
     const operation = (async () => {
       let state = 'unavailable';
       try {
-        const response = await fetchImpl(`http://127.0.0.1:${app.port}/`, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(750) });
+        const origin=config.webGateway?.appTargets?.[app.id]||(app.web.nativePort?`http://127.0.0.1:${app.web.nativePort}`:null);if(!origin)throw Error('App target is not configured.');
+        const target=new URL(origin);if(target.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(target.hostname)||target.username||target.password||target.pathname!=='/'||target.search||target.hash)throw Error('Invalid app target.');
+        const response = await fetchImpl(target.href, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(750) });
         state = response.status >= 200 && response.status < 400 ? 'reachable' : [401, 403].includes(response.status) ? 'restricted' : response.status < 500 ? 'unknown' : 'unavailable';
         await response.body?.cancel();
       } catch {}
@@ -101,8 +100,8 @@ export function createConsoleHandler({ auth, config, events, observations, fetch
         resourcePermissions: count('SELECT COUNT(*) AS count FROM auth_resources r WHERE user_id=? AND (expires_at IS NULL OR expires_at>?) AND (membership_required=0 OR EXISTS(SELECT 1 FROM auth_members m WHERE m.space_id=r.space_id AND m.user_id=r.user_id))', session.user.id, now),
         activeGrants: count('SELECT COUNT(*) AS count FROM auth_grants WHERE user_id=? AND revoked_at IS NULL AND expires_at>?', session.user.id, now),
         revokedGrants: count('SELECT COUNT(*) AS count FROM auth_grants WHERE user_id=? AND revoked_at IS NOT NULL', session.user.id),
-        managedApps: APPS.filter(app => config.apps[app.id]?.managed === true).length,
-        unmanagedApps: APPS.filter(app => config.apps[app.id]?.managed !== true).length,
+        managedApps: apps.filter(app => config.apps[app.adapterId]?.managed === true).length,
+        unmanagedApps: apps.filter(app => registry.getBusiness(app.adapterId) && config.apps[app.adapterId]?.managed !== true).length,
       };
     } catch { return { state: 'unknown', observedAt: iso(now), freshUntil: iso(now + FRESH_MS), platformAdmin: true }; }
   }
@@ -125,7 +124,7 @@ export function createConsoleHandler({ auth, config, events, observations, fetch
       if (!reference?.appId || !reference.spaceId || !config.apps[reference.appId]?.spaces?.includes(reference.spaceId)) return null;
       try {
         auth.authorize(token, { appId: reference.appId, spaceId: reference.spaceId, resourceId: reference.resourceId, action: 'read' }, { auditDenied: false });
-        const slug = reference.appId === 'lattice-slides' ? 'slides' : reference.appId;
+        const slug = registry.getWeb(registry.webId(reference.appId))?.slug;
         if (!/^[a-z][a-z0-9-]*$/.test(slug)) return null;
         return { appId: reference.appId, spaceId: reference.spaceId, ...(reference.resourceId !== undefined && { resourceId: reference.resourceId }), ...(reference.revision !== undefined && { revision: reference.revision }), href: `/apps/${slug}/` };
       } catch { return null; }
@@ -188,11 +187,11 @@ export function createConsoleHandler({ auth, config, events, observations, fetch
       if (url.search) { reply(response, 400, { code: 'INVALID_REQUEST' }); return true; }
       const now = clock();
       const permissionState = permissions(session, now);
-      const apps = await Promise.all(APPS.map(async app => ({ id: app.id, name: app.name, service: await probe(app), business: { state: config.apps[app.id] ? 'configured' : 'not_configured', mode: config.apps[app.id]?.managed === true ? 'managed' : config.apps[app.id]?.managed === false ? 'standalone' : 'unknown' }, mcp: { state: config.apps[app.id] ? 'configured' : 'not_configured', ...mcpActivity(app.id) } })));
+      const appStatus = await Promise.all(apps.map(async app => ({ id:app.id,name:app.name,adapterId:app.adapterId,service:await probe(app),business:{state:config.apps[app.adapterId]?'configured':registry.getBusiness(app.adapterId)?'not_configured':'not_supported',mode:config.apps[app.adapterId]?.managed===true?'managed':config.apps[app.adapterId]?.managed===false?'standalone':'unknown'},mcp:{state:config.apps[app.adapterId]?'configured':registry.getBusiness(app.adapterId)?'not_configured':'not_supported',...mcpActivity(app.adapterId)}})));
       const storage = await readStorageStatus(config.console?.storageStatusFile, clock());
       requireAdmin(request);
       const generatedAt = iso(clock());
-      reply(response, 200, { schemaVersion: 1, generatedAt, sections: { permissions: permissionState, connections: { state: apps.every(app => ['reachable', 'restricted'].includes(app.service.state)) ? 'ready' : 'mixed', observedAt: generatedAt, freshUntil: iso(clock() + FRESH_MS), apps }, storage: { ...storage, queue: queue(storage) } } });
+      reply(response, 200, { schemaVersion: 1, generatedAt, sections: { permissions: permissionState, connections: { state: appStatus.every(app => ['reachable', 'restricted', 'not_required'].includes(app.service.state)) ? 'ready' : 'mixed', observedAt: generatedAt, freshUntil: iso(clock() + FRESH_MS), apps: appStatus }, storage: { ...storage, queue: queue(storage) } } });
     } catch (error) {
       if (error.status === 401) reply(response, 401, { code: 'UNAUTHENTICATED', loginUrl: `${config.issuer}/auth/login?return_to=%2Fadmin%2F` });
       else if (error.status === 403) reply(response, 403, { code: 'CONSOLE_FORBIDDEN' });

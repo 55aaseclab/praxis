@@ -1,37 +1,54 @@
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { access, chown, chmod, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { resolve, isAbsolute, dirname } from 'node:path';
 import { AuthStore } from '../src/business/auth.mjs';
 import { readApps } from '../src/apps.mjs';
 import { AppProviderRegistry } from '../src/business/app-providers.mjs';
 
-const WORKSPACE_ROOT = fileURLToPath(new URL('../', import.meta.url));
+const declarations = registry => registry.apps.map(app => ({ app, deployment: app.integration?.deployment || {}, business: app.integration?.business }));
+const defaultDeclarations = declarations(DEFAULT_APP_REGISTRY);
+const adapters = Object.fromEntries(defaultDeclarations.filter(({ deployment, business }) => business && deployment.adapterPort).map(({ business, deployment }) => [business.adapterId, deployment.adapterPort]));
+const apps = [...new Set(['web', ...defaultDeclarations.flatMap(({ deployment }) => deployment.volumes || [])])];
+const runtimeDeclarations = defaultDeclarations.filter(({ deployment }) => deployment.dataId && Object.keys(deployment.runtime || {}).length);
 
-const adapters = {
-  reminder: 4322, knowledge: 14324, travel: 4323, projects: 4327,
-  memo: 4325, tingproof: 15173, slides: 4328,
-};
-const apps = ['reminder', 'knowledge', 'travel', 'projects', 'memo', 'tingproof', 'slides', 'finance', 'intelligence', 'polaris', 'letters', 'profiles', 'web', 'slides-decks', 'slides-state', 'slides-exports'];
+export function renderAppRecipe(value, parameters) {
+  if (typeof value === 'string') {
+    const rendered = value.replace(/\$\{([A-Za-z][A-Za-z0-9]*)\}/g, (_, key) => {
+      if (!Object.hasOwn(parameters, key) || !['string', 'number'].includes(typeof parameters[key])) throw new Error('An app recipe references an unknown parameter.');
+      return String(parameters[key]);
+    });
+    if (rendered.includes('${')) throw new Error('An app recipe contains an unsupported parameter.');
+    return rendered;
+  }
+  if (Array.isArray(value)) return value.map(item => renderAppRecipe(item, parameters));
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value).map(([key, item]) => [renderAppRecipe(key, parameters), renderAppRecipe(item, parameters)]);
+    if (new Set(entries.map(([key]) => key)).size !== entries.length) throw new Error('App recipe keys collide after parameter substitution.');
+    return Object.fromEntries(entries);
+  }
+  if (value === null || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value)) return value;
+  throw new Error('App recipes must contain JSON-compatible values.');
+}
 
 // These are bootstrap layout declarations, never observed host/container mounts.
 // Include only data-location variables explicitly owned by installed providers.
-export function builtinProviderDefaults({ providers, runtime, spaceMaps = {}, workingDirectories = {}, appTargets = {}, ownerId }) {
-  const result = { finance: { url: 'http://127.0.0.1:4329' }, intelligence: { url: 'http://127.0.0.1:4330' }, polaris: { url: 'http://127.0.0.1:18787' } };
-  if (ownerId !== undefined) {
-    if (typeof ownerId !== 'string' || !/^[A-Za-z0-9_.:-]{1,200}$/.test(ownerId)) throw new Error('The private document owner is invalid.');
-    for (const app of ['letters', 'profiles']) result[app] = { ownerId };
-  }
-  for (const app of ['finance', 'intelligence', 'polaris']) {
-    const configuredPort = app === 'intelligence' ? runtime[app]?.INTELLIGENCE_PORT ?? runtime[app]?.PORT : runtime[app]?.PORT;
-    if (configuredPort !== undefined) {
-      if (!/^[1-9][0-9]{0,4}$/.test(String(configuredPort)) || Number(configuredPort) > 65535) throw new Error('A configured native application port is invalid.');
-      result[app].url = 'http://127.0.0.1:' + configuredPort;
-    }
-    if (appTargets[app] !== undefined) {
-      const target = new URL(appTargets[app]);
+export function builtinProviderDefaults({ providers, runtime, spaceMaps = {}, workingDirectories = {}, appTargets = {}, ownerId, registry = DEFAULT_APP_REGISTRY }) {
+  const result = {}, definitions = declarations(registry);
+  if (ownerId !== undefined && (typeof ownerId !== 'string' || !/^[A-Za-z0-9_.:-]{1,200}$/.test(ownerId))) throw new Error('The private document owner is invalid.');
+  for (const { app, deployment } of definitions) {
+    if (ownerId !== undefined && app.integration.web.policy === 'document-owner') result[app.id] = { ownerId };
+    if (!deployment.provider) continue;
+    const selectedRuntime = runtime[deployment.dataId || app.id] || {};
+    let port = deployment.provider.port;
+    for (const name of deployment.provider.portEnvs || []) if (selectedRuntime[name] !== undefined) { port = selectedRuntime[name]; break; }
+    if (!/^[1-9][0-9]{0,4}$/.test(String(port)) || Number(port) > 65535) throw new Error('A configured native application port is invalid.');
+    result[app.id] = { ...result[app.id], url: 'http://127.0.0.1:' + port };
+    if (appTargets[app.id] !== undefined) {
+      const target = new URL(appTargets[app.id]);
       if (target.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname) || target.username || target.password || target.pathname !== '/' || target.search || target.hash) throw new Error('A saved native application target is invalid.');
-      result[app].url = target.origin;
+      result[app.id].url = target.origin;
     }
   }
   for (const provider of providers) {
@@ -134,7 +151,7 @@ async function prepareVolumes() {
   const uid = Number(process.env.PRAXIS_UID || 1000), gid = Number(process.env.PRAXIS_GID || 1000);
   if (![uid, gid].every(id => Number.isSafeInteger(id) && id > 0 && id <= 2147483647)) throw new Error('Use a non-root service account UID and GID.');
   const roots = ['/config', '/data/core', ...apps.map(app => '/data/' + app),
-    ...['web', ...Object.keys(adapters), 'finance', 'intelligence', 'polaris'].map(app => '/app-config/' + app)];
+    ...['web', ...runtimeDeclarations.map(({ deployment }) => deployment.dataId)].map(app => '/app-config/' + app)];
   for (const root of roots) {
     await mkdir(root, { recursive: true, mode: 0o700 });
     const info = await lstat(root);
@@ -176,8 +193,8 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
   await mkdir('/config/keys', { recursive: true, mode: 0o700 });
   if (complete) {
     const required = ['/app-config/web/installation.json'];
-    for (const app of [...Object.keys(adapters), 'finance', 'intelligence', 'polaris']) required.push('/app-config/' + app + '/runtime.json');
-    for (const app of ['reminder', 'knowledge', 'projects', 'travel', 'slides']) required.push('/app-config/' + app + '/spaces.json');
+    for (const { deployment } of runtimeDeclarations) required.push('/app-config/' + deployment.dataId + '/runtime.json');
+    for (const { deployment } of runtimeDeclarations) if (deployment.spaces) required.push('/app-config/' + deployment.dataId + '/spaces.json');
     for (const file of required) if (!await exists(file)) throw new Error('Application configuration is missing. Restore the private backup.');
   }
   const credentials = await privateJson('/config/owner.json', {
@@ -198,56 +215,39 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
     apps: Object.fromEntries(Object.entries(adapters).map(([app, port]) => [app, {
       url: 'http://127.0.0.1:' + port + '/api/business',
       keyFile: '/config/keys/' + app + '.key', spaces: [spaceId], managed: true,
+      ...renderAppRecipe(defaultDeclarations.find(value => value.business?.adapterId === app)?.deployment.businessBindings || {}, { origin, originHost: url.host, spaceId, ownerId, workspaceId }),
     }])),
   };
   for (const app of Object.keys(adapters)) await mirrorKey(app, complete);
   const webInstallation = await privateJson('/app-config/web/installation.json', installation);
-  const runtime = {
-    reminder: { REMINDER_MANAGED: '1', REMINDER_BUSINESS_KEY_FILE: '/config/key', REMINDER_BUSINESS_SPACES_FILE: '/config/spaces.json', REMINDER_BUSINESS_UI_URL: origin + '/business/reminder/' },
-    knowledge: { KNOWLEDGE_MANAGED: '1', KNOWLEDGE_ADAPTER_KEY_FILE: '/config/key', KNOWLEDGE_BUSINESS_CONFIG: '/config/spaces.json', KNOWLEDGE_DATA_DIR: '/data/knowledge', KNOWLEDGE_INBOX_ROOT: '/data/knowledge/inbox', KNOWLEDGE_BASE_PATH: '/apps/knowledge/' },
-    travel: { TRAVEL_DATA_DIR: '/data/travel', TRAVEL_BUSINESS_KEY_FILE: '/config/key', TRAVEL_BUSINESS_CONFIG_FILE: '/config/spaces.json' },
-    projects: { PROJECTS_MANAGED: '1', PROJECTS_BUSINESS_KEY_FILE: '/config/key', PROJECTS_BUSINESS_CONFIG_FILE: '/config/spaces.json', PROJECTS_DATA_DIR: '/data/projects', PROJECTS_KNOWLEDGE_BASE_URL: '/apps/knowledge/' },
-    memo: { MEMO_DATA_DIR: '/data/memo', MEMO_BUSINESS_KEY_FILE: '/config/key', MEMO_SPACE_IDS: spaceId },
-    tingproof: { TINGPROOF_LEGACY_SPACE_ID: spaceId, TINGPROOF_MANAGED: '0', TINGPROOF_BUSINESS_KEY_FILE: '/config/key', TINGPROOF_DATA_DIR: '/data/tingproof' },
-    finance: { FINANCE_DATA: '/data/finance/finance.json', FINANCE_ALLOWED_ORIGINS: origin },
-    intelligence: { INTELLIGENCE_DATA_DIR: '/data/intelligence', INTELLIGENCE_PREVIEW: '0' },
-    polaris: { POLARIS_OBSERVATIONS_FILE: '/data/polaris/observations.json', PRAXIS_WORKSPACE_ID: workspaceId },
-    slides: { HOME: '/data/slides/home', XDG_CACHE_HOME: '/data/slides/cache', SLIDES_BUSINESS_KEY_FILE: '/config/key', SLIDES_BUSINESS_SPACES_FILE: '/config/spaces.json', SLIDES_BUSINESS_AUTHORIZATION_URL: 'http://127.0.0.1:4326/api/business/slides/authorize-job', SLIDES_BUSINESS_AUTHORIZATION_HOST: url.host },
-  };
-  const maps = {
-    reminder: { spaces: { [spaceId]: '/data/reminder/checklist.json' } },
-    knowledge: { version: 1, spaces: [spaceId] },
-    projects: { version: 1, spaces: [spaceId] },
-    travel: { version: 1, webSpace: spaceId, spaces: { [spaceId]: [] } },
-    slides: { version: 1, spaces: { [spaceId]: '/data/slides/slides.json' } },
-  };
+  const parameters = { origin, originHost: url.host, spaceId, ownerId, workspaceId, now: new Date().toISOString() };
+  const runtime = Object.fromEntries(runtimeDeclarations.map(({ deployment }) => [deployment.dataId, renderAppRecipe(deployment.runtime, parameters)]));
+  const maps = Object.fromEntries(runtimeDeclarations.filter(({ deployment }) => deployment.spaces).map(({ deployment }) => [deployment.dataId, renderAppRecipe(deployment.spaces, parameters)]));
   const configuredRuntime = {}, configuredMaps = {}, workingDirectories = {};
   for (const [app, env] of Object.entries(runtime)) {
     configuredRuntime[app] = await privateJson('/app-config/' + app + '/runtime.json', env);
     workingDirectories[app] = '/app';
     if (maps[app]) configuredMaps[app] = await privateJson('/app-config/' + app + '/spaces.json', maps[app]);
   }
-  for (const app of ['letters', 'profiles']) {
-    const directory = '/data/' + app + '/documents';
+  for (const { app, deployment } of defaultDeclarations) {
+    if (!deployment.privateDocuments) continue;
+    const { directory, environment } = deployment.privateDocuments;
     if (complete && !await exists(directory)) throw new Error('A private document directory is missing. Restore its original data.');
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    configuredRuntime[app] = { ['PRAXIS_' + app.toUpperCase() + '_DIR']: directory };
-    workingDirectories[app] = '/workspace';
+    configuredRuntime[app.id] = { [environment]: directory }; workingDirectories[app.id] = '/workspace';
   }
-  const providers = await new AppProviderRegistry({ root: WORKSPACE_ROOT }).providers();
+  const providers = await new AppProviderRegistry({ root: DEFAULT_APP_REGISTRY.root }).providers();
   const existingCore = await exists('/config/core.json') ? (await readPrivateConfiguration('/config/core.json')).value : null;
   config.appProviders = builtinProviderDefaults({ providers, runtime: configuredRuntime, spaceMaps: configuredMaps, workingDirectories, appTargets: existingCore?.webGateway?.appTargets || {}, ownerId: webInstallation.ownerId });
   if (existingCore) await upgradeBuiltinProviderConfiguration('/config/core.json', config.appProviders);
   else await privateJson('/config/core.json', config);
-  for (const file of ['/data/intelligence/data.json', '/data/polaris/observations.json']) {
+  for (const { deployment } of defaultDeclarations) for (const initial of deployment.initialFiles || []) {
+    if (!deployment.dataId || typeof initial.path !== 'string' || initial.path.startsWith('/') || initial.path.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('An app initial file path is invalid.');
+    const file = '/data/' + deployment.dataId + '/' + initial.path;
     if (complete && !await exists(file)) throw new Error('Application data is missing. Restore its original snapshot.');
+    await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+    await privateJson(file, renderAppRecipe(initial.value, parameters));
   }
-  await privateJson('/data/intelligence/data.json', {
-    schemaVersion: 1, preview: false, updatedAt: new Date().toISOString(),
-    collections: [{ id: 'inbox', title: 'Inbox', description: 'Incoming materials', domain: 'mixed', monitoringState: 'not_configured' }],
-    materials: [], objects: [], events: [],
-  });
-  await privateJson('/data/polaris/observations.json', { workspaceId, packs: [], runs: [], graphs: [], events: {} });
   if (!complete) {
     const auth = new AuthStore({ file: config.database, issuer: origin });
     try {
@@ -256,8 +256,8 @@ export async function initializeBuiltins({ origin = process.env.PRAXIS_CANONICAL
       const space = auth.db.prepare('SELECT id FROM auth_spaces WHERE id=?').get(spaceId);
       if (!space) auth.createSpace({ id: spaceId, type: 'personal', ownerId });
       auth.setPlatformAdmin({ userId: ownerId, enabled: true });
-      const catalog = await readApps(WORKSPACE_ROOT, { publicUrlsFile: null });
-      auth.setWebAccess({ userId: ownerId, apps: catalog.map(app => app.id).filter(id => !['letters', 'profiles', 'polaris'].includes(id)), workbench: true, prds: true });
+      const catalog = await readApps(DEFAULT_APP_REGISTRY.root, { publicUrlsFile: null });
+      auth.setWebAccess({ userId: ownerId, apps: catalog.filter(app => DEFAULT_APP_REGISTRY.getApp(app.id)?.integration.web.policy === 'grant').map(app => app.id), workbench: true, prds: true });
     } finally { auth.close(); }
     await privateJson('/config/initialized.json', { version: 1, initializedAt: new Date().toISOString() });
   }

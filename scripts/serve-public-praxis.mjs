@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 import { access } from 'node:fs/promises';
 import { createPraxisServer } from '../src/server.mjs';
 
@@ -11,13 +12,12 @@ const server = createPraxisServer({
   publicUrlsFile,
   webGateway: {
     privateDocumentOwnerId: process.env.PRAXIS_DOCUMENT_OWNER_ID,
-    privateDocumentRoots: { letters: process.env.PRAXIS_LETTERS_DIR, profiles: process.env.PRAXIS_PROFILES_DIR },
+    privateDocumentRoots: Object.fromEntries(DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.web.kind === 'private-documents').map(app => [app.id, process.env[app.integration.web.directoryEnv]])),
     enabled: managed,
-    requireTingproofNativeScope: process.env.PRAXIS_TINGPROOF_SCOPED === 'true',
     canonicalUrl: process.env.PRAXIS_CANONICAL_URL,
     coreUrl: process.env.PRAXIS_WEB_CORE_URL || 'http://127.0.0.1:4326',
     originHost: process.env.PRAXIS_ORIGIN_HOST || 'localhost',
-    travelSharesFile: process.env.PRAXIS_TRAVEL_SHARES_FILE,
+    ...Object.fromEntries(DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.web.share?.configurationEnv).map(app => { const share = app.integration.web.share; return [share.configurationKey, process.env[share.configurationEnv]]; })),
   },
 });
 server.on('error', error => { console.error(`Praxis public profile failed: ${error.message}`); process.exitCode = 1; });

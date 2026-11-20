@@ -32,9 +32,10 @@ function compareVersions(a, b) {
 export function prdMetadata(content, fallback) {
   const body = content.replace(/^\uFEFF/, '').replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '');
   const title = body.match(/^#\s+(.+?)\s*#*\s*$/m)?.[1]?.replace(/[*_`]/g, '').trim() || `${fallback} PRD`;
-  const explicit = body.match(/^(?:\*\*)?(?:当前)?(?:需求(?:文档)?修订(?:号)?|requirements\s+revision|版本号?|version)(?:\*\*)?\s*[:：]\s*(?:\*\*)?([vV]?\d+\.\d+\.\d+)(?:\b|\*|\s)/im);
+  const revision = body.match(/^(?:\*\*)?(?:当前)?(?:需求(?:文档)?修订(?:号)?|文档修订(?:号)?|requirements\s+revision|document\s+revision)(?:\*\*)?\s*[:：]\s*(?:\*\*)?([vV]?\d+(?:\.\d+){0,2})(?=\*{0,2}(?:\s|$))/im);
+  const explicit = body.match(/^(?:\*\*)?(?:当前)?(?:版本号?|version)(?:\*\*)?\s*[:：]\s*(?:\*\*)?([vV]?\d+\.\d+\.\d+)(?:\b|\*|\s)/im);
   const tableVersions = [...body.matchAll(/^\|\s*\*{0,2}([vV]?\d+\.\d+\.\d+)\*{0,2}\s*\|/gm)].map(match => match[1]);
-  const version = explicit?.[1] || tableVersions.sort(compareVersions).at(-1) || null;
+  const version = revision?.[1] || explicit?.[1] || tableVersions.sort(compareVersions).at(-1) || null;
   return { title, version };
 }
 

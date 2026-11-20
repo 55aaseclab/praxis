@@ -1,0 +1,20 @@
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!src/**/*.mjs
+!public/*.css
+!public/*.js
+!public/*.html
+!public/*.webmanifest
+!public/*.svg
+!public/praxis-*.png
+!config/installed-apps.json
+!config/compose-platform.json
+!scripts/*.mjs
+!docs/PRD*.md
+!docs/APP-STANDARD.md
+!docs/APP-PROVIDERS.md
+!skills/*/SKILL.md
+
+# Dependency caches and Git metadata never belong in a release context.

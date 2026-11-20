@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { isAbsolute, parse, resolve, sep } from 'node:path';
@@ -43,21 +44,21 @@ function targetIdentity(source) {
   return `${source.id}/${source.target}`;
 }
 
-async function activeReminderSpaces(eventsFile) {
+async function activeBusinessSpaces(eventsFile, appId) {
   let database;
   try {
     database = new DatabaseSync(eventsFile, { readOnly: true });
     const active = new Set();
     const tables = new Set(database.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('source_cursors','business_events')").all().map(row => row.name));
-    if (tables.has('source_cursors')) for (const row of database.prepare("SELECT space FROM source_cursors WHERE app='reminder' AND cursor>0").all()) active.add(row.space);
-    if (tables.has('business_events')) for (const row of database.prepare("SELECT DISTINCT space FROM business_events WHERE app='reminder'").all()) active.add(row.space);
+    if (tables.has('source_cursors')) for (const row of database.prepare("SELECT space FROM source_cursors WHERE app=? AND cursor>0").all(appId)) active.add(row.space);
+    if (tables.has('business_events')) for (const row of database.prepare("SELECT DISTINCT space FROM business_events WHERE app=?").all(appId)) active.add(row.space);
     return active;
   } catch { fail('INVALID_BUSINESS_METADATA', 'Business event coverage metadata cannot be read safely'); }
   finally { database?.close(); }
 }
 
 /** Register app-owned sources for one backup run without reading business payloads. */
-export async function withBusinessBackupSources(storageConfig, businessConfig, { knownActiveSources = [] } = {}) {
+export async function withBusinessBackupSources(storageConfig, businessConfig, { knownActiveSources = [], registry = DEFAULT_APP_REGISTRY, onDeclaredSource } = {}) {
   const config = validateConfig(storageConfig);
   if (!object(businessConfig) || !object(businessConfig.apps) || !Array.isArray(knownActiveSources)) fail('INVALID_CONFIG', 'Business backup configuration is invalid');
   const known = new Set();
@@ -92,6 +93,7 @@ export async function withBusinessBackupSources(storageConfig, businessConfig, {
   async function register(source, { optional = false } = {}) {
     const checked = await inspectPath(source.source);
     outsideBackupRoots(checked.path, config);
+    if (onDeclaredSource) await onDeclaredSource(Object.freeze({ ...source, source: checked.path }));
     if (!checked.exists) {
       if (!optional || known.has(checked.path) || byPath.has(checked.path)) fail('MISSING_ACTIVE_DATA', 'An active business backup source is missing');
       return false;
@@ -111,29 +113,35 @@ export async function withBusinessBackupSources(storageConfig, businessConfig, {
   }
   await register({ id: 'praxis-business', kind: 'sqlite', source: businessConfig.database, target: 'auth.db' });
   await register({ id: 'praxis-business', kind: 'sqlite', source: businessConfig.eventsDatabase, target: 'events.db' });
-  const omitted = (config.coverage?.omitted || []).filter(value => typeof value !== 'string' || !value.startsWith('business/reminder/'));
-  if (businessConfig.apps.reminder) {
-    const configFile = await inspectPath(businessConfig.apps.reminder.spacesFile, { privateFile: true });
-    if (!configFile.exists) fail('MISSING_ACTIVE_DATA', 'Reminder space configuration is missing');
-    if (configFile.info.size > 256 * 1024) fail('INVALID_CONFIG', 'Reminder space configuration is too large');
-    let mapping;
-    try { mapping = JSON.parse(await readFile(configFile.path, 'utf8')); } catch { fail('INVALID_CONFIG', 'Reminder space configuration contains invalid JSON'); }
-    if (!object(mapping) || Object.keys(mapping).some(key => key !== 'spaces') || !object(mapping.spaces) || !Object.keys(mapping.spaces).length) fail('INVALID_CONFIG', 'Reminder space configuration requires an explicit spaces mapping');
-    const active = await activeReminderSpaces(businessConfig.eventsDatabase);
-    const mapped = new Set();
-    for (const [spaceId, source] of Object.entries(mapping.spaces)) {
-      if (!identifier(spaceId)) fail('INVALID_CONFIG', 'Reminder space identifier is invalid');
-      const checked = await inspectPath(source);
-      if (mapped.has(checked.path)) fail('INVALID_BACKUP_SOURCE', 'Reminder spaces must not share the same data file');
-      mapped.add(checked.path);
-      const opaqueId = createHash('sha256').update(JSON.stringify([config.workspaceId, spaceId])).digest('hex').slice(0, 32);
-      const included = await register({ id: 'reminder', kind: 'json', source: checked.path, target: `spaces/${opaqueId}.json`, schema: 'reminder-v2' }, { optional: !active.has(spaceId) });
-      if (!included) omitted.push(`business/reminder/${opaqueId}:uninitialized`);
-    }
+  const recoveries = registry.apps.filter(app => typeof app.integration?.storage?.recovery?.collect === 'function');
+  const prefixes = recoveries.map(app => app.integration.storage.recovery.omissionPrefix || `business/${app.integration.storage.sourceId || app.integration.storage.rootId || app.id}/`);
+  const omitted = (config.coverage?.omitted || []).filter(value => typeof value !== 'string' || !prefixes.some(prefix => value.startsWith(prefix)));
+  for (const app of recoveries) {
+    const owned = app.integration.storage, declaration = owned.recovery, adapterId = app.integration.business?.adapterId || app.id, configured = businessConfig.apps[adapterId];
+    if (!configured) continue;
+    const id = owned.sourceId || owned.rootId || app.id, fields = declaration.configFields || [];
+    if (!Array.isArray(fields) || fields.some(field => !/^[a-z][A-Za-z0-9]{0,79}$/.test(field))) fail('INVALID_CONFIG', 'App recovery configuration fields are invalid');
+    const selected = Object.freeze(Object.fromEntries(fields.map(field => [field, configured[field]])));
+    const prefix = declaration.omissionPrefix || `business/${id}/`;
+    const field = name => { if (!fields.includes(name) || typeof selected[name] !== 'string') fail('INVALID_CONFIG', 'A declared app recovery path is missing'); return selected[name]; };
+    const context = Object.freeze({ config: selected,
+      fail, inspect: inspectPath,
+      path(name, child) { const base = field(name); if (!isAbsolute(base) || resolve(base) !== base || /[\\\0\r\n]/.test(base)) fail('UNSAFE_PATH', 'An app recovery directory must be canonical and absolute'); try { safeRelative(child); } catch { fail('UNSAFE_PATH', 'An app recovery filename is unsafe'); } return resolve(base, child); },
+      async readConfiguration(name) {
+        const file = await inspectPath(field(name), { privateFile: true });
+        if (!file.exists) fail('MISSING_ACTIVE_DATA', 'Application space configuration is missing');
+        if (file.info.size > 256 * 1024) fail('INVALID_CONFIG', 'Application space configuration is too large');
+        try { return JSON.parse(await readFile(file.path, 'utf8')); } catch { fail('INVALID_CONFIG', 'Application space configuration contains invalid JSON'); }
+      },
+      activeSpaces: () => activeBusinessSpaces(businessConfig.eventsDatabase, adapterId),
+      opaqueSpaceId(spaceId) { if (!identifier(spaceId)) fail('INVALID_CONFIG', 'Application space identifier is invalid'); return createHash('sha256').update(JSON.stringify([config.workspaceId, spaceId])).digest('hex').slice(0, 32); },
+      register(source, options) {
+        if (!object(source) || Object.keys(source).some(key => !['kind', 'source', 'target', 'schema', 'exportedAt'].includes(key)) || source.schema && typeof owned.validators?.[source.schema] !== 'function') fail('INVALID_BACKUP_SOURCE', 'An app recovery source must use its owned schema and identity');
+        return register({ ...source, id }, options);
+      },
+      omit(value) { if (typeof value !== 'string' || !/^[a-zA-Z0-9_.:-]{1,100}$/.test(value)) fail('INVALID_CONFIG', 'An app recovery omission is invalid'); omitted.push(prefix + value); },
+    });
+    await declaration.collect(context);
   }
-  if (businessConfig.apps.tingproof) await register({ id: 'tingproof', kind: 'sqlite', source: businessConfig.apps.tingproof.dataFile, target: 'tingproof.db' });
-  if (businessConfig.apps.projects) await register({ id: 'projects', kind: 'sqlite', source: resolve(businessConfig.apps.projects.dataDir, 'projects.db'), target: 'projects.db' });
-  if (businessConfig.apps.knowledge) await register({ id: 'knowledge', kind: 'sqlite', source: resolve(businessConfig.apps.knowledge.dataDir, 'knowledge.db'), target: 'knowledge.db' });
-  if (businessConfig.apps.memo) await register({ id: 'memo', kind: 'sqlite', source: resolve(businessConfig.apps.memo.dataDir, 'memo.db'), target: 'memo.db' });
   return validateConfig({ ...config, appSources, coverage: { ...config.coverage, omitted: [...new Set(omitted)] } });
 }

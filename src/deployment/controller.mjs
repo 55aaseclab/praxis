@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { request } from 'node:http';
@@ -33,15 +34,15 @@ async function documentBindings(root) {
     const config = JSON.parse(await handle.readFile('utf8'));
     if (!config || typeof config.ownerId !== 'string' || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(config.ownerId)) throw fail('INVALID_PRIVATE_DOCUMENT_CONFIG');
     const env = { PRAXIS_DOCUMENT_OWNER_ID: config.ownerId }, mounts = [];
-    for (const id of ['letters', 'profiles']) {
-      const source = config[id];
+    for (const app of DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.web.kind === 'private-documents')) {
+      const web = app.integration.web, source = config[web.privateConfigKey];
       if (typeof source !== 'string' || source === '/' || source !== resolve(source) || /[,\r\n\0]/.test(source) ||
           await realpath(source) !== source || !(await lstat(source)).isDirectory()) throw fail('INVALID_PRIVATE_DOCUMENT_CONFIG');
-      const target = '/run/praxis-documents/' + id;
-      env['PRAXIS_' + id.toUpperCase() + '_DIR'] = target;
+      const target = web.mountTarget;
+      env[web.directoryEnv] = target;
       mounts.push({ type: 'bind', source, target, readOnly: true });
     }
-    if (config.letters === config.profiles || config.letters.startsWith(config.profiles + '/') || config.profiles.startsWith(config.letters + '/')) throw fail('INVALID_PRIVATE_DOCUMENT_CONFIG');
+    if (mounts.some((left, i) => mounts.some((right, j) => i !== j && (left.source === right.source || left.source.startsWith(right.source + '/') || right.source.startsWith(left.source + '/'))))) throw fail('INVALID_PRIVATE_DOCUMENT_CONFIG');
     return { env, mounts };
   } catch { throw fail('INVALID_PRIVATE_DOCUMENT_CONFIG'); }
   finally { await handle.close(); }

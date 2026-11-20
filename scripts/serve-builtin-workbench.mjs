@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 import { readFile } from 'node:fs/promises';
 import { createPraxisServer } from '../src/server.mjs';
 
@@ -9,9 +10,9 @@ const server = createPraxisServer({
   consoleHost: new URL(installation.origin).host,
   consoleOrigin: installation.origin,
   webGateway: {
-    enabled: true, requireTingproofNativeScope: true, canonicalUrl: installation.origin, coreUrl: 'http://127.0.0.1:4326',
+    enabled: true, canonicalUrl: installation.origin, coreUrl: 'http://127.0.0.1:4326',
     originHost: 'localhost', privateDocumentOwnerId: installation.ownerId,
-    privateDocumentRoots: { letters: '/data/letters/documents', profiles: '/data/profiles/documents' },
+    privateDocumentRoots: Object.fromEntries(DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.deployment?.privateDocuments).map(app => [app.id, app.integration.deployment.privateDocuments.directory])),
   },
 });
 server.on('error', error => { console.error(error.message); process.exitCode = 1; });

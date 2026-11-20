@@ -86,7 +86,8 @@ test('only document entry requests and actual successful HTML are transform cand
   assert.deepEqual(navigationContext(req, '/admin/'), { mode: 'admin' });
   assert.deepEqual(navigationContext(req, '/prds/'), { mode: 'prds' });
   assert.deepEqual(navigationContext(req, '/prds/sample-app/'), { mode: 'prds' });
-  for (const path of ['/api/items', '/assets/app.js', '/static/picture', '/workbench/api/items', '/lattice/portal/decks/1', '/image.png']) assert.equal(navigationContext(req, path, 'travel'), null, path);
+  for (const path of ['/api/items', '/assets/app.js', '/static/picture', '/workbench/api/items', '/image.png']) assert.equal(navigationContext(req, path, 'travel'), null, path);
+  assert.equal(navigationContext(req, '/lattice/portal/decks/1', 'lattice-slides'), null, 'Lattice owns its portal exclusion');
   for (const path of ['/business/', '/business/reminder', '/business/reminder/private', '/admin/private', '/share/travel/token/trip', '/prds', '/prds/source.md', '/prds/private/file/']) assert.equal(navigationContext(req, path), null, path);
   for (const request of [{ method: 'POST', headers: {} }, { method: 'HEAD', headers: {} }, { method: 'GET', headers: { range: 'bytes=0-2' } }, { method: 'GET', headers: { upgrade: 'websocket' } }, { method: 'GET', headers: { 'sec-fetch-dest': 'script' } }]) assert.equal(navigationContext(request, '/', 'travel'), null);
   assert.equal(isNavigationHtml({ statusCode: 200, headers: htmlHeaders }), true);

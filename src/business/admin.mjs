@@ -1,4 +1,4 @@
-import { credentialFromRequest, WEB_APP_IDS } from './auth.mjs';
+import { credentialFromRequest } from './auth.mjs';
 
 const PREFIX = '/api/business/admin';
 const MAX_BYTES = 16 * 1024;
@@ -55,7 +55,7 @@ function user(auth, id) {
 }
 function webAccess(auth, userId) {
   user(auth, userId);
-  if (auth.isPlatformAdmin(userId)) return { userId, configured: true, apps: [...WEB_APP_IDS], workbench: true, prds: true, expiresAt: null, source: 'administrator' };
+  if (auth.isPlatformAdmin(userId)) return { userId, configured: true, apps: [...auth.webAppIds], workbench: true, prds: true, expiresAt: null, source: 'administrator' };
   const policy = auth.getWebEntryPolicy(userId);
   if (!policy) return { userId, configured: false, apps: [], workbench: true, prds: false, expiresAt: null };
   return { userId, configured: true, ...policy, workbench: true };

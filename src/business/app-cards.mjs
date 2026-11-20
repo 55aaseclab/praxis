@@ -1,10 +1,11 @@
 import { AppProviderRegistry, normalizeProviderCard, validateProviderResult } from './app-providers.mjs';
-import { OPERATIONS } from './bridge.mjs';
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 const denied=()=>Object.assign(new Error('App projection access is unavailable.'),{status:403,code:'FORBIDDEN'});
-export function canReadAppCards(access,appId,config={}) {
-  if(!access?.workbench||appId==='polaris')return false;
-  if(['letters','profiles'].includes(appId))return access.platformAdmin===true&&typeof access.userId==='string'&&config.appProviders?.[appId]?.ownerId===access.userId;
-  return access.apps.includes(appId);
+export function canReadAppCards(access,appId,config={},integrations=DEFAULT_APP_REGISTRY) {
+  if(!access?.workbench)return false;
+  const web=integrations.getWeb(appId);if(!web)return false;
+  if(web.policy==='document-owner')return access.platformAdmin===true&&typeof access.userId==='string'&&config.appProviders?.[appId]?.ownerId===access.userId;
+  return web.policy==='platform-admin'?access.platformAdmin===true:access.apps.includes(appId);
 }
 async function boundedJson(response) {
   if(!response.ok)throw new Error('App source unavailable.');
@@ -13,12 +14,12 @@ async function boundedJson(response) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 export class AppCards {
-  constructor({auth,bridge,config,registry=new AppProviderRegistry(),fetchImpl=fetch,clock=Date.now}) {Object.assign(this,{auth,bridge,config,registry,fetch:fetchImpl,clock});}
+  constructor({auth,bridge,config,registry=new AppProviderRegistry(),integrations=auth.registry||DEFAULT_APP_REGISTRY,fetchImpl=fetch,clock=Date.now}) {Object.assign(this,{auth,bridge,config,registry,integrations,fetch:fetchImpl,clock});}
   async get(token) {
     const session=this.auth.requireNativeSession(token),initial=this.auth.getWebAccess(token);
     if(!initial.workbench)throw denied();
     const providers=await this.registry.providers();
-    const results=await Promise.all(providers.filter(provider=>canReadAppCards(initial,provider.app.id,this.config)).map(async provider=>{
+    const results=await Promise.all(providers.filter(provider=>provider.descriptor?.role!=='runtime'&&canReadAppCards(initial,provider.app.id,this.config,this.integrations)).map(async provider=>{
       const appId=provider.app.id;
       if(provider.error)return{appId,status:'unavailable',items:[],code:provider.error};
       const {descriptor,module}=provider;
@@ -27,14 +28,14 @@ export class AppCards {
       const adapterId=descriptor.adapterAppId||appId;
       if(descriptor.resourceMode!=='native-view'&&!this.config.apps?.[adapterId])return{appId,status:'unavailable',items:[],code:'APP_SOURCE_NOT_CONFIGURED'};
       const spaces=(this.config.apps?.[adapterId]?.spaces||[]).filter(spaceId=>this.auth.userPermissions(session.user.id,spaceId,adapterId,'read').length>0);
-      const current=()=>{const access=this.auth.getWebAccess(token);if(!canReadAppCards(access,appId,this.config))throw denied();};
+      const current=()=>{const access=this.auth.getWebAccess(token);if(!canReadAppCards(access,appId,this.config,this.integrations))throw denied();};
       try {
         current();
         const value=validateProviderResult(await module.getCards({
           spaces,actor:{userId:session.user.id,username:session.user.username},
           invoke:async request=>{
             current();
-            if(!request||Object.keys(request).some(key=>!['spaceId','operation','resourceId','input'].includes(key))||!spaces.includes(request.spaceId)||!descriptor.readOperations?.includes(request.operation)||(OPERATIONS[adapterId]?.[request.operation]!=='read'||['cancel_job','retry_job'].includes(request.operation)))throw denied();
+            if(!request||Object.keys(request).some(key=>!['spaceId','operation','resourceId','input'].includes(key))||!spaces.includes(request.spaceId)||!descriptor.readOperations?.includes(request.operation)||(this.integrations.operationDefinitions[adapterId]?.[request.operation]?.mutation!==false))throw denied();
             const result=await this.bridge.invokeProjection(token,{...request,appId:adapterId});current();return result;
           },
           readNative:async request=>{
@@ -51,7 +52,7 @@ export class AppCards {
         if(['unsupported','unavailable'].includes(value.status)&&value.items.length)throw new Error('Invalid unavailable cards.');
         let malformed = 0;
         const projected = [];
-        for (const card of value.items) { try { projected.push(normalizeProviderCard(appId,card)); } catch { malformed++; } }
+        for (const card of value.items) { try { projected.push(normalizeProviderCard(appId,card,{registry:this.integrations})); } catch { malformed++; } }
         const items=projected.filter(card=>{
           try {current();if(descriptor.resourceMode!=='native-view'){if(!card.spaceId||!card.resourceId)return false;this.auth.authorize(token,{appId:adapterId,spaceId:card.spaceId,resourceId:card.resourceId,action:'read'},{auditDenied:false});}return true;}catch{return false;}
         });
@@ -59,11 +60,11 @@ export class AppCards {
       }catch(error){if(error.status===401)throw error;return {appId,status:error.status===403?'denied':'unavailable',items:[],code:error.status===403?'FORBIDDEN':'APP_SOURCE_UNAVAILABLE'};}
     }));
     const access=this.auth.getWebAccess(token);
-    const allowed=results.filter(value=>canReadAppCards(access,value.appId,this.config));
+    const allowed=results.filter(value=>canReadAppCards(access,value.appId,this.config,this.integrations));
     const items=allowed.flatMap(value=>value.items).filter(card=>{
       const provider=providers.find(value=>value.app.id===card.appId);
       try{if(provider.descriptor.resourceMode!=='native-view')this.auth.authorize(token,{appId:provider.descriptor.adapterAppId||card.appId,spaceId:card.spaceId,resourceId:card.resourceId,action:'read'},{auditDenied:false});return true;}catch{return false;}
     });
-    return {schemaVersion:1,generatedAt:new Date(this.clock()).toISOString(),items:[...new Map(items.map(card=>[card.id,card])).values()],sources:allowed.map(({appId,status,code})=>({appId,status,...(code?{code}:{})})),partial:allowed.some(value=>['unavailable','partial'].includes(value.status))};
+    return {schemaVersion:1,apps:this.integrations.publicFacts().filter(app=>canReadAppCards(access,app.id,this.config,this.integrations)),generatedAt:new Date(this.clock()).toISOString(),items:[...new Map(items.map(card=>[card.id,card])).values()],sources:allowed.map(({appId,status,code})=>({appId,status,...(code?{code}:{})})),partial:allowed.some(value=>['unavailable','partial'].includes(value.status))};
   }
 }

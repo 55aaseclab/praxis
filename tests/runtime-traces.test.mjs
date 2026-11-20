@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { createRuntimeTraceReader } from '../src/business/runtime-traces.mjs';
 import { createConsoleHandler } from '../src/business/console.mjs';
 import { SESSION_COOKIE } from '../src/business/auth.mjs';
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 import { describe, getTraces, projectRuntimeTraces } from '../third_party/polaris/praxis-provider.mjs';
 
 const now = Date.parse('2026-11-19T12:00:00Z');
@@ -11,11 +12,11 @@ const run = id => ({ id, flowId: 'fieldwork-research', packId: 'research', packV
   steps: [{ stepId: 'collect', status: 'failed', version: 'v2', createdAt: '2026-11-18T10:00:00Z', completedAt: '2026-11-18T10:01:00Z', input: { token: 'PRIVATE_TOKEN' }, output: { body: 'PRIVATE_BODY' } }], artifacts: [{ id: 'private-artifact-name', content: 'PRIVATE_ARTIFACT' }] });
 function fixture({ configured = true, runs = [run('run-one')] } = {}) {
   let allowed = true, calls = 0;
-  const auth = { requirePlatformAdminSession: token => {
+  const auth = { registry: DEFAULT_APP_REGISTRY, requirePlatformAdminSession: token => {
     if (token !== 'synthetic-native') throw Object.assign(Error('Native session required'), { status: 401 });
     if (!allowed) throw Object.assign(Error('Forbidden'), { status: 403 });
     return { user: { id: 'synthetic-owner' } };
-  } };
+  }, getWebAccess(token) { this.requirePlatformAdminSession(token); return { userId: 'synthetic-owner', workbench: true, platformAdmin: true, apps: [] }; } };
   const config = { issuer: 'https://praxis.example', apps: {}, ...(configured ? { appProviders: { polaris: { url: 'http://127.0.0.1:19999' } } } : {}) };
   const registry = { providers: async () => [{ app: { id: 'polaris' }, descriptor: describe(), module: { getTraces } }] };
   const fetchImpl = async (url, options) => {
@@ -24,7 +25,7 @@ function fixture({ configured = true, runs = [run('run-one')] } = {}) {
     body.rawLog = 'PRIVATE_LOG'; if (body.runs[0]) body.runs[0].credentials = 'PRIVATE_CREDENTIAL';
     return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
   };
-  return { auth, config, registry, fetchImpl, calls: () => calls, withdraw: () => { allowed = false; }, reader: options => createRuntimeTraceReader({ auth, config, registry, fetchImpl, clock: () => now, ...options }) };
+  return { auth, config, registry, fetchImpl, calls: () => calls, withdraw: () => { allowed = false; }, reader: options => createRuntimeTraceReader({ auth, config, registry, integrations: auth.registry, fetchImpl, clock: () => now, ...options }) };
 }
 test('runtime reader never probes a default host when its source is unconfigured', async () => {
   const f = fixture({ configured: false }), report = await f.reader()({ token: 'synthetic-native' });

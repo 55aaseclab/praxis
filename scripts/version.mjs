@@ -11,7 +11,7 @@ const declaration = /^版本：v?(\d+\.\d+\.\d+)(?=\s|$)/m;
 const ownedPaths = [
   ...files, 'docs', 'src', 'public', 'scripts', 'tests', 'config', 'infra', 'ops', 'skills',
   'AGENTS.md', 'README.md', 'README.zh-CN.md', 'paseo.json', '.gitignore', '.gitmodules',
-  'Dockerfile', 'Dockerfile.storage', 'Dockerfile.builtins', 'packaging', 'compose.yaml', 'compose.apps.yaml', 'compose.storage.yaml', 'compose.business.yaml', 'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml', '.dockerignore',
+  'Dockerfile', 'Dockerfile.storage', 'packaging', 'compose.yaml', 'compose.apps.yaml', 'compose.storage.yaml', 'compose.business.yaml', 'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml', '.dockerignore',
 ];
 
 function parseVersion(version) {

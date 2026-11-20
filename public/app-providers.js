@@ -1,5 +1,5 @@
 // Reviewed app providers expose read-only projections in the current browser.
-export const APP_ROUTES = Object.freeze({ reminder: 'reminder', knowledge: 'knowledge', 'lattice-slides': 'slides', travel: 'travel', tingproof: 'tingproof', memo: 'memo', finance: 'finance', intelligence: 'intelligence', calendar: 'calendar', 'matrix-reader': 'matrix-reader', projects: 'projects', letters: 'letters', profiles: 'profiles' });
+import { appFact, appFactsEpoch, appRoutePrefixes, setAppFacts } from './app-registry.js';
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = (value, maximum = 10000) => typeof value === 'string' && value.length > 0 && value.length <= maximum && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value);
 export function localizedText(value, language = 'en') {
@@ -9,14 +9,13 @@ export function localizedText(value, language = 'en') {
 }
 const label = value => text(value, 2000) || object(value) && text(value.en, 2000) && text(value.zh, 2000);
 export function nativeHref(value, appId, origin) {
-  if (!Object.hasOwn(APP_ROUTES, appId) || !text(value, 4096) || /[\\\u0000-\u0020\u007f]/u.test(value)) throw new Error('Invalid app entry.');
+  const prefixes = appRoutePrefixes(appId);
+  if (!prefixes.length || !text(value, 4096) || value.startsWith('//') || /[\\\u0000-\u0020\u007f]/u.test(value)) throw new Error('Invalid app entry.');
   const rawPath=value.split(/[?#]/,1)[0];
   if(/%(?:2e|2f|5c)/i.test(rawPath)||/(?:^|\/)\.{1,2}(?:\/|$)/.test(rawPath))throw new Error('Invalid app entry.');
   const url = new URL(value, origin);
   if (url.origin !== origin || url.username || url.password) throw new Error('App entries must stay on their registered origin.');
-  const prefix = `/apps/${APP_ROUTES[appId]}/`;
-  const reminder = appId === 'reminder' && url.pathname === '/business/reminder/';
-  if (!url.pathname.startsWith(prefix) && !reminder) throw new Error('App entry is outside its registered route.');
+  if (!prefixes.some(prefix => url.pathname.startsWith(prefix))) throw new Error('App entry is outside its registered route.');
   return url.pathname + url.search + url.hash;
 }
 export function evidenceHref(value, origin) {
@@ -30,7 +29,7 @@ export function evidenceHref(value, origin) {
   return url.href;
 }
 export function validateCard(value, origin) {
-  if (!object(value) || !Object.hasOwn(APP_ROUTES, value.appId) || !text(value.id, 1000) || !text(value.resourceId, 500) || !text(value.revision, 500) || !['reminder', 'result', 'decision'].includes(value.kind) || !text(value.title, 20000) || !label(value.reason) || !object(value.source) || !text(value.source.name, 200) || !object(value.primaryAction) || !label(value.primaryAction.label) || !Array.isArray(value.evidence) || value.evidence.length > 64) throw new Error('Invalid app card.');
+  if (!object(value) || !appFact(value.appId) || appFact(value.appId).cardsSupported === false || !text(value.id, 1000) || !text(value.resourceId, 500) || !text(value.revision, 500) || !['reminder', 'result', 'decision'].includes(value.kind) || !text(value.title, 20000) || !label(value.reason) || !object(value.source) || !text(value.source.name, 200) || !object(value.primaryAction) || !label(value.primaryAction.label) || !Array.isArray(value.evidence) || value.evidence.length > 64) throw new Error('Invalid app card.');
   if (value.spaceId !== undefined && !text(value.spaceId, 500) || value.preview !== undefined && !text(value.preview, 20000) || value.date !== undefined && value.date !== null && !text(value.date, 100) || value.updatedAt !== undefined && !Number.isFinite(Date.parse(value.updatedAt))) throw new Error('Invalid app card metadata.');
   const primaryAction = { ...value.primaryAction, href: nativeHref(value.primaryAction.href, value.appId, origin) };
   const evidence = value.evidence.map(entry => {
@@ -81,8 +80,9 @@ export function laterTime(choice, now = new Date()) {
 }
 export function providerReadHref(path, appId, origin) {
   if (!text(path, 4096)) throw new Error('Invalid provider read.');
-  const prefix = `/apps/${APP_ROUTES[appId]}/`;
-  const absolute = /^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('/apps/') || path.startsWith('//');
+  const prefix = appFact(appId)?.entry.nativePath;
+  if (!prefix) throw new Error('Provider app has no registered native route.');
+  const absolute = /^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('/apps/') || path.startsWith('/business/') || path.startsWith('//');
   const href = absolute ? path : prefix + path.replace(/^\/+/, '');
   const checked = nativeHref(href, appId, origin);
   const url = new URL(checked, origin);
@@ -96,13 +96,16 @@ function reviewedModuleUrl(value,appId,origin){
 }
 export async function readBrowserProviders({ kind, identity, signal, fetchImpl = fetch, importModule = value => import(value), origin = globalThis.location?.origin } = {}) {
   if (!['cards', 'data'].includes(kind) || !origin) throw new Error('Invalid browser provider request.');
+  const currentEpoch = appFactsEpoch();
   const response = await fetchImpl('/api/workbench/providers', { credentials: 'same-origin', mode: 'same-origin', redirect: 'error', cache: 'no-store', signal });
   if (!response.ok) throw new Error('Browser providers are unavailable.');
   const manifest = await response.json();
+  if (signal?.aborted || currentEpoch !== appFactsEpoch()) throw new Error('Browser provider identity changed.');
   if (!object(manifest) || manifest.schemaVersion !== 1 || !Array.isArray(manifest.providers) || manifest.providers.length > 32) throw new Error('Invalid browser provider manifest.');
+  if (manifest.apps !== undefined) setAppFacts(manifest.apps);
   const seen = new Set();
   for (const provider of manifest.providers) {
-    if (!object(provider) || !Object.hasOwn(APP_ROUTES, provider.appId) || !reviewedModuleUrl(provider.moduleUrl, provider.appId, origin) || seen.has(provider.appId)) throw new Error('Unreviewed browser provider.');
+    if (!object(provider) || !appFact(provider.appId) || !appFact(provider.appId).entry.nativePath || !reviewedModuleUrl(provider.moduleUrl, provider.appId, origin) || seen.has(provider.appId)) throw new Error('Unreviewed browser provider.');
     seen.add(provider.appId);
   }
   const results = await Promise.all(manifest.providers.filter(provider => kind === 'cards' || provider.dataExecution !== 'server').map(async provider => {

@@ -3,35 +3,18 @@ import { chmodSync, lstatSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createHash, createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 
 export const SESSION_COOKIE = 'praxis_business_session';
-export const WEB_APP_IDS = Object.freeze(['reminder', 'travel', 'knowledge', 'memo', 'lattice-slides', 'tingproof', 'projects', 'finance', 'intelligence', 'matrix-reader', 'calendar']);
-export const BUSINESS_SCOPES = Object.freeze({
-  'reminder:read': { appId: 'reminder', actions: ['read'] },
-  'reminder:write': { appId: 'reminder', actions: ['create', 'update', 'complete', 'delete'] },
-  'tingproof:read': { appId: 'tingproof', actions: ['read'] },
-  'tingproof:write': { appId: 'tingproof', actions: ['submit', 'assign'] },
-  'travel:read': { appId: 'travel', actions: ['read'] },
-  'travel:write': { appId: 'travel', actions: ['update'] },
-  'memo:read': { appId: 'memo', actions: ['read'] },
-  'memo:write': { appId: 'memo', actions: ['update'] },
-  'knowledge:read': { appId: 'knowledge', actions: ['read'] },
-  'knowledge:write': { appId: 'knowledge', actions: ['create', 'update'] },
-  'projects:read': { appId: 'projects', actions: ['read'] },
-  'projects:write': { appId: 'projects', actions: ['create', 'update'] },
-  'slides:read': { appId: 'slides', actions: ['read'] },
-  'slides:write': { appId: 'slides', actions: ['create', 'update'] },
-  'slides:render': { appId: 'slides', actions: ['render'] },
-  'slides:export': { appId: 'slides', actions: ['export'] },
-  'slides:notes': { appId: 'slides', actions: ['notes'] },
-  'slides:delete': { appId: 'slides', actions: ['delete'] },
-  'slides:lock': { appId: 'slides', actions: ['manage_lock'] },
+const PLATFORM_ACTIONS = Object.freeze({ spaces: ['manage_members', 'manage_sharing', 'manage_delegation'] });
+const PLATFORM_SCOPES = Object.freeze({
   'spaces:members': { appId: 'spaces', actions: ['manage_members'] },
   'spaces:sharing': { appId: 'spaces', actions: ['manage_sharing'] },
   'spaces:delegation': { appId: 'spaces', actions: ['manage_delegation'] },
 });
-const APP_ACTIONS = Object.freeze({ memo: ['read', 'update'], reminder: ['read', 'create', 'update', 'complete', 'delete'], tingproof: ['read', 'submit', 'assign'], travel: ['read', 'update'], projects: ['read', 'create', 'update'], knowledge: ['read', 'create', 'update'], slides: ['read', 'create', 'update', 'render', 'export', 'delete', 'notes', 'manage_lock'], spaces: ['manage_members', 'manage_sharing', 'manage_delegation'] });
-const TARGETED_CREATE_APPS = new Set(['projects', 'knowledge', 'slides', 'reminder']);
+export const WEB_APP_IDS = DEFAULT_APP_REGISTRY.webAppIds;
+export const BUSINESS_SCOPES = Object.freeze({ ...DEFAULT_APP_REGISTRY.scopes, ...PLATFORM_SCOPES });
+const APP_ACTIONS = Object.freeze({ ...DEFAULT_APP_REGISTRY.businessActions, ...PLATFORM_ACTIONS });
 const DAY = 86400000;
 const maximumGrantAge = 30 * DAY;
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -67,13 +50,13 @@ function strings(value, label, wildcard = false) {
   }
   return result;
 }
-function normalizeRules(rules) {
+function normalizeRules(rules, appActions = APP_ACTIONS) {
   if (!Array.isArray(rules) || rules.length < 1 || rules.length > 1000) fail('Delegation requires one or more bounded rules.');
   return rules.map(rule => {
     if (!rule || typeof rule !== 'object' || Array.isArray(rule) || Object.keys(rule).some(key => !['appId', 'spaceId', 'resources', 'actions'].includes(key))) fail('Delegation rule has unknown or invalid fields.');
     const appId = identifier(rule.appId, 'Application');
     const actions = strings(rule.actions, 'Actions');
-    if (!Object.hasOwn(APP_ACTIONS, appId) || actions.some(action => !APP_ACTIONS[appId].includes(action))) fail('Application or business action is not supported.');
+    if (!Object.hasOwn(appActions, appId) || actions.some(action => !appActions[appId].includes(action))) fail('Application or business action is not supported.');
     return { appId, spaceId: identifier(rule.spaceId, 'Space'), resources: strings(rule.resources, 'Resources', true), actions };
   });
 }
@@ -102,7 +85,8 @@ export function credentialFromRequest(request) {
 }
 
 export class AuthStore {
-  constructor({ file, issuer, clock = () => Date.now(), busyTimeoutMs = 5000 } = {}) {
+  constructor({ file, issuer, clock = () => Date.now(), busyTimeoutMs = 5000, registry = DEFAULT_APP_REGISTRY } = {}) {
+    this.registry = registry; this.webAppIds = registry.webAppIds; this.appActions = Object.freeze({ ...registry.businessActions, ...PLATFORM_ACTIONS }); this.scopes = Object.freeze({ ...registry.scopes, ...PLATFORM_SCOPES }); this.targetedCreateApps = new Set(registry.targetedCreateApps);
     if (typeof issuer !== 'string') fail('An explicit public issuer URL is required.');
     let url;
     try { url = new URL(issuer); } catch { fail('Issuer URL is invalid.'); }
@@ -271,9 +255,9 @@ export class AuthStore {
     if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['userId', 'apps', 'workbench', 'prds', 'expiresAt'].includes(key))) fail('Web access contains unknown or invalid fields.');
     const { userId, apps, workbench, prds, expiresAt = null } = input;
     identifier(userId, 'User');
-    if (!Array.isArray(apps) || apps.length > WEB_APP_IDS.length || new Set(apps).size !== apps.length || apps.some(app => !WEB_APP_IDS.includes(app)) || workbench !== undefined && typeof workbench !== 'boolean' || typeof prds !== 'boolean') fail('Web access requires explicit supported applications and boolean entry permissions.');
+    if (!Array.isArray(apps) || apps.length > this.webAppIds.length || new Set(apps).size !== apps.length || apps.some(app => !this.webAppIds.includes(app)) || workbench !== undefined && typeof workbench !== 'boolean' || typeof prds !== 'boolean') fail('Web access requires explicit supported applications and boolean entry permissions.');
     if (expiresAt !== null && (!Number.isSafeInteger(expiresAt) || expiresAt <= this.clock())) fail('Web access expiry must be null or a future timestamp.');
-    const normalized = WEB_APP_IDS.filter(app => apps.includes(app));
+    const normalized = this.webAppIds.filter(app => apps.includes(app));
     this.controlTransaction(() => {
       if (!this.db.prepare('SELECT 1 FROM auth_users WHERE id=?').get(userId)) fail('User not found.', 404, 'NOT_FOUND');
       let previous = null;
@@ -299,32 +283,32 @@ export class AuthStore {
     if (!row) return null;
     let apps;
     try { apps = JSON.parse(row.apps); } catch { fail('Web entry policy is unavailable.', 503, 'UNAVAILABLE'); }
-    if (!Array.isArray(apps) || apps.length > WEB_APP_IDS.length || new Set(apps).size !== apps.length || apps.some(app => !WEB_APP_IDS.includes(app)) || ![0, 1].includes(row.workbench) || ![0, 1].includes(row.prds) || row.expires_at !== null && (!Number.isSafeInteger(row.expires_at) || row.expires_at <= 0)) fail('Web entry policy is unavailable.', 503, 'UNAVAILABLE');
-    return { apps: WEB_APP_IDS.filter(app => apps.includes(app)), prds: Boolean(row.prds), expiresAt: row.expires_at };
+    if (!Array.isArray(apps) || apps.length > 128 || new Set(apps).size !== apps.length || apps.some(app => typeof app !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(app)) || ![0, 1].includes(row.workbench) || ![0, 1].includes(row.prds) || row.expires_at !== null && (!Number.isSafeInteger(row.expires_at) || row.expires_at <= 0)) fail('Web entry policy is unavailable.', 503, 'UNAVAILABLE');
+    return { apps: this.webAppIds.filter(app => apps.includes(app)), prds: Boolean(row.prds), expiresAt: row.expires_at };
   }
   getWebAccess(token) {
     const session = this.getSession(token);
     if (session.clientId !== 'praxis-browser') fail('Native browser login is required.', 401, 'UNAUTHENTICATED');
     const base = { userId: session.user.id, username: session.user.username, workbench: true, expiresAt: session.expiresAt, csrfToken: session.csrfToken };
-    if (this.isPlatformAdmin(session.user.id)) return { ...base, userId: session.user.id, apps: [...WEB_APP_IDS], prds: true, permissionsExpireAt: null, platformAdmin: true };
+    if (this.isPlatformAdmin(session.user.id)) return { ...base, userId: session.user.id, apps: [...this.webAppIds], prds: true, permissionsExpireAt: null, platformAdmin: true };
     const policy = this.getWebEntryPolicy(session.user.id);
     if (!policy || policy.expiresAt !== null && policy.expiresAt <= this.clock()) return { ...base, apps: [], prds: false, permissionsExpireAt: null, platformAdmin: false };
     return { ...base, apps: policy.apps, prds: policy.prds, permissionsExpireAt: policy.expiresAt, platformAdmin: false };
   }
   configureWebAccessBoundary({ enabled = false, apps = {} } = {}) {
     if (typeof enabled !== 'boolean' || !apps || typeof apps !== 'object' || Array.isArray(apps)) fail('Web access boundary configuration is invalid.');
-    this.webAccessBoundary = { enabled, apps: Object.fromEntries(Object.entries(apps).filter(([id]) => ['reminder', 'tingproof', 'travel', 'projects', 'knowledge', 'slides', 'memo'].includes(id)).map(([id, app]) => [id, new Set(app?.spaces || [])])) };
+    this.webAccessBoundary = { enabled, apps: Object.fromEntries(Object.entries(apps).filter(([id]) => Boolean(this.registry.getBusiness(id))).map(([id, app]) => [id, new Set(app?.spaces || [])])) };
   }
   currentWebApps(userId) {
-    if (this.isPlatformAdmin(userId)) return [...WEB_APP_IDS];
+    if (this.isPlatformAdmin(userId)) return [...this.webAppIds];
     const policy = this.getWebEntryPolicy(userId);
     return policy && (policy.expiresAt === null || policy.expiresAt > this.clock()) ? policy.apps : [];
   }
   webBoundaryAllows(userId, spaceId, appId) {
     if (!this.webAccessBoundary.enabled) return true;
     const allowed = this.currentWebApps(userId), configured = this.webAccessBoundary.apps;
-    if (appId === 'spaces') return Object.entries(configured).some(([id, spaces]) => allowed.includes(id === 'slides' ? 'lattice-slides' : id) && spaces.has(spaceId));
-    return allowed.includes(appId === 'slides' ? 'lattice-slides' : appId) && Boolean(configured[appId]?.has(spaceId));
+    if (appId === 'spaces') return Object.entries(configured).some(([id, spaces]) => allowed.includes(this.registry.webId(id)) && spaces.has(spaceId));
+    return allowed.includes(this.registry.webId(appId)) && Boolean(configured[appId]?.has(spaceId));
   }
   webPermissionExpiry(userId) {
     if (!this.webAccessBoundary.enabled || this.isPlatformAdmin(userId)) return Infinity;
@@ -334,17 +318,16 @@ export class AuthStore {
   effectiveRules(userId, rules) {
     return rules.flatMap(rule => rule.actions.flatMap(action => {
       const resources = unique(intersect(this.userPermissions(userId, rule.spaceId, rule.appId, action), rule.resources));
-      return resources.length && (action !== 'create' || resources.includes('*') || TARGETED_CREATE_APPS.has(rule.appId)) ? [{ appId: rule.appId, spaceId: rule.spaceId, actions: [action], resources }] : [];
+      return resources.length && (action !== 'create' || resources.includes('*') || this.targetedCreateApps.has(rule.appId)) ? [{ appId: rule.appId, spaceId: rule.spaceId, actions: [action], resources }] : [];
     }));
   }
   accountAccess(token) {
     const session = this.requireNativeSession(token), web = this.getWebAccess(token), rules = this.availableRules(session.user.id);
-    const names = { reminder: 'Reminder', travel: 'Travel', knowledge: 'Knowledge', memo: 'Memo', 'lattice-slides': 'Lattice', tingproof: '听校', projects: 'Projects', finance: 'Finance', intelligence: 'Intelligence', 'matrix-reader': 'Matrix Reader', calendar: 'Calendar' };
     const capabilities = web.apps.map(appId => {
-      const businessAppId = appId === 'lattice-slides' ? 'slides' : appId;
-      const matches = rules.filter(rule => rule.appId === businessAppId), supported = ['reminder', 'tingproof', 'travel', 'projects', 'knowledge', 'slides', 'memo'].includes(businessAppId), configured = Boolean(this.webAccessBoundary.apps[businessAppId]?.size);
+      const businessAppId = this.registry.businessId(appId);
+      const matches = rules.filter(rule => rule.appId === businessAppId), supported = Boolean(this.registry.getBusiness(businessAppId)), configured = Boolean(this.webAccessBoundary.apps[businessAppId]?.size);
       const allResources = matches.some(rule => rule.resources.includes('*'));
-      return { appId, name: names[appId], availability: !supported ? 'unsupported' : this.webAccessBoundary.enabled && !configured ? 'unavailable' : matches.length ? 'available' : 'no_resources', actions: unique(matches.flatMap(rule => rule.actions)), spaceCount: unique(matches.map(rule => rule.spaceId)).length, resourceCount: allResources ? null : unique(matches.flatMap(rule => rule.resources.map(id => JSON.stringify([rule.spaceId, id])))).length, allResources };
+      return { appId, name: this.registry.getApp(appId)?.name || appId, availability: !supported ? 'unsupported' : this.webAccessBoundary.enabled && !configured ? 'unavailable' : matches.length ? 'available' : 'no_resources', actions: unique(matches.flatMap(rule => rule.actions)), spaceCount: unique(matches.map(rule => rule.spaceId)).length, resourceCount: allResources ? null : unique(matches.flatMap(rule => rule.resources.map(id => JSON.stringify([rule.spaceId, id])))).length, allResources };
     });
     return { access: { apps: web.apps, prds: web.prds, expiresAt: web.permissionsExpireAt }, capabilities };
   }
@@ -383,7 +366,7 @@ export class AuthStore {
     this.changed({ type: 'membership', userId, spaceId });
   }
   grantResource({ userId, spaceId, appId, resources, actions, expiresAt }) {
-    const [rule] = normalizeRules([{ spaceId, appId, resources, actions }]);
+    const [rule] = this.normalizeRules([{ spaceId, appId, resources, actions }]);
     if (appId === 'spaces') fail('Space management rights require a current owner or administrator membership.', 403, 'FORBIDDEN');
     if (!this.db.prepare('SELECT 1 FROM auth_users WHERE id=?').get(userId)) fail('User not found.', 404, 'NOT_FOUND');
     const space = this.db.prepare('SELECT * FROM auth_spaces WHERE id=?').get(spaceId);
@@ -413,18 +396,33 @@ export class AuthStore {
     this.db.prepare('INSERT INTO auth_clients VALUES(?,?,?)').run(id, name, JSON.stringify(uris));
     return { id, name, redirectUris: uris };
   }
+  normalizeRules(rules) { return normalizeRules(rules, this.appActions); }
+  membershipRole(userId, spaceId) {
+    return this.db.prepare('SELECT role FROM auth_members WHERE user_id=? AND space_id=?').get(userId, spaceId)?.role || null;
+  }
+  subjectReadScope(userId, { appId, spaceId, resourceId }) {
+    identifier(userId, 'Subject');
+    const resources = this.userPermissions(userId, spaceId, appId, 'read');
+    if (!resources.includes('*') && !resources.includes(resourceId)) return null;
+    const member = this.membershipRole(userId, spaceId);
+    const expiries = ['owner', 'admin'].includes(member) ? [] : this.db.prepare('SELECT * FROM auth_resources WHERE user_id=? AND space_id=? AND app_id=?').all(userId, spaceId, appId)
+      .filter(row => (!row.membership_required || member) && (row.expires_at === null || row.expires_at > this.clock()) && JSON.parse(row.actions).includes('read') && (JSON.parse(row.resources).includes('*') || JSON.parse(row.resources).includes(resourceId)))
+      .map(row => row.expires_at ?? Infinity);
+    return { expiresAt: Math.min(this.webPermissionExpiry(userId), ...expiries) };
+  }
   userPermissions(userId, spaceId, appId, action) {
-    if (!Object.hasOwn(APP_ACTIONS, appId) || !APP_ACTIONS[appId].includes(action) || !this.db.prepare('SELECT 1 FROM auth_users WHERE id=? AND enabled=1').get(userId)) return [];
+    if (!Object.hasOwn(this.appActions, appId) || !this.appActions[appId].includes(action) || !this.db.prepare('SELECT 1 FROM auth_users WHERE id=? AND enabled=1').get(userId)) return [];
     if (!this.webBoundaryAllows(userId, spaceId, appId)) return [];
     const member = this.db.prepare('SELECT role FROM auth_members WHERE user_id=? AND space_id=?').get(userId, spaceId);
-    if (appId === 'slides' && action === 'manage_lock' && member?.role !== 'owner') return [];
+    const business = this.registry.getBusiness(appId), roles = business?.actionRoles?.[action] || (business?.ownerOnlyActions?.includes(action) ? ['owner'] : null);
+    if (roles && !roles.includes(member?.role)) return [];
     if (member && ['owner', 'admin'].includes(member.role)) return ['*'];
     if (appId === 'spaces') return [];
     const rows = this.db.prepare('SELECT * FROM auth_resources WHERE user_id=? AND space_id=? AND app_id=?').all(userId, spaceId, appId);
     const resources = rows.filter(row => (!row.membership_required || member) && (row.expires_at === null || row.expires_at > this.clock()) && JSON.parse(row.actions).includes(action)).flatMap(row => JSON.parse(row.resources));
     return resources.includes('*') ? ['*'] : unique(resources);
   }
-  availableRules(userId, requested = APP_ACTIONS) {
+  availableRules(userId, requested = this.appActions) {
     const rules = [];
     for (const space of this.db.prepare('SELECT id FROM auth_spaces').all()) {
       for (const [appId, actions] of Object.entries(requested)) {
@@ -438,7 +436,7 @@ export class AuthStore {
   }
   createGrant({ userId, clientId, rules, expiresAt }) {
     identifier(userId); identifier(clientId);
-    const normalized = normalizeRules(rules);
+    const normalized = this.normalizeRules(rules);
     const expiry = timestamp(expiresAt, this.clock() + 7 * DAY);
     if (expiry <= this.clock() || expiry > this.clock() + maximumGrantAge) fail('Delegation expiry must be in the future and at most thirty days away.');
     if (!this.db.prepare('SELECT 1 FROM auth_clients WHERE id=?').get(clientId)) fail('Client not found.', 404, 'NOT_FOUND');
@@ -496,7 +494,7 @@ export class AuthStore {
     const userResources = this.userPermissions(actor.userId, spaceId, appId, action);
     const delegated = actor.firstPartyNative || actor.firstPartyAdmin ? userResources : this.getGrant(actor.grantId).rules.filter(rule => rule.appId === appId && rule.spaceId === spaceId && rule.actions.includes(action)).flatMap(rule => rule.resources);
     const resources = unique(intersect(userResources, delegated.includes('*') ? ['*'] : delegated));
-    const allowed = resources.length && (resourceId === undefined || resources.includes('*') || resources.includes(resourceId)) && (action !== 'create' || resources.includes('*') || TARGETED_CREATE_APPS.has(appId));
+    const allowed = resources.length && (resourceId === undefined || resources.includes('*') || resources.includes(resourceId)) && (action !== 'create' || resources.includes('*') || this.targetedCreateApps.has(appId));
     if (!allowed) {
       if (auditDenied !== false) this.audit({ event: 'authorization', ...actor, appId, spaceId, action, resourceId, outcome: 'denied', reason: 'scope' });
       fail('The requested business operation is not permitted.', 403, 'FORBIDDEN');
@@ -608,7 +606,7 @@ export class AuthStore {
     return `${payload}.${signature}`;
   }
   consentRules(token, input, context) {
-    if (input.rules !== undefined) return normalizeRules(input.rules);
+    if (input.rules !== undefined) return this.normalizeRules(input.rules);
     if (typeof input.consent !== 'string' || input.consent.length > 60000) fail('Consent form is missing or expired.', 403, 'CONSENT_REQUIRED');
     const [payload, signature, extra] = input.consent.split('.');
     const expected = createHmac('sha256', this.auditKey).update(`consent:${payload}`).digest('base64url');
@@ -616,7 +614,7 @@ export class AuthStore {
     let consent;
     try { consent = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); } catch { fail('Consent form could not be verified.', 403, 'CONSENT_REQUIRED'); }
     if (consent.session !== hash(token) || consent.context !== context || consent.at > this.clock() || consent.at + 600000 <= this.clock()) fail('Consent form is missing or expired.', 403, 'CONSENT_REQUIRED');
-    return normalizeRules(consent.rules.filter((rule, index) => input[`rule_${index}`] === '1'));
+    return this.normalizeRules(consent.rules.filter((rule, index) => input[`rule_${index}`] === '1'));
   }
   requireRequestCsrf(request) {
     if (request.headers?.authorization !== undefined) { credentialFromRequest(request); return; }
@@ -630,17 +628,18 @@ export class AuthStore {
     if (!client || !JSON.parse(client.redirect_uris).includes(redirectUri)) fail('Client or redirect URI is not registered.', 400, 'INVALID_CLIENT');
     if (parameters.get('response_type') !== 'code' || parameters.get('code_challenge_method') !== 'S256' || !/^[A-Za-z0-9_-]{43}$/.test(parameters.get('code_challenge') ?? '')) fail('Authorization requires code response and PKCE S256.', 400, 'INVALID_REQUEST');
     if (parameters.get('resource') !== this.resource) fail('Resource audience does not match this MCP service.', 400, 'INVALID_TARGET');
-    const scopes = unique((parameters.get('scope') || 'reminder:read').split(/\s+/).filter(Boolean));
-    if (scopes.some(scope => !Object.hasOwn(BUSINESS_SCOPES, scope))) fail('Requested scope is unsupported.', 400, 'INVALID_SCOPE');
+    const defaultScope = Object.entries(this.scopes).find(([, value]) => value.actions.includes('read'))?.[0] || '';
+    const scopes = unique((parameters.get('scope') || defaultScope).split(/\s+/).filter(Boolean));
+    if (scopes.some(scope => !Object.hasOwn(this.scopes, scope))) fail('Requested scope is unsupported.', 400, 'INVALID_SCOPE');
     const requested = {};
-    for (const scope of scopes) { const definition = BUSINESS_SCOPES[scope]; requested[definition.appId] = unique([...(requested[definition.appId] ?? []), ...definition.actions]); }
+    for (const scope of scopes) { const definition = this.scopes[scope]; requested[definition.appId] = unique([...(requested[definition.appId] ?? []), ...definition.actions]); }
     const state = parameters.get('state');
     if (state !== null && state.length > 2048) fail('OAuth state is too long.');
     return { clientId, clientName: client.name, redirectUri, challenge: parameters.get('code_challenge'), resource: this.resource, scopes, requested, state };
   }
   createAuthorizationCode({ request, userId, rules }) {
     const allowedActions = request.requested;
-    const normalized = normalizeRules(rules);
+    const normalized = this.normalizeRules(rules);
     if (normalized.some(rule => rule.actions.some(action => !allowedActions[rule.appId]?.includes(action)))) fail('Consent cannot expand requested OAuth scopes.', 403, 'FORBIDDEN');
     const grant = this.createGrant({ userId, clientId: request.clientId, rules: normalized });
     const code = randomToken('pxc');
@@ -661,7 +660,7 @@ export class AuthStore {
     const access = this.issueToken({ grantId });
     const refresh = this.issueToken({ grantId, ttlSeconds: 7 * 86400, type: 'refresh', family });
     const grant = this.getGrant(grantId);
-    const scopes = Object.entries(BUSINESS_SCOPES).filter(([, definition]) => grant.rules.some(rule => rule.appId === definition.appId && rule.actions.some(action => definition.actions.includes(action)))).map(([scope]) => scope);
+    const scopes = Object.entries(this.scopes).filter(([, definition]) => grant.rules.some(rule => rule.appId === definition.appId && rule.actions.some(action => definition.actions.includes(action)))).map(([scope]) => scope);
     return { access_token: access.accessToken, token_type: 'Bearer', expires_in: access.expiresIn, refresh_token: refresh.accessToken, scope: scopes.join(' ') };
   }
   refresh({ refreshToken, clientId, resource }) {
@@ -733,14 +732,17 @@ function localReturn(value, fallback = '/business/', allowDelegate = false) {
     return value;
   } catch { return fallback; }
 }
-function choices(rules, language) {
-  const apps = { memo: ['Memo', 'Memo'], reminder: ['Reminder', '提醒'], tingproof: ['TingProof', '听校'], travel: ['Travel', '旅行'], projects: ['Projects', '项目'], knowledge: ['Knowledge', '知识库'], slides: ['Lattice', 'Lattice'], spaces: ['Spaces', '空间管理'] };
+function choices(rules, language, registry) {
+
   const actions = { read: ['Read', '读取'], create: ['Create', '新增'], update: ['Update', '修改'], complete: ['Complete', '完成'], delete: ['Delete', '删除'], submit: ['Submit corrections', '提交校正'], assign: ['Assign', '分配任务'], render: ['Render', '渲染'], export: ['Export', '导出'], notes: ['Speaker notes', '讲稿'], manage_lock: ['Manage content locks', '内容锁'], manage_members: ['Manage members', '管理成员'], manage_sharing: ['Manage sharing', '管理共享'], manage_delegation: ['Manage delegation', '管理委托'] };
   const i = language === 'zh' ? 1 : 0;
   return rules.map((rule, index) => {
+    const declared = registry.getApp(registry.webId(rule.appId));
+    const appName = rule.appId === 'spaces' ? ['Spaces', '空间管理'][i] : language === 'zh' ? declared?.labels?.zh?.name || declared?.name || rule.appId : declared?.name || rule.appId;
+    const actionLabel = registry.getBusiness(rule.appId)?.actionLabels?.[rule.actions[0]]?.[language] || actions[rule.actions[0]]?.[i] || rule.actions[0];
     const size = rule.resources.length;
     const scope = rule.resources.includes('*') ? ['Authorized resources in this space', '空间内获准资源'][i] : [`${size} selected ${size === 1 ? 'resource' : 'resources'}`, `${size}项指定资源`][i];
-    return `<label><input type="checkbox" name="rule_${index}" value="1"> ${escapeHtml(rule.spaceId)} · ${escapeHtml(apps[rule.appId]?.[i] ?? rule.appId)} · ${escapeHtml(actions[rule.actions[0]]?.[i] ?? rule.actions[0])} <small>(${scope})</small></label>`;
+    return `<label><input type="checkbox" name="rule_${index}" value="1"> ${escapeHtml(rule.spaceId)} · ${escapeHtml(appName)} · ${escapeHtml(actionLabel)} <small>(${scope})</small></label>`;
   }).join('');
 }
 
@@ -757,12 +759,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
     if (!path.startsWith('/auth/') && !path.startsWith('/oauth/') && !path.startsWith('/api/business/management/') && !path.startsWith('/api/business/web-resource-access/') && !['/api/business/web-access', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'].includes(path)) return false;
     try {
       if (path.startsWith('/api/business/web-resource-access/')) {
-        const resourceRoutes = {
-          '/api/business/web-resource-access/knowledge/legacy-library': { appId: 'knowledge', webAppId: 'knowledge', resourceId: 'legacy-library' },
-          '/api/business/web-resource-access/slides/legacy-decks': { appId: 'slides', webAppId: 'lattice-slides', resourceId: 'legacy-decks' },
-          '/api/business/web-resource-access/slides/native-render': { appId: 'slides', webAppId: 'lattice-slides', resourceId: 'legacy-decks', actions: ['read', 'render'] },
-          '/api/business/web-resource-access/tingproof/native-projects': { appId: 'tingproof', webAppId: 'tingproof', resourceId: 'native-projects', allSpaces: true },
-        };
+        const resourceRoutes = Object.fromEntries(store.registry.apps.flatMap(app => Object.entries(app.integration.web.nativePolicies || {}).map(([policyId, policy]) => [policy.legacyEndpoint || `/api/business/web-resource-access/${store.registry.businessId(app.id)}/${policyId}`, { ...policy, appId: store.registry.businessId(app.id), webAppId: app.id, resourceId: policy.resource }])));
         const target = resourceRoutes[path];
         if (!target || webGateway?.enabled !== true) fail('Resource access route was not found.', 404, 'NOT_FOUND');
         if (request.method !== 'GET') { send(response, 405, { code: 'METHOD_NOT_ALLOWED' }, undefined, { Allow: 'GET' }); return true; }
@@ -775,7 +772,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         let expiresAt = 0;
         if (target.allSpaces) {
           const spaces = apps[target.appId]?.spaces || [];
-          const actions = ['read', 'assign'];
+          const actions = target.actions;
           const rules = store.availableRules(session.user.id, { [target.appId]: actions });
           if (!spaces.length) fail('Native authoring access is not allowed.', 403, 'FORBIDDEN');
           expiresAt = Math.min(session.expiresAt, web.permissionsExpireAt ?? Infinity);
@@ -871,9 +868,9 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
           store.revokeGrantSpace(targetId, spaceId); audit(targetId); send(response, 200, { ok: true });
         } else fail('Management route or method was not found.', 404, 'NOT_FOUND');
       } else if (path === '/.well-known/oauth-authorization-server' && request.method === 'GET') {
-        send(response, 200, { issuer: store.issuer, authorization_endpoint: `${store.issuer}/oauth/authorize`, token_endpoint: `${store.issuer}/oauth/token`, registration_endpoint: `${store.issuer}/oauth/register`, revocation_endpoint: `${store.issuer}/oauth/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code', 'refresh_token'], code_challenge_methods_supported: ['S256'], token_endpoint_auth_methods_supported: ['none'], scopes_supported: Object.keys(BUSINESS_SCOPES), authorization_response_iss_parameter_supported: true });
+        send(response, 200, { issuer: store.issuer, authorization_endpoint: `${store.issuer}/oauth/authorize`, token_endpoint: `${store.issuer}/oauth/token`, registration_endpoint: `${store.issuer}/oauth/register`, revocation_endpoint: `${store.issuer}/oauth/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code', 'refresh_token'], code_challenge_methods_supported: ['S256'], token_endpoint_auth_methods_supported: ['none'], scopes_supported: Object.keys(store.scopes), authorization_response_iss_parameter_supported: true });
       } else if (path.startsWith('/.well-known/oauth-protected-resource') && request.method === 'GET') {
-        send(response, 200, { resource: store.resource, authorization_servers: [store.issuer], bearer_methods_supported: ['header'], scopes_supported: Object.keys(BUSINESS_SCOPES), resource_name: 'Praxis business tools' });
+        send(response, 200, { resource: store.resource, authorization_servers: [store.issuer], bearer_methods_supported: ['header'], scopes_supported: Object.keys(store.scopes), resource_name: 'Praxis business tools' });
       } else if (path === '/oauth/register' && request.method === 'POST') {
         const remote = request.socket?.remoteAddress ?? 'unknown';
         const attempts = registrations.get(remote) ?? { count: 0, reset: store.clock() + 3600000 };
@@ -918,7 +915,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         if (session.clientId === 'praxis-browser' && (store.isPlatformAdmin(session.user.id) || store.webAccessBoundary.enabled)) { send(response, 303, '', 'text/plain', { Location: target }); return true; }
         const rules = store.availableRules(session.user.id), consent = store.createConsent(parseCookie(request), rules, `praxis-browser:${target}`);
         if (!rules.length) { send(response, 200, renderPage('Agent access', '智能体授权', `<p>${translate('There are no available business actions to authorize. App access and agent permissions are granted separately.', '目前没有可授权的业务操作。应用访问权限不会自动产生智能体操作能力。')}</p><a href="/">${translate('Back to workbench', '返回工作台')}</a>`), 'text/html; charset=utf-8'); return true; }
-        send(response, 200, renderPage('Authorize the workbench', '授权工作台', `<p>${translate('Choose the actions this workbench can perform. This grant lasts seven days and can be revoked at any time.', '选择本次工作台可以操作的范围，授权有效期为七天。可随时撤销。')}</p><form method="post" action="/auth/delegate"><input type="hidden" name="return_to" value="${escapeHtml(target)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}">${choices(rules, language)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`), 'text/html; charset=utf-8');
+        send(response, 200, renderPage('Authorize the workbench', '授权工作台', `<p>${translate('Choose the actions this workbench can perform. This grant lasts seven days and can be revoked at any time.', '选择本次工作台可以操作的范围，授权有效期为七天。可随时撤销。')}</p><form method="post" action="/auth/delegate"><input type="hidden" name="return_to" value="${escapeHtml(target)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}">${choices(rules, language, store.registry)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`), 'text/html; charset=utf-8');
       } else if (path === '/auth/delegate' && request.method === 'POST') {
         requireOrigin(request, store);
         const input = await readBody(request), token = parseCookie(request);
@@ -948,7 +945,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         if (request.method === 'GET') {
           if (!available.length) { send(response, 200, renderPage('No actions available', '暂无可授权操作', `<p>${escapeHtml(oauth.clientName)}${translate(' requested actions that are unavailable for your account.', ' 请求的操作没有与你当前权限及已接入的业务能力相交。')}</p><p>${translate('App access and agent permissions are granted separately.', '应用访问权限不会自动产生智能体操作能力。')}</p><a href="/">${translate('Back to workbench', '返回工作台')}</a>`), 'text/html; charset=utf-8'); return true; }
           const consent = store.createConsent(parseCookie(request), available, `${url.pathname}${url.search}`);
-          send(response, 200, renderPage('Authorize external agent', '授权外部智能体', `<p><strong>${escapeHtml(oauth.clientName)}</strong>${translate(' is requesting access to act on your behalf. Select the allowed actions. This grant can be revoked at any time during its seven-day term.', ' 请求代表你操作以下业务。请选择获准范围，七天内可随时撤销。')}</p><form method="post" action="${escapeHtml(`${url.pathname}${url.search}`)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}">${choices(available, language)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`), 'text/html; charset=utf-8');
+          send(response, 200, renderPage('Authorize external agent', '授权外部智能体', `<p><strong>${escapeHtml(oauth.clientName)}</strong>${translate(' is requesting access to act on your behalf. Select the allowed actions. This grant can be revoked at any time during its seven-day term.', ' 请求代表你操作以下业务。请选择获准范围，七天内可随时撤销。')}</p><form method="post" action="${escapeHtml(`${url.pathname}${url.search}`)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}">${choices(available, language, store.registry)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`), 'text/html; charset=utf-8');
         } else {
           requireOrigin(request, store);
           const input = await readBody(request);

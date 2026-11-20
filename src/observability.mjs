@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_APP_REGISTRY } from './default-app-registry.mjs';
 
 const DAY = 86400000, APPLICATION_ID = 0x50584f42;
 const workspace = resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -15,39 +16,31 @@ export const OBSERVATION_SCHEMA = Object.freeze({
   source: ['http', 'mcp', 'browser', 'system'],
   result: ['ok', 'invalid', 'unsupported', 'unauthenticated', 'forbidden', 'conflict', 'unavailable', 'outcome_unknown', 'cancelled'],
   reason_code: ['NONE', 'INVALID_INPUT', 'UNKNOWN_ROUTE', 'UNKNOWN_OPERATION', 'UNKNOWN_TOOL', 'UNSUPPORTED_CAPABILITY', 'UNAUTHENTICATED', 'FORBIDDEN', 'CONFLICT', 'APP_UNAVAILABLE', 'OUTCOME_UNKNOWN', 'REQUEST_FAILED', 'CLIENT_REPORTED', 'METHOD_NOT_ALLOWED', 'REQUEST_TOO_LARGE', 'RATE_LIMITED', 'ORIGIN_REJECTED', 'HOST_REJECTED', 'SDK_VALIDATION', 'STREAM_OPEN'],
-  app_id: ['reminder', 'knowledge', 'lattice-slides', 'travel', 'tingproof', 'memo', 'projects', 'finance', 'intelligence', 'polaris', 'calendar', 'matrix-reader', 'other'],
+  app_id: [...DEFAULT_APP_REGISTRY.apps.map(app => app.id), 'other'],
   capability: ['read', 'create', 'update', 'complete', 'delete', 'search', 'share', 'import', 'export', 'stats', 'schedule', 'other'],
 });
-const pick = (key, value, fallback) => OBSERVATION_SCHEMA[key].includes(value) ? value : fallback;
-export function canonicalizeObservation(fields) {
+const pick = (key, value, fallback, registry = DEFAULT_APP_REGISTRY) => (key === 'app_id' ? value === 'other' || Boolean(registry.getApp(value)) : OBSERVATION_SCHEMA[key].includes(value)) ? value : fallback;
+export function canonicalizeObservation(fields, registry = DEFAULT_APP_REGISTRY) {
   if (!fields || typeof fields !== 'object' || Array.isArray(fields) || !OBSERVATION_SCHEMA.event_name.includes(fields.event_name)) return null;
   if (fields.duration_ms !== undefined && (!Number.isSafeInteger(fields.duration_ms) || fields.duration_ms < 0 || fields.duration_ms > DAY)) return null;
   return {
     event_name: fields.event_name, route_id: pick('route_id', fields.route_id, 'other'),
     method: pick('method', fields.method, 'OTHER'), source: pick('source', fields.source, 'system'),
     result: pick('result', fields.result, 'invalid'), reason_code: pick('reason_code', fields.reason_code, 'INVALID_INPUT'),
-    app_id: pick('app_id', fields.app_id, 'other'), capability: pick('capability', fields.capability, 'other'),
+    app_id: pick('app_id', fields.app_id, 'other', registry), capability: pick('capability', fields.capability, 'other'),
     duration_ms: fields.duration_ms ?? null,
   };
 }
 
-const operations = Object.freeze({ list_topics: 'read', read_topic: 'read', set_guide: 'update', archive_guide: 'update', list: 'read', list_projects: 'read', find_references: 'read', list_libraries: 'read', read_library: 'read', create_library: 'create', set_collection: 'update', add_source: 'update', capture_project: 'update', read_source: 'read', set_entry: 'update', replace_document_text: 'update', insert_document_text: 'update', delete_document_text: 'update', import_paper_statistics: 'update', import_document: 'update', read_document: 'read', search_evidence: 'search', read_entry: 'read', search: 'search', read_project: 'read', create_project: 'create', update_project: 'update', set_work_item: 'update', set_reference: 'update', list_assignments: 'read', get_assignment: 'read', list_itineraries: 'read', read_itinerary: 'read', update_place_details: 'update', upsert_place: 'update', set_day_plan: 'update', set_budget_item: 'update', search_places: 'search', get_place: 'read', plan_route: 'read', query_travel_services: 'read', events: 'read', add: 'create', record: 'create', create_assignment: 'create', submit_corrections: 'update', revoke_assignment: 'delete' });
-export function classifyCapability(appId, operation) {
-  if (appId === 'slides') {
-    const mapping = { get_capabilities: 'read', get_media_catalog: 'read', get_template: 'read', get_slot_guidance: 'read', list_decks: 'read', read_deck: 'read', create_deck: 'create', apply_edits: 'update', list_assets: 'read', create_upload: 'create', write_upload_chunk: 'update', finish_upload: 'update', import_asset: 'create', remove_asset: 'delete', preview: 'read', check: 'read', validate: 'read', lint: 'read', budget: 'read', prepare_audio: 'create', render_video: 'create', review: 'create', export: 'read', get_job: 'read', cancel_job: 'update', retry_job: 'create', get_artifact: 'read', list_revisions: 'read', restore_revision: 'update', set_content_lock: 'update', archive_deck: 'delete', get_links: 'read', events: 'read' };
-    return { app_id: 'lattice-slides', capability: mapping[operation] || 'other' };
-  }
-  return { app_id: pick('app_id', appId, 'other'), capability: typeof operation === 'string' && Object.hasOwn(operations, operation) ? operations[operation] : pick('capability', operation, 'other') };
+export function classifyCapability(appId, operation, registry = DEFAULT_APP_REGISTRY) {
+  const business = registry.getBusiness(appId) || registry.getBusiness(registry.businessId(appId));
+  const definition = business?.operations?.[operation];
+  const capability = definition?.capability || definition?.action || operation;
+  return { app_id: pick('app_id', registry.webId(appId), 'other', registry), capability: pick('capability', capability, 'other') };
 }
-export function classifyTool(name) {
-  if (typeof name === 'string' && name.startsWith('slides_')) return classifyCapability('slides', name.slice('slides_'.length));
-  if (name === 'travel_search_services') return classifyCapability('travel', 'query_travel_services');
-  for (const app of OBSERVATION_SCHEMA.app_id.filter(value => value !== 'other')) {
-    for (const operation of [...Object.keys(operations), ...OBSERVATION_SCHEMA.capability.filter(value => value !== 'other')]) {
-      if (name === `${app}_${operation}`) return classifyCapability(app, operation);
-    }
-  }
-  return { app_id: 'other', capability: 'other' };
+export function classifyTool(name, registry = DEFAULT_APP_REGISTRY) {
+  const tool = registry.tools.find(tool => tool.name === name);
+  return tool ? classifyCapability(tool.appId, tool.operation, registry) : { app_id: 'other', capability: 'other' };
 }
 export function classifyOutcome(status, code) {
   if (code === 'OUTCOME_UNKNOWN' || code === 'AUTHORIZATION_CHANGED_AFTER_COMMIT') return { result: 'outcome_unknown', reason_code: 'OUTCOME_UNKNOWN' };
@@ -61,12 +54,12 @@ export function classifyOutcome(status, code) {
   if (status >= 400) return { result: 'invalid', reason_code: 'INVALID_INPUT' };
   return { result: 'ok', reason_code: 'NONE' };
 }
-export function routeId(path, surface = 'praxis') {
+export function routeId(path, surface = 'praxis', registry = DEFAULT_APP_REGISTRY) {
   if (path === '/health') return 'health';
   if (['/api/platform/status', '/api/platform/observations', '/api/business/console/status', '/api/business/console/observations'].includes(path)) return 'platform_status';
   if (surface === 'business') {
-    if (['/', '/business', '/business/', '/business/reminder/', '/business/tingproof/'].includes(path)) return 'business_ui';
-    if (['/reminder.js', '/tingproof.js', '/tingproof.css', '/app-transport.js', '/reminder-view.js', '/reminder-view-model.js', '/reminder-view.css'].includes(path)) return 'business_static';
+    if (['/', '/business', '/business/'].includes(path) || registry.apps.some(app => app.integration.web.corePages?.some(entry => entry.path === path))) return 'business_ui';
+    if (path === '/app-transport.js' || registry.apps.some(app => app.integration.web.coreAssets?.some(entry => entry.path === path))) return 'business_static';
     if (path === '/mcp') return 'mcp';
     if (path === '/api/business/invoke') return 'business_invoke';
     if (path === '/api/business/catalog') return 'business_catalog';
@@ -99,8 +92,8 @@ function safeFile(file, { readOnly = false } = {}) {
 }
 
 export class ObservationStore {
-  constructor({ file, clock = () => Date.now(), readOnly = false } = {}) {
-    this.clock = clock; this.state = file ? 'unavailable' : 'disabled'; this.db = null; this.readOnly = readOnly;
+  constructor({ file, clock = () => Date.now(), readOnly = false, registry = DEFAULT_APP_REGISTRY } = {}) {
+    this.registry = registry; this.clock = clock; this.state = file ? 'unavailable' : 'disabled'; this.db = null; this.readOnly = readOnly;
     if (!file) return;
     try {
       const size = safeFile(file, { readOnly });
@@ -129,7 +122,7 @@ export class ObservationStore {
     } catch { try { this.db?.close(); } catch {} this.db = null; }
   }
   record(fields) {
-    const value = canonicalizeObservation(fields);
+    const value = canonicalizeObservation(fields, this.registry);
     if (!this.db || this.readOnly || !value) return false;
     try {
       const now = this.clock();
@@ -176,11 +169,11 @@ export class ObservationStore {
   close() { try { this.db?.close(); } catch {} this.db = null; }
 }
 
-export function browserObservation(body) {
+export function browserObservation(body, registry = DEFAULT_APP_REGISTRY) {
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !['event_name', 'duration_ms', 'app_id'].includes(key)) || !['page_load', 'registry_load', 'app_open', 'page_error'].includes(body.event_name)) return null;
-  if (body.app_id !== undefined && !OBSERVATION_SCHEMA.app_id.includes(body.app_id)) return null;
+  if (body.app_id !== undefined && !registry.getApp(body.app_id) && body.app_id !== 'other') return null;
   if (body.duration_ms !== undefined && (!Number.isSafeInteger(body.duration_ms) || body.duration_ms < 0 || body.duration_ms > 600000)) return null;
-  return canonicalizeObservation({ ...body, route_id: 'home', method: 'POST', source: 'browser', result: body.event_name === 'page_error' ? 'invalid' : 'ok', reason_code: 'CLIENT_REPORTED' });
+  return canonicalizeObservation({ ...body, route_id: 'home', method: 'POST', source: 'browser', result: body.event_name === 'page_error' ? 'invalid' : 'ok', reason_code: 'CLIENT_REPORTED' }, registry);
 }
 
 export function recordObservation(store, fields) { try { return store?.record(fields) === true; } catch { return false; } }
@@ -214,7 +207,7 @@ export function createBrowserIngress({ store, clock = () => Date.now(), limit = 
         const timer = setTimeout(error, 2000);
         request.on('data', data); request.once('end', end); request.once('error', error); request.once('aborted', error); request.once('close', error);
       });
-      const value = browserObservation(JSON.parse(raw));
+      const value = browserObservation(JSON.parse(raw), store?.registry);
       if (!value) return reply(400);
       recordObservation(store, value); return reply(204);
     } catch { return reply(400); }
@@ -223,7 +216,7 @@ export function createBrowserIngress({ store, clock = () => Date.now(), limit = 
 
 export function observeResponse(store, request, response, surface = 'praxis') {
   const started = performance.now(); let route = 'other', emitted = false;
-  try { route = routeId(new URL(request.url, 'http://observation.invalid').pathname, surface); } catch {}
+  try { route = routeId(new URL(request.url, 'http://observation.invalid').pathname, surface, store?.registry); } catch {}
   const source = ['health', 'business_catalog', 'business_events', 'browser_ingress', 'platform_status'].includes(route) ? 'system' : 'http';
   const emit = (aborted = false) => { if (emitted) return; emitted = true; recordObservation(store, { event_name: route === 'mcp' ? 'mcp_protocol' : 'http_request', route_id: route, method: request.method, source, duration_ms: Math.max(0, Math.round(performance.now() - started)), ...(aborted ? { result: 'cancelled', reason_code: 'REQUEST_FAILED' } : classifyOutcome(response.statusCode)) }); };
   response.once('finish', () => emit());

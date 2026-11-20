@@ -1,12 +1,12 @@
 import { t } from './i18n.js';
-const appIds = new Set(['reminder', 'travel', 'knowledge', 'memo', 'lattice-slides', 'tingproof', 'projects', 'finance', 'intelligence', 'polaris', 'calendar', 'matrix-reader', 'letters', 'profiles']);
+const appIdentity = value => typeof value === 'string' && /^[a-z][a-z0-9-]{0,79}$/.test(value);
 const states = new Set(['ready', 'authorization-required', 'login-required']);
 
 function mountNavigation() {
   const source = new URL(import.meta.url);
   if (source.origin !== location.origin || source.pathname !== '/praxis-nav.js' || document.querySelector('#praxis-system-navigation')) return;
   const marker = [...document.querySelectorAll('script[data-praxis-platform-nav]')].find(node => node.type === 'module' && node.src === source.href);
-  if (!marker || !['app', 'business', 'admin', 'prds'].includes(marker.dataset.mode) || (['admin', 'prds'].includes(marker.dataset.mode) ? marker.dataset.appId !== undefined : !appIds.has(marker.dataset.appId))) return;
+  if (!marker || !['app', 'business', 'admin', 'prds'].includes(marker.dataset.mode) || (['admin', 'prds'].includes(marker.dataset.mode) ? marker.dataset.appId !== undefined : !appIdentity(marker.dataset.appId))) return;
   const host = document.createElement('praxis-system-navigation'); host.id = 'praxis-system-navigation'; host.dataset.placement = 'fixed'; host.hidden = true;
   const root = host.attachShadow({ mode: 'open' });
   const stylesheet = document.createElement('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = new URL('/praxis-nav.css', source).href;

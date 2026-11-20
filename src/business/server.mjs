@@ -1,11 +1,10 @@
-import { MEMO_RECORD_OPERATIONS } from './memo-schema.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { AuthStore, createAuthHandler, credentialFromRequest } from './auth.mjs';
-import { BusinessBridge, businessError, OPERATIONS } from './bridge.mjs';
+import { BusinessBridge, businessError } from './bridge.mjs';
 import { BusinessEvents } from './events.mjs';
 import { handleMcp, recordMcpIngressFailure } from './mcp.mjs';
 import { loadBusinessConfig } from './config.mjs';
@@ -16,8 +15,10 @@ import { createConsoleHandler, requireConsoleAdmin } from './console.mjs';
 import { createAdminHandler, createAccountHandler, requireAccountSession } from './admin.mjs';
 import { createMcpManagementHandler } from './mcp-management.mjs';
 import { PUBLIC_GUIDANCE_MCP_PATH, PUBLIC_GUIDANCE_TOOLS } from '../public-mcp-registry.mjs';
-import { createSlidesWebHandler } from './slides-web.mjs';
-import { createSlidesJobAuthorizationHandler } from './slides-job-authorization.mjs';
+import { createAppHttpHandler } from './app-http.mjs';
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
+import { readAppIntegrationFile } from '../app-integrations.mjs';
+import { createAppJobAuthorizationHandler } from './app-job-authorization.mjs';
 import { AppProviderRegistry } from './app-providers.mjs';
 import { AppCards, canReadAppCards } from './app-cards.mjs';
 import { CardPreferences } from './card-preferences.mjs';
@@ -26,8 +27,8 @@ import { readDataInventory } from './data-inventory.mjs';
 import { createRuntimeTraceReader } from './runtime-traces.mjs';
 
 const ADMIN_ASSETS = Object.freeze({ '/app-providers.js': ['app-providers.js', 'application/javascript'], '/admin.js': ['admin.js', 'application/javascript'], '/admin.css': ['admin.css', 'text/css'], '/admin-mcp.js': ['admin-mcp.js', 'application/javascript'], '/admin-data.js': ['admin-data.js', 'application/javascript'], '/admin-mcp.css': ['admin-mcp.css', 'text/css'], '/platform.js': ['platform.js', 'application/javascript'], '/platform.css': ['platform.css', 'text/css'], '/platform-charts.js': ['platform-charts.js', 'application/javascript'], '/vendor/chartjs-4.6.1.umd.min.js': [new URL('../../node_modules/chart.js/dist/chart.umd.min.js', import.meta.url), 'application/javascript'] });
-const APP_PAGES = Object.freeze({ '/business/reminder/': 'reminder.html', '/business/tingproof/': 'tingproof.html' });
-const APP_ASSETS = Object.freeze({ '/i18n.js': ['i18n.js', 'application/javascript'], '/reminder.js': ['reminder.js', 'application/javascript'], '/tingproof.js': ['tingproof.js', 'application/javascript'], '/tingproof.css': ['tingproof.css', 'text/css'], '/app-transport.js': ['app-transport.js', 'application/javascript'], '/reminder-view.js': ['reminder-view.js', 'application/javascript'], '/reminder-view-model.js': ['reminder-view-model.js', 'application/javascript'], '/reminder-view.css': ['reminder-view.css', 'text/css'] });
+const APP_ASSETS = Object.freeze({ '/i18n.js': ['i18n.js','application/javascript'], '/app-transport.js':['app-transport.js','application/javascript'], '/app-registry.js':['app-registry.js','application/javascript'] });
+
 
 export async function readJson(request, maximumBytes = 1024 * 1024) {
   let size = 0; const chunks = [];
@@ -37,12 +38,13 @@ export async function readJson(request, maximumBytes = 1024 * 1024) {
 function json(response, status, result, headers = {}) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers }); response.end(JSON.stringify(result));
 }
-export function createBusinessServer({ config, auth = new AuthStore({ file: config.database, issuer: config.issuer }), events = new BusinessEvents(config.eventsDatabase), fetchImpl, consoleFetchImpl, pollMs = 1000, version = packageMetadata.version }) {
+export function createBusinessServer({ config, auth: authOption, registry = authOption?.registry || config.appRegistry || DEFAULT_APP_REGISTRY, events = new BusinessEvents(config.eventsDatabase), fetchImpl, consoleFetchImpl, pollMs = 1000, version = packageMetadata.version }) {
+  const auth = authOption || new AuthStore({ file: config.database, issuer: config.issuer, registry });
   const gate = new PolicyGate();
-  const observations = new ObservationStore({ file: config.observationsFile });
-  const bridge = new BusinessBridge({ auth, events, apps: config.apps, fetchImpl, gate, observeAdapter: value => recordObservation(observations, { event_name: 'adapter_request', route_id: 'business_invoke', method: 'POST', source: value.system ? 'system' : 'http', ...classifyCapability(value.appId, value.operation), ...classifyOutcome(value.status, value.code), duration_ms: value.durationMs }) });
-  const providers = new AppProviderRegistry({ root: config.providerRoot });
-  const appCards = new AppCards({ auth, bridge, config, registry: providers, fetchImpl });
+  const observations = new ObservationStore({ file: config.observationsFile, registry });
+  const bridge = new BusinessBridge({ auth, events, apps: config.apps, fetchImpl, gate, registry, observeAdapter: value => recordObservation(observations, { event_name: 'adapter_request', route_id: 'business_invoke', method: 'POST', source: value.system ? 'system' : 'http', ...classifyCapability(value.appId, value.operation, registry), ...classifyOutcome(value.status, value.code), duration_ms: value.durationMs }) });
+  const providers = new AppProviderRegistry({ root: config.providerRoot || registry.root });
+  const appCards = new AppCards({ auth, bridge, config, registry: providers, integrations: registry, fetchImpl });
   const cardPreferences = new CardPreferences({ db: auth.db });
   const appInventory = async file => {
     let bindings; try { bindings = await readDataInventory(file); } catch { bindings = { apps: [] }; }
@@ -56,10 +58,12 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
     return providers.inventory({ bindings, workspaceRoot: bindings.workspaceRoot, resolveDataSource: createDataSourceResolver({ config: { ...config, appProviders }, root: providers.root }) });
   };
   const handleAuth = createAuthHandler({ store: auth, issuer: config.issuer, webGateway: config.webGateway, apps: config.apps });
-  const handleConsole = createConsoleHandler({ auth, config, events, observations, fetchImpl: consoleFetchImpl, readInventory: appInventory, getRuntimeTraces: createRuntimeTraceReader({ auth, config, registry: providers, fetchImpl }) });
+  const handleConsole = createConsoleHandler({ auth, config, events, observations, registry, fetchImpl: consoleFetchImpl, readInventory: appInventory, getRuntimeTraces: createRuntimeTraceReader({ auth, config, registry: providers, fetchImpl }) });
   const handleAdmin = createAdminHandler({ auth });
-  const handleSlidesWeb = createSlidesWebHandler({ auth, bridge });
-  const handleSlidesJobAuthorization = createSlidesJobAuthorizationHandler({ auth, config });
+  const handleAppHttp = createAppHttpHandler({ auth, bridge, config, registry, fetchImpl });
+  const handleAppJobAuthorization = createAppJobAuthorizationHandler({ auth, config, registry });
+  const appPages = registry.apps.flatMap(app => (app.integration.web.corePages || []).map(page => ({appId: app.id, ...page})));
+  const appAssets = registry.apps.flatMap(app => (app.integration.web.coreAssets || []).map(asset => ({appId: app.id, ...asset})));
   const handleMcpManagement = createMcpManagementHandler({ auth, config, observations, guideRegistry: { path: PUBLIC_GUIDANCE_MCP_PATH, tools: PUBLIC_GUIDANCE_TOOLS }, guideEnabled: config.webGateway?.enabled === true });
   const handleAccount = createAccountHandler({ auth });
   const streams = new Set(), collectionErrors = new Set(), pendingRequests = new Set();
@@ -109,12 +113,17 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
       const monitorAuth = request.method === 'GET' && ['/auth/session', '/api/business/web-access'].includes(url.pathname);
       const monitorAccount = request.method === 'GET' && url.pathname === '/api/business/account/session';
       const monitorConsole = url.pathname.startsWith('/api/business/console/');
-      const monitorStatic = ['/admin', '/admin/'].includes(url.pathname) || Object.hasOwn(ADMIN_ASSETS, url.pathname);
+      const monitorStatic = ['/admin', '/admin/'].includes(url.pathname) || Object.hasOwn(ADMIN_ASSETS, url.pathname) || Object.hasOwn(APP_ASSETS, url.pathname);
       if (monitorAuth || monitorAccount || monitorConsole || monitorStatic) {
         if (origin && origin !== config.issuer && !(config.allowedOrigins || []).includes(origin)) throw businessError(403, 'ORIGIN_REJECTED');
         if (monitorAuth && await handleAuth(request, response)) return;
         if (monitorAccount && await handleAccount(request, response)) return;
         if (monitorConsole && await handleConsole(request, response)) return;
+        const sharedAsset=APP_ASSETS[url.pathname];
+        if(sharedAsset&&['GET','HEAD'].includes(request.method)){
+          const bytes=await readFile(new URL('../../public/'+sharedAsset[0],import.meta.url));
+          response.writeHead(200,{'Content-Type':sharedAsset[1]+'; charset=utf-8','Content-Length':bytes.length,'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});response.end(request.method==='HEAD'?undefined:bytes);return;
+        }
         if (['/admin', '/admin/'].includes(url.pathname) || Object.hasOwn(ADMIN_ASSETS, url.pathname)) {
           const shared = ['/admin', '/admin/', '/admin.js', '/admin.css'].includes(url.pathname);
           const authorizePage = () => shared ? requireAccountSession(request, { auth }) : requireConsoleAdmin(request, { auth, config });
@@ -133,23 +142,35 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
           response.end(request.method === 'HEAD' ? undefined : content); return;
         }
       }
+      if(url.pathname==='/api/apps'&&['GET','HEAD'].includes(request.method)){
+        requireAccountSession(request,{auth});const access=auth.getWebAccess(credentialFromRequest(request));
+        const facts = registry.publicFacts();
+        const apps = registry.apps.filter(app => canReadAppCards(access, app.id, config, registry)).map(app => ({ ...facts.find(fact => fact.id === app.id), url: new URL('/apps/' + registry.getWeb(app.id).slug + app.path, config.issuer).href }));
+        return json(response,200,{apps},{Vary:'Cookie'});
+      }
       if (await gate.run(() => handleAuth(request, response))) return;
       if (origin && origin !== config.issuer && !(config.allowedOrigins || []).includes(origin)) throw businessError(403, 'ORIGIN_REJECTED');
-      if (await handleSlidesJobAuthorization(request, response)) return;
-      if (await handleSlidesWeb(request, response)) return;
+      if (await handleAppJobAuthorization(request, response)) return;
+      if (await handleAppHttp(request, response)) return;
       if (await gate.run(() => handleAccount(request, response))) return;
       if (await gate.run(() => handleMcpManagement(request, response))) return;
       if (await gate.run(() => handleAdmin(request, response))) return;
       if (url.pathname === '/health' && request.method === 'GET') return json(response, collectionErrors.size ? 503 : 200, { status: collectionErrors.size ? 'degraded' : 'ok', version });
       if (['/', '/business', '/business/', '/business.html'].includes(url.pathname)) {
         if (!['GET', 'HEAD'].includes(request.method)) return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET, HEAD' });
-        response.writeHead(303, { Location: config.webGateway?.enabled === true ? `${config.issuer}/` : '/business/reminder/', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' }); response.end(); return;
+        response.writeHead(303, { Location: config.webGateway?.enabled === true ? `${config.issuer}/` : (appPages[0]?.path || '/admin/'), 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' }); response.end(); return;
       }
-      if (Object.hasOwn(APP_PAGES, url.pathname)) {
-        if (!['GET', 'HEAD'].includes(request.method)) return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET, HEAD' });
-        const content = await readFile(new URL(`../../public/${APP_PAGES[url.pathname]}`, import.meta.url));
-        response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' });
-        return response.end(request.method === 'HEAD' ? undefined : content);
+      const appPage=appPages.find(page=>page.path===url.pathname), appAsset=appAssets.find(asset=>asset.path===url.pathname);
+      if(appPage||appAsset){
+        if(!['GET','HEAD'].includes(request.method))return json(response,405,{code:'METHOD_NOT_ALLOWED'},{Allow:'GET, HEAD'});
+        const binding=appPage||appAsset;
+        const authorizeAsset = () => { requireAccountSession(request, { auth }); if (!canReadAppCards(auth.getWebAccess(credentialFromRequest(request)), binding.appId, config, registry)) throw businessError(403, 'FORBIDDEN'); };
+        authorizeAsset();
+        const source=await readAppIntegrationFile(registry,binding.appId,binding.file,2*1024*1024);
+        const content=Buffer.isBuffer(source.content)?source.content:Buffer.from(source.content);
+        authorizeAsset();
+        response.writeHead(200,{'Content-Type':(appPage?'text/html':appAsset.type)+'; charset=utf-8','Content-Length':content.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...(appPage?{'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'self'; object-src 'none'"}:{})});
+        response.end(request.method==='HEAD'?undefined:content);return;
       }
       const asset = Object.hasOwn(APP_ASSETS, url.pathname) && APP_ASSETS[url.pathname];
       if (asset && ['GET', 'HEAD'].includes(request.method)) { const content = await readFile(new URL(`../../public/${asset[0]}`, import.meta.url)); response.writeHead(200, { 'Content-Type': `${asset[1]}; charset=utf-8`, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' }); return response.end(request.method === 'HEAD' ? undefined : content); }
@@ -163,11 +184,12 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
         const input = await readJson(request, 16 * 1024);
         const appId = typeof input?.cardId === 'string' ? input.cardId.split(':')[0] : '';
         const catalog = await providers.catalog();
+        const cardSource = (await providers.providers()).find(provider => provider.app.id === appId);
         const value = await gate.run(() => auth.withPolicyLease(() => {
           const current = requireAccountSession(request, { auth });
           auth.requireRequestCsrf(request);
           const access = auth.getWebAccess(token);
-          if (!catalog.some(app => app.id === appId && app.id !== 'polaris') || input.state !== 'visible' && !canReadAppCards(access,appId,config)) throw businessError(403, 'FORBIDDEN');
+          if (!catalog.some(app => app.id === appId) || input.state !== 'visible' && (!cardSource?.descriptor?.cards.supported || !canReadAppCards(access,appId,config,registry))) throw businessError(403, 'FORBIDDEN');
           try { const data = cardPreferences.set(current.user.id, input); return { status: 200, data }; }
           catch (error) { if (error.status) return { status: error.status, data: { code: error.code, ...(error.current ? { current: error.current } : {}) } }; throw error; }
         }));
@@ -177,30 +199,39 @@ export function createBusinessServer({ config, auth = new AuthStore({ file: conf
         }
         return json(response, value.status, value.data, { Vary: 'Cookie' });
       }
-      if (['/api/business/workbench/projects', '/api/business/workbench/agenda', '/api/business/workbench/attention'].includes(url.pathname)) {
-        if (request.method !== 'GET') return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET' });
-        if (url.search) throw businessError(400, 'INVALID_REQUEST');
-        requireAccountSession(request, { auth });
-        const token = credentialFromRequest(request);
-        const source = url.pathname.split('/').at(-1);
-        const reads = { projects: 'workbenchProjects', agenda: 'workbenchAgenda', attention: 'workbenchAttention' };
-        const data = source === 'attention' ? await appCards.get(token) : await bridge[reads[source]](token);
-        return json(response, 200, data, { Vary: 'Cookie' });
+      const directoryApp=registry.apps.find(app=>app.integration.web.workbenchDirectory?.path===url.pathname);
+      if(directoryApp||['/api/business/workbench/agenda','/api/business/workbench/attention'].includes(url.pathname)){
+        if(request.method!=='GET')return json(response,405,{code:'METHOD_NOT_ALLOWED'},{Allow:'GET'});
+        if(url.search)throw businessError(400,'INVALID_REQUEST');
+        requireAccountSession(request,{auth});const token=credentialFromRequest(request);
+        let data;
+        if(directoryApp){
+          const descriptor=directoryApp.integration.web.workbenchDirectory,adapter=registry.businessId(directoryApp.id),web=registry.getWeb(directoryApp.id);
+          const value=await bridge.workbenchItems(token,adapter,descriptor.operation),entries=[];
+          for(const space of value.spaces){
+            const projected=descriptor.project(space.items,{spaceId:space.spaceId,nativePath:'/apps/'+web.slug+'/'});
+            if(!Array.isArray(projected)||projected.length>200)throw businessError(502,'INVALID_APP_RESPONSE');
+            for(const item of projected){if(item.appId!==directoryApp.id||typeof item.href!=='string'||/[\\\x00-\x20]/.test(item.href))throw businessError(502,'INVALID_APP_RESPONSE');const target=new URL(item.href,config.issuer);if(target.origin!==new URL(config.issuer).origin||!target.pathname.startsWith('/apps/'+web.slug+'/')||/%(?:2e|2f|5c)/i.test(target.pathname))throw businessError(502,'INVALID_APP_RESPONSE');entries.push(item);}
+          }
+          data={schemaVersion:1,appId:directoryApp.id,...value,entries};
+        }else data=url.pathname.endsWith('/attention')?await appCards.get(token):await bridge.workbenchAgenda(token);
+        return json(response,200,data,{Vary:'Cookie'});
       }
       if (url.pathname === '/api/business/catalog' && request.method === 'GET') return json(response, 200, { spaces: bridge.catalog(credentialFromRequest(request)) });
-      if (['/api/business/invoke', '/api/business/memo-records'].includes(url.pathname) && request.method === 'POST') {
+      const invokeAlias=registry.apps.flatMap(app=>(app.integration.business?.invokeAliases||[]).map(alias=>({adapterId:app.integration.business.adapterId,...alias}))).find(alias=>alias.path===url.pathname);
+      if ((url.pathname==='/api/business/invoke'||invokeAlias) && request.method === 'POST') {
         const started = performance.now(); let invocation, actorKnown = false;
-        const record = outcome => recordObservation(observations, { event_name: 'business_action', route_id: 'business_invoke', method: 'POST', source: 'http', ...classifyCapability(invocation?.appId, invocation?.operation), ...outcome, duration_ms: Math.max(0, Math.round(performance.now() - started)) });
+        const record = outcome => recordObservation(observations, { event_name: 'business_action', route_id: 'business_invoke', method: 'POST', source: 'http', ...classifyCapability(invocation?.appId, invocation?.operation, registry), ...outcome, duration_ms: Math.max(0, Math.round(performance.now() - started)) });
         try {
           auth.requireRequestCsrf(request);
           const token = credentialFromRequest(request);
           try { auth.authenticate(token); actorKnown = true; } catch {}
-          invocation = await readJson(request, (url.pathname === '/api/business/memo-records' ? 10 : 3) * 1024 * 1024);
-          if (url.pathname === '/api/business/memo-records' && (invocation?.appId !== 'memo' || invocation?.resourceId !== 'records' || !MEMO_RECORD_OPERATIONS.includes(invocation?.operation))) throw businessError(400, 'INVALID_REQUEST');
+          invocation = await readJson(request, invokeAlias?.maxRequestBytes || 3*1024*1024);
+          if (invokeAlias && (invocation?.appId !== invokeAlias.adapterId || !invokeAlias.operations.includes(invocation?.operation))) throw businessError(400, 'INVALID_REQUEST');
           const result = await bridge.invoke(token, invocation, { source: request.headers.authorization ? 'http' : 'web' });
           record(classifyOutcome(200)); return json(response, 200, result);
         } catch (error) {
-          const unknown = typeof invocation?.appId === 'string' && typeof invocation?.operation === 'string' && (!Object.hasOwn(OPERATIONS, invocation.appId) || !Object.hasOwn(OPERATIONS[invocation.appId], invocation.operation));
+          const unknown = typeof invocation?.appId === 'string' && typeof invocation?.operation === 'string' && (!Object.hasOwn(registry.operations, invocation.appId) || !Object.hasOwn(registry.operations[invocation.appId], invocation.operation));
           record(actorKnown && unknown && error.code === 'INVALID_REQUEST' ? { result: 'unsupported', reason_code: 'UNKNOWN_OPERATION' } : classifyOutcome(error.status || 500, error.code));
           throw error;
         }

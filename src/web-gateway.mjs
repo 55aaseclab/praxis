@@ -1,35 +1,17 @@
 import { request as httpRequest } from 'node:http';
-import { authorizeTravelShare } from './travel-share.mjs';
+import { DEFAULT_APP_REGISTRY } from './default-app-registry.mjs';
 import { collectNavigationBody, injectSystemNavigation, isNavigationHtml, navigationContext, navigationHeaders } from './system-navigation.mjs';
 import { fileURLToPath } from 'node:url';
+import { resolve, isAbsolute } from 'node:path';
 import { readApps, appIconEntry } from './apps.mjs';
 
-export const WEB_APPS = Object.freeze({
-  reminder: { slug: 'reminder', port: 4322 },
-  travel: { slug: 'travel', port: 4323 },
-  knowledge: { slug: 'knowledge', port: 14324 },
-  memo: { slug: 'memo', port: 4325 },
-  'lattice-slides': { slug: 'slides', port: 14666 },
-  tingproof: { slug: 'tingproof', port: 15173 },
-  projects: { slug: 'projects', port: 4327 },
-  finance: { slug: 'finance', port: 4329 },
-  intelligence: { slug: 'intelligence', port: 4330 },
-  polaris: { slug: 'polaris', port: 18787 },
-});
-const webAppIds = new Set([...Object.keys(WEB_APPS), 'matrix-reader', 'calendar']);
-const slugs = new Map(Object.entries(WEB_APPS).map(([id, value]) => [value.slug, id]));
-slugs.set('matrix-reader', 'matrix-reader');
-slugs.set('calendar', 'calendar');
-const personalApps = new Set(['letters', 'profiles']);
-for (const id of personalApps) slugs.set(id, id);
+export const WEB_APPS = Object.freeze(Object.fromEntries(DEFAULT_APP_REGISTRY.webApps.filter(app => app.kind === 'proxy').map(app => [app.id, { slug: app.slug, port: app.nativePort }])));
 const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
 const hopHeaders = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade']);
 const blockedParts = new Set(['node_modules', '@fs', '@id', '@vite', 'src', 'server']);
-// Polaris runs as the local operator. Only forward headers needed by its native HTTP client.
-const portalRequestHeaders = new Set(['accept', 'accept-encoding', 'accept-language', 'content-type', 'content-length', 'origin', 'range', 'if-range', 'if-none-match', 'if-modified-since', 'last-event-id', 'idempotency-key', 'x-polaris-expected-version']);
 const sessionPattern = /^praxis_business_session=[a-zA-Z0-9_-]{16,512}$/;
 const installAssets = new Set(['/manifest.webmanifest', '/praxis-180.png', '/praxis-192.png', '/praxis-512.png']);
-const desktopPaths = new Set(['/', '/index.html', '/api/apps', '/api/observations', '/app.js', '/identity.js', '/experience.js', '/install.js', '/styles.css', '/praxis.svg', '/praxis-nav.js', '/praxis-nav.css', '/i18n.js', '/attention.js', '/attention.css', '/app-providers.js', '/api/workbench/providers']);
+const desktopPaths = new Set(['/', '/index.html', '/api/apps', '/api/observations', '/app.js', '/identity.js', '/experience.js', '/install.js', '/styles.css', '/praxis.svg', '/praxis-nav.js', '/praxis-nav.css', '/i18n.js', '/attention.js', '/attention.css', '/app-providers.js', '/app-registry.js', '/api/workbench/providers']);
 const platformPaths = new Set(['/api/platform/status', '/api/platform/observations', '/api/platform/traces']);
 
 function fail(status, code) { return Object.assign(new Error('Gateway request rejected.'), { status, code }); }
@@ -74,44 +56,49 @@ function writeJson(response, status, value, extra = {}) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body), 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', Vary: 'Cookie', ...extra });
   response.end(body);
 }
-function coreRoute(pathname) {
-  return ['/business.html', '/reminder.js', '/tingproof.js', '/tingproof.css', '/app-transport.js', '/reminder-view.js', '/reminder-view-model.js', '/reminder-view.css', '/admin.js', '/admin.css', '/admin-mcp.js', '/admin-data.js', '/admin-mcp.css', '/platform.js', '/platform.css', '/platform-charts.js', '/vendor/chartjs-4.6.1.umd.min.js', '/admin', '/admin/'].includes(pathname) || pathname === '/mcp' || pathname === '/business' || pathname.startsWith('/business/') || pathname === '/api/business' || pathname.startsWith('/api/business/') || pathname === '/auth' || pathname.startsWith('/auth/') || pathname === '/oauth' || pathname.startsWith('/oauth/') || ['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'].includes(pathname);
+function coreRoute(pathname, registry = DEFAULT_APP_REGISTRY) {
+  return registry.apps.some(app=>[...(app.integration.web.coreAssets||[]),...(app.integration.web.corePages||[])].some(entry=>entry.path===pathname)) || ['/business.html', '/app-transport.js', '/app-registry.js', '/admin.js', '/admin.css', '/admin-mcp.js', '/admin-data.js', '/admin-mcp.css', '/platform.js', '/platform.css', '/platform-charts.js', '/vendor/chartjs-4.6.1.umd.min.js', '/admin', '/admin/'].includes(pathname) || pathname === '/mcp' || pathname === '/business' || pathname.startsWith('/business/') || pathname === '/api/business' || pathname.startsWith('/api/business/') || pathname === '/auth' || pathname.startsWith('/auth/') || pathname === '/oauth' || pathname.startsWith('/oauth/') || ['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'].includes(pathname);
 }
-function appRoute(pathname) {
-  const match = /^\/apps\/([a-z-]+)(\/.*)?$/.exec(pathname);
-  const id = match && slugs.get(match[1]);
+function appRoute(pathname, registry = DEFAULT_APP_REGISTRY) {
+  const match = /^\/apps\/([a-z][a-z0-9-]{0,79})(\/.*)?$/.exec(pathname);
+  const id = match && registry.webApps.find(app => app.slug === match[1])?.id;
   if (!id) return null;
   return { id, prefix: `/apps/${match[1]}`, pathname: match[2] || '/' };
 }
-export function knowledgeLegacyPath(pathname) {
-  return !['/', '/index.html', '/health', '/api/config', '/workspace-assets/app.js', '/workspace-assets/styles.css'].includes(pathname) && !/^\/k\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}\/[a-z0-9][a-z0-9-]{0,79}\/(?:[a-z0-9][a-z0-9-]{0,79}\/)?$/.test(pathname);
+export function canOpenApp(identity, id, registry = DEFAULT_APP_REGISTRY) {
+  const web = registry.getWeb(id);
+  if (!web) return false;
+  if (web.policy === 'document-owner') return identity.platformAdmin === true && (identity.documentOwners?.includes(id) || identity.documentOwner === true && !identity.documentOwners);
+  return web.policy === 'platform-admin' ? identity.platformAdmin === true : identity.apps.includes(id);
 }
-function tingproofPublicEntry(request, route, search) {
-  if (!['GET', 'HEAD'].includes(request.method)) return false;
-  if (/^\/assets\/(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:js|mjs|css|woff2?|ttf|svg|png|jpe?g|gif|webp|ico)$/.test(route.pathname)) return true;
-  if (!['/', '/index.html'].includes(route.pathname)) return false;
-  const parameters = new URLSearchParams(search), valid = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(value);
-  return parameters.getAll('assignment').length === 1 && parameters.getAll('space').length === 1 && valid(parameters.get('assignment')) && valid(parameters.get('space')) && [...parameters.keys()].every(key => ['assignment', 'space'].includes(key));
-}
-export function canOpenApp(identity, id) {
-  if (personalApps.has(id)) return identity.documentOwner === true;
-  return id === 'polaris' ? identity.platformAdmin === true : identity.apps.includes(id);
-}
-export function gatewayApps(apps, access, origin) {
-  return apps.filter(app => canOpenApp(access, app.id)).map(app => {
+export function gatewayApps(apps, access, origin, registry = DEFAULT_APP_REGISTRY) {
+  return apps.filter(app => canOpenApp(access, app.id, registry)).map(app => {
     const { id: appId, kind, name, description, icon, version } = app;
-    const slug = WEB_APPS[appId]?.slug ?? appId;
+    const web = registry.getWeb(appId), slug = web.slug;
     const url = new URL(`/apps/${slug}${app.path}`, origin);
-    return { id: appId, kind, name, description, icon, ...(version && { version }), ...(app.labels && { labels: app.labels }), ...(app.adminOnly === true ? { adminOnly: true } : {}), ...(app.launcher !== undefined ? { launcher: app.launcher } : {}), url: url.href };
+    return { ...registry.publicFacts().find(fact => fact.id === appId), id: appId, kind, name, description, icon, ...(version && { version }), ...(app.labels && { labels: app.labels }), ...(app.adminOnly === true ? { adminOnly: true } : {}), ...(app.launcher !== undefined ? { launcher: app.launcher } : {}), url: url.href, entry: publicEntry(registry, appId) };
   });
 }
 
-export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:4326', originHost = 'localhost', appTargets = {}, travelSharesFile, staticApps = {}, privateDocumentOwnerId, readAppCatalog = () => readApps(fileURLToPath(new URL('../', import.meta.url)), { publicUrlsFile: null }), requireTingproofNativeScope = false, timeoutMs = 3000, revalidateMs = 5000, clock = Date.now } = {}) {
+function publicEntry(registry, id) {
+  const web=registry.getWeb(id);if(!web)return undefined;
+  const directory=web.workbenchDirectory;
+  return {nativePath:`/apps/${web.slug}/`,policy:web.policy,kind:web.kind,legacyPaths:web.legacyPaths||[],
+    ...(registry.getApp(id)?.integration.business?{adapterId:registry.businessId(id)}:{}),
+    ...(directory?{workbenchDirectory:{path:directory.path,title:directory.title}}:{})};
+}
+export { publicEntry };
+function relativeProxyPath(value) {
+  return typeof value==='string'&&value.startsWith('/')&&!value.startsWith('//')&&!/[\\\x00-\x20]/.test(value)&&!value.split(/[?#]/,1)[0].split('/').some(part=>part==='.'||part==='..');
+}
+
+export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:4326', originHost = 'localhost', appTargets = {}, staticApps = {}, privateDocumentOwnerId, privateDocumentOwnerIds = {}, registry = DEFAULT_APP_REGISTRY, readAppCatalog = () => readApps(fileURLToPath(new URL('../', import.meta.url)), { publicUrlsFile: null }), timeoutMs = 3000, revalidateMs = 5000, clock = Date.now, ...installationOptions } = {}) {
   const canonical = canonicalOrigin(canonicalUrl);
   const core = localOrigin(coreUrl);
   if (!/^[a-zA-Z0-9.-]+$/.test(originHost)) throw new Error('Legacy origin Host must be a fixed hostname.');
   if (!Number.isFinite(revalidateMs) || revalidateMs < 20 || revalidateMs > 10000) throw new Error('Gateway revalidation interval is invalid.');
-  const targets = Object.fromEntries(Object.entries(WEB_APPS).map(([id, app]) => [id, localOrigin(appTargets[id] || `http://127.0.0.1:${app.port}`)]));
+  const targets = Object.fromEntries(registry.webApps.filter(app => app.kind === 'proxy' && (appTargets[app.id] || app.nativePort)).map(app => [app.id, localOrigin(appTargets[app.id] || `http://127.0.0.1:${app.nativePort}`)]));
+  const webAppIds = new Set(registry.webAppIds);
   const active = new Set();
 
   async function access(request) {
@@ -135,18 +122,21 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
       if (!value || typeof value.username !== 'string' || !value.username || value.username.length > 200 || !Array.isArray(value.apps) || value.apps.length > webAppIds.size || value.apps.some(id => !webAppIds.has(id)) || new Set(value.apps).size !== value.apps.length || typeof value.workbench !== 'boolean' || typeof value.prds !== 'boolean' || !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= clock() || typeof value.csrfToken !== 'string' || !/^[A-Za-z0-9_-]{16,512}$/.test(value.csrfToken)) throw fail(503, 'UNAVAILABLE');
       if (value.platformAdmin !== undefined && typeof value.platformAdmin !== 'boolean') throw fail(503, 'UNAVAILABLE');
       if (value.canViewPlatform !== undefined && typeof value.canViewPlatform !== 'boolean' || value.permissionsExpireAt !== undefined && value.permissionsExpireAt !== null && (!Number.isSafeInteger(value.permissionsExpireAt) || value.permissionsExpireAt <= clock())) throw fail(503, 'UNAVAILABLE');
-      return { ...value, documentOwner: value.platformAdmin === true && Boolean(privateDocumentOwnerId) && privateDocumentOwnerId === value.userId, platformAdmin: value.platformAdmin === true, canViewPlatform: value.canViewPlatform === true, permissionsExpireAt: value.permissionsExpireAt ?? null };
+      return { ...value, documentOwner: value.platformAdmin === true && Boolean(privateDocumentOwnerId) && privateDocumentOwnerId === value.userId, documentOwners: registry.webApps.filter(app => app.policy === 'document-owner' && value.platformAdmin === true && Boolean(privateDocumentOwnerIds[app.id] || privateDocumentOwnerId) && (privateDocumentOwnerIds[app.id] || privateDocumentOwnerId) === value.userId).map(app => app.id), platformAdmin: value.platformAdmin === true, canViewPlatform: value.canViewPlatform === true, permissionsExpireAt: value.permissionsExpireAt ?? null };
     } catch (error) { if (error.status) throw error; throw fail(503, 'UNAVAILABLE'); }
     finally { clearTimeout(timer); }
   }
   function sameOrigin(request, unsafe = false) {
     return (!request.headers.origin || request.headers.origin === canonical.origin) && (!request.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(request.headers['sec-fetch-site'])) && (!unsafe || request.headers.origin === canonical.origin);
   }
-  async function legacyAccess(request, appId = 'knowledge', resourceId = 'legacy-library') {
+  async function nativeAccess(request, appId, policyId) {
+    const definition=registry.getWeb(appId)?.nativePolicies?.[policyId];
+    if(!definition)throw fail(403,'FORBIDDEN');
+    const endpoint=definition.legacyEndpoint||`/api/business/web-resource-access/${registry.businessId(appId)}/${policyId}`;
     const abort = new AbortController(), timer = setTimeout(() => abort.abort(), timeoutMs);
     try {
       const result = await new Promise((resolve, reject) => {
-        const outgoing = httpRequest(new URL(`/api/business/web-resource-access/${appId}/${resourceId}`, core), { headers: { Host: canonical.host, Accept: 'application/json', Cookie: cookie(request) }, signal: abort.signal }, resolve);
+        const outgoing = httpRequest(new URL(endpoint, core), { headers: { Host: canonical.host, Accept: 'application/json', Cookie: cookie(request) }, signal: abort.signal }, resolve);
         outgoing.on('error', reject); outgoing.end();
       });
       if ([401, 403].includes(result.statusCode)) { result.resume(); throw fail(result.statusCode, result.statusCode === 401 ? 'UNAUTHENTICATED' : 'FORBIDDEN'); }
@@ -206,15 +196,16 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
     return `${prefix}${destination.pathname}${destination.search}${destination.hash}`;
   }
   async function proxy(request, response, { target, id, pathname, search = '', prefix = '', credentials = false, share = false, initial, permitted, navigation }) {
-    const portal = id === 'polaris';
+    const web = registry.getWeb(id);
+    const isolated = Array.isArray(web?.forwardHeaders);
     const headers = cleanHeaders(request.headers, { credentials });
     headers.host = credentials ? canonical.host : `${originHost}:${target.port}`;
-    if (portal) {
+    if (isolated) {
       for (const name of Object.keys(headers)) {
-        if (!portalRequestHeaders.has(name)) delete headers[name];
+        if (!web.forwardHeaders.includes(name)) delete headers[name];
       }
-      headers.host = target.host;
-      if (headers.origin) headers.origin = target.origin;
+      if(web.hostMode==='target')headers.host = target.host;
+      if (web.rewriteOrigin && headers.origin) headers.origin = target.origin;
       headers['x-forwarded-prefix'] = prefix;
     }
     const admin = ['/admin', '/admin/', '/admin.js', '/admin.css', '/admin-mcp.js', '/admin-data.js', '/admin-mcp.css', '/platform.js', '/platform.css', '/platform-charts.js', '/vendor/chartjs-4.6.1.umd.min.js'].includes(pathname) || pathname === '/api/business/admin' || pathname.startsWith('/api/business/admin/') || pathname === '/api/business/account' || pathname.startsWith('/api/business/account/') || pathname.startsWith('/api/business/console/');
@@ -230,12 +221,12 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
         outgoing.setTimeout(0);
         const resultHeaders = cleanHeaders(incoming.headers, { credentials: true });
         delete resultHeaders['set-cookie'];
-        if (portal && resultHeaders['access-control-allow-origin']) {
+        if (isolated && resultHeaders['access-control-allow-origin']) {
           resultHeaders['access-control-allow-origin'] = canonical.origin;
         }
         if (credentials && incoming.headers['set-cookie']) resultHeaders['set-cookie'] = incoming.headers['set-cookie'];
         if (resultHeaders.location && !credentials) {
-          const rewritten = locationHeader(resultHeaders.location, target, prefix, !share && !portal);
+          const rewritten = locationHeader(resultHeaders.location, target, prefix, !share && !isolated);
           if (!rewritten) { incoming.destroy(); outgoing.destroy(); writeJson(response, 502, { code: 'INVALID_UPSTREAM' }); return resolve(); }
           resultHeaders.location = rewritten;
         }
@@ -244,7 +235,7 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
         resultHeaders.vary = [...new Set((String(resultHeaders.vary || '') + ', Cookie').split(',').map(value => value.trim()).filter(Boolean))].join(', ');
         resultHeaders['referrer-policy'] = share ? 'no-referrer' : credentials ? incoming.headers['referrer-policy'] || 'same-origin' : 'same-origin';
         resultHeaders['x-content-type-options'] = 'nosniff';
-        if (portal && resultHeaders['content-disposition']) {
+        if (isolated && resultHeaders['content-disposition']) {
           // Workflow files can contain author-supplied HTML and SVG.
           resultHeaders['content-security-policy'] = "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'";
         }
@@ -291,11 +282,18 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
         return false;
       }
       if (pathname.startsWith('/share/')) {
-        const scope = await authorizeTravelShare(request, { file: travelSharesFile, clock, origin: canonical.origin });
-        await proxy(request, response, { target: targets.travel, ...scope, share: true }); return true;
+        const app=registry.apps.find(app=>app.integration.web.share&&pathname.startsWith(app.integration.web.share.prefix));
+        if(!app)throw fail(404,'NOT_FOUND');
+        const definition=app.integration.web.share;
+        const instance=installationOptions;
+        const file=instance[definition.configurationKey],sourceRoots=[registry.root,fileURLToPath(new URL('../',import.meta.url))].filter(Boolean).map(root=>resolve(root));
+        if(typeof file!=='string'||!isAbsolute(file)||resolve(file)!==file||sourceRoots.some(root=>file===root||file.startsWith(root+'/')))throw fail(404,'NOT_FOUND');
+        const scope=await definition.authorize({url:request.url,method:request.method,headers:{origin:request.headers.origin,upgrade:request.headers.upgrade}}, {file,clock,origin:canonical.origin});
+        if(!relativeProxyPath(scope.pathname)||typeof scope.prefix!=='string'||!scope.prefix.startsWith(definition.prefix))throw fail(404,'NOT_FOUND');
+        await proxy(request,response,{target:targets[app.id],id:app.id,...scope,share:true});return true;
       }
-      if (coreRoute(pathname)) {
-        const navigation = navigationContext(request, pathname);
+      if (coreRoute(pathname,registry)) {
+        const navigation = navigationContext(request, pathname, undefined, { registry });
         let identity;
         if (navigation) {
           if (navigation.mode === 'admin' && request.headers.authorization) throw fail(401, 'UNAUTHENTICATED');
@@ -308,22 +306,21 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
         if (navigation && !sameOrigin(request)) throw fail(403, 'FORBIDDEN');
         await proxy(request, response, { target: core, pathname, search, credentials: true, initial: identity && { ...identity, permissionsExpireAt: null }, permitted: () => true, navigation }); return true;
       }
-      const route = appRoute(pathname);
+      const route = appRoute(pathname, registry);
       if (pathname.startsWith('/apps/') && !route) throw fail(404, 'NOT_FOUND');
       const identity = await access(request);
       if (!sameOrigin(request, !safeMethods.has(request.method))) throw fail(403, 'FORBIDDEN');
       if (route) {
-        if (!canOpenApp(identity, route.id)) throw fail(403, 'FORBIDDEN');
-        // The coding gateway serves a separate application's active content. Keep it on its isolated origin.
-        if (route.id === 'polaris' && (!['GET', 'HEAD'].includes(request.method) || route.pathname === '/g' || route.pathname.startsWith('/g/'))) throw fail(404, 'NOT_FOUND');
-        if (route.id === 'polaris' && (decodeURIComponent(route.pathname) === '/api/praxis/traces' || decodeURIComponent(route.pathname).startsWith('/api/praxis/traces/'))) throw fail(404, 'NOT_FOUND');
+        if (!canOpenApp(identity, route.id, registry)) throw fail(403, 'FORBIDDEN');
+        const web=registry.getWeb(route.id);
+        if(web.readOnly&&!['GET','HEAD'].includes(request.method)||web.internalPaths?.some(path=>route.pathname===path||route.pathname.startsWith(path+'/')))throw fail(404,'NOT_FOUND');
         if (pathname === route.prefix) { response.writeHead(308, { Location: `${route.prefix}/${search}`, 'Cache-Control': 'no-store' }); response.end(); return true; }
         if (!targets[route.id]) {
           const serve = staticApps[route.id];
           if (!serve) throw fail(404, 'NOT_FOUND');
-          const nav = navigationContext(request, route.pathname, route.id);
-          const permitted = fresh => fresh.username === identity.username && canOpenApp(fresh, route.id);
-          const isPrivateRead = personalApps.has(route.id) && route.pathname.startsWith('/api/');
+          const nav = navigationContext(request, route.pathname, route.id, { registry });
+          const permitted = fresh => fresh.username === identity.username && canOpenApp(fresh, route.id, registry);
+          const isPrivateRead = web.kind === 'private-documents' && route.pathname.startsWith('/api/');
           const stop = isPrivateRead && watch(request, response, identity, permitted, () => response.destroy());
           try {
             await serve(request, response, route.pathname, nav && { ...nav, canonicalOrigin: canonical.origin }, async () => {
@@ -334,41 +331,23 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
           }
           return true;
         }
-        const legacy = route.id === 'knowledge' && knowledgeLegacyPath(route.pathname);
-        if (legacy) { const scope = await legacyAccess(request); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
-        const tingproofNative = requireTingproofNativeScope && route.id === 'tingproof' && !tingproofPublicEntry(request, route, search);
-        if (tingproofNative) { const scope = await legacyAccess(request, 'tingproof', 'native-projects'); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
-        const slidesNativeRender = route.id === 'lattice-slides' && request.method === 'POST' && route.pathname === '/workbench/api/render';
-        if (slidesNativeRender) { const scope = await legacyAccess(request, 'slides', 'native-render'); identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt); }
-        let slidesLegacy = false;
-        if (route.id === 'lattice-slides') {
-          const parameters = new URLSearchParams(search);
-          const shell = ['/', '/index.html'].includes(route.pathname);
-          const managed = parameters.has('slidesSpace') || parameters.has('slidesResource') || parameters.get('deck')?.includes(':');
-          if (shell && (!parameters.get('deck') || managed)) route.pathname = '/_business/';
-          else if (!route.pathname.startsWith('/_business/') && !route.pathname.startsWith('/api/slides/')) {
-            const scope = await legacyAccess(request, 'slides', 'legacy-decks');
-            identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt);
-            slidesLegacy = true;
-            if (shell) route.pathname = '/_viewer/';
-          }
+        const rule=web.route?web.route({method:request.method,pathname:route.pathname,search}):{binding:'native',checks:[]};
+        if(rule.deny)throw fail(rule.deny,'NOT_FOUND');
+        if(rule.pathname!==undefined){if(!relativeProxyPath(rule.pathname))throw fail(503,'UNAVAILABLE');route.pathname=rule.pathname;}
+        const checks=rule.checks||[];
+        for(const id of checks){const scope=await nativeAccess(request,route.id,id);identity.permissionsExpireAt=Math.min(identity.permissionsExpireAt??Infinity,scope.expiresAt);}
+        const permitted=async next=>canOpenApp(next,route.id,registry)&&!(await Promise.all(checks.map(id=>nativeAccess(request,route.id,id)))).some(scope=>!scope.allowed);
+        if(rule.binding==='core'){
+          if(!web.corePrefixes?.some(prefix=>route.pathname.startsWith(prefix)))throw fail(503,'UNAVAILABLE');
+          await proxy(request,response,{target:core,pathname:route.pathname,search,credentials:true,initial:identity,permitted});return true;
         }
-        const permitted = async next => canOpenApp(next, route.id) &&
-          (!legacy || (await legacyAccess(request)).allowed) &&
-          (!slidesLegacy || (await legacyAccess(request, 'slides', 'legacy-decks')).allowed) &&
-          (!tingproofNative || (await legacyAccess(request, 'tingproof', 'native-projects')).allowed) &&
-          (!slidesNativeRender || (await legacyAccess(request, 'slides', 'native-render')).allowed);
-        if (route.id === 'lattice-slides' && route.pathname.startsWith('/api/slides/')) {
-          await proxy(request, response, { target: core, pathname: `/api/business/slides/web/${route.pathname.slice('/api/slides/'.length)}`, search, credentials: true, initial: identity, permitted });
-          return true;
-        }
-        await proxy(request, response, { target: targets[route.id], ...route, search, initial: identity, permitted, navigation: navigationContext(request, route.pathname, route.id) }); return true;
+        await proxy(request,response,{target:targets[route.id],...route,search,initial:identity,permitted,navigation:navigationContext(request,route.pathname,route.id,{registry})});return true;
       }
       const iconPath = /^\/app-icons\/[a-z][a-z0-9-]*\.svg$/.test(pathname) || /^\/[a-z][a-z0-9-]*-icon\.svg$/.test(pathname);
       if (iconPath) {
         const app = appIconEntry(await readAppCatalog(), pathname);
         if (!app) throw fail(404, 'NOT_FOUND');
-        if (!canOpenApp(identity, app.id)) throw fail(403, 'FORBIDDEN');
+        if (!canOpenApp(identity, app.id, registry)) throw fail(403, 'FORBIDDEN');
       }
       const prd = pathname === '/prds' || pathname.startsWith('/prds/');
       if (prd && !identity.prds || platformPaths.has(pathname) && !identity.canViewPlatform) throw fail(403, 'FORBIDDEN');
@@ -382,24 +361,22 @@ export function createWebGateway({ canonicalUrl, coreUrl = 'http://127.0.0.1:432
   }
   async function upgrade(request, socket, head) {
     try {
-      const { pathname, search } = gatewayPath(request.url), route = appRoute(pathname);
+      const { pathname, search } = gatewayPath(request.url), route = appRoute(pathname, registry);
       if (!route || request.headers.host !== canonical.host || request.headers.upgrade?.toLowerCase() !== 'websocket' || !sameOrigin(request, true)) throw fail(403, 'FORBIDDEN');
-      if (route.id === 'knowledge' || route.id === 'polaris' || !targets[route.id]) throw fail(403, 'FORBIDDEN');
-      const identity = await access(request);
-      if (!canOpenApp(identity, route.id)) throw fail(403, 'FORBIDDEN');
-      if (route.id === 'lattice-slides') await legacyAccess(request, 'slides', 'legacy-decks');
-      if (requireTingproofNativeScope && route.id === 'tingproof') {
-        const scope = await legacyAccess(request, 'tingproof', 'native-projects');
-        identity.permissionsExpireAt = Math.min(identity.permissionsExpireAt ?? Infinity, scope.expiresAt);
-      }
+      const web=registry.getWeb(route.id);
+      if(web.allowUpgrade===false||!targets[route.id])throw fail(403,'FORBIDDEN');
+      const identity=await access(request);
+      if(!canOpenApp(identity,route.id,registry))throw fail(403,'FORBIDDEN');
+      const checks=web.upgradePolicies||[];
+      for(const id of checks){const scope=await nativeAccess(request,route.id,id);identity.permissionsExpireAt=Math.min(identity.permissionsExpireAt??Infinity,scope.expiresAt);}
       const target = targets[route.id];
       const headers = cleanHeaders(request.headers, { upgrade: true });
       headers.host = `${originHost}:${target.port}`; headers.connection = 'Upgrade'; headers.upgrade = 'websocket';
       const outgoing = httpRequest(new URL(`${route.pathname}${search}`, target), { headers });
       let stop = () => {};
       const destroy = () => { outgoing.destroy(); socket.destroy(); };
-      stop = watch(request, socket, identity, async next => canOpenApp(next, route.id) &&
-        (route.id !== 'tingproof' || (await legacyAccess(request, 'tingproof', 'native-projects')).allowed), destroy);
+      stop = watch(request, socket, identity, async next => canOpenApp(next, route.id, registry) &&
+        !(await Promise.all(checks.map(id=>nativeAccess(request,route.id,id)))).some(scope=>!scope.allowed), destroy);
       outgoing.setTimeout(timeoutMs, destroy);
       outgoing.once('upgrade', (incoming, upstream, upstreamHead) => {
         outgoing.setTimeout(0); upstream.setTimeout(0);

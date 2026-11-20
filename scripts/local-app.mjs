@@ -42,7 +42,7 @@ export function developmentApps(manifests, official) {
         zh: { name: app.name.zh, description: app.description.zh }
       },
       url: url.href,
-      icon: '/projects-icon.svg'
+      icon: '/praxis-logo.svg'
     };
   });
 }

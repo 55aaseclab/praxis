@@ -29,8 +29,11 @@ COPY --from=tools /usr/local/bin/restic /usr/local/bin/rclone /usr/local/bin/
 WORKDIR /opt/praxis
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
-COPY --chown=node:node src/storage ./src/storage
-COPY --chown=node:node src/business ./src/business
+COPY --chown=node:node src ./src/
+COPY --chown=node:node config ./config/
+COPY --chown=node:node skills ./skills/
+# The shared context allowlist supplies only reviewed app declarations/helpers.
+COPY --chown=node:node third_party/ ./third_party/
 COPY --chown=node:node scripts/storage.mjs scripts/storage-worker.mjs scripts/business-sync-worker.mjs ./scripts/
 ENV NODE_ENV=production PRAXIS_RESTIC_BINARY=/usr/local/bin/restic PRAXIS_RCLONE_BINARY=/usr/local/bin/rclone
 USER node

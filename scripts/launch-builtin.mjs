@@ -11,10 +11,5 @@ for (const [name, value] of Object.entries(settings)) {
 }
 const args = process.argv.slice(2);
 if (args.shift() !== 'node' || !args[0]) throw new Error('A native Node entry point is required.');
-if (process.env.PRAXIS_TINGPROOF_NATIVE === '1') {
-  const { startTingProofServer } = await import(pathToFileURL(resolve(args[0])).href);
-  startTingProofServer({ host: '127.0.0.1', port: 15173, distDir: '/app/dist-public' });
-} else {
-  process.argv = [process.execPath, ...args];
-  await import(pathToFileURL(resolve(args[0])).href);
-}
+process.argv = [process.execPath, ...args];
+await import(pathToFileURL(resolve(args[0])).href);

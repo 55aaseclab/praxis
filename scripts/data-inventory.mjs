@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 import { assertAppBindings, resolveAppPaths } from '../src/storage/app-paths.mjs';
 import { constants } from 'node:fs';
 import { open, lstat, realpath, mkdir, chmod, writeFile, rename } from 'node:fs/promises';
@@ -19,16 +20,20 @@ const safePath = value => canonical(value) && !/(?:^|\/)(?:\.env(?:\.[^/]*)?|aut
 const paths = mapping => object(mapping?.spaces) ? Object.values(mapping.spaces).filter(safePath) : [];
 
 /** Project configured locations only; never open application records or databases. */
-export function createDataInventory({ registry = [], business = {}, storage = {}, reminderSpaces, slidesSpaces, polaris, financeMounts = [], financeProjectName, intelligenceRuntime, sourceRoot = repository, now = Date.now() } = {}) {
+export function createDataInventory({ registry = [], business = {}, storage = {}, integrations = DEFAULT_APP_REGISTRY, sourceRoot = repository, now = Date.now(), ...inputs } = {}) {
   const applications = Array.isArray(registry) ? registry.filter(app => app?.kind === 'app').map(({ id, name, source }) => ({ id, name, source })) : [];
-  if (object(polaris) && !applications.some(app => app.id === 'polaris')) applications.push({ id: 'polaris', name: 'Polaris' });
+  for (const app of integrations.apps) {
+    const key = app.integration.storage?.inventory?.includeWithInput;
+    if (key && object(inputs[key]) && !applications.some(entry => entry.id === app.id)) applications.push({ id: app.id, name: app.name, source: app.source });
+  }
   if (!applications.some(app => app.id === 'praxis')) applications.push({ id: 'praxis', name: 'Praxis' });
   const workspaceId = typeof storage.workspaceId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storage.workspaceId) ? storage.workspaceId : null;
-  const working = storage.workingData ? resolveAppPaths(storage) : null;
+  const working = storage.workingData ? resolveAppPaths(storage, { registry: integrations }) : null;
   const sources = Array.isArray(storage.appSources) ? storage.appSources : [];
   const configuredApps = object(business.apps) ? business.apps : {};
   const apps = applications.map(app => {
-    const id = app.id === 'lattice-slides' ? 'slides' : app.id;
+    const definition = integrations.getApp(app.id)?.integration;
+    const id = definition?.storage?.sourceId || definition?.business?.adapterId || app.id;
     const config = object(configuredApps[id]) ? configuredApps[id] : {};
     const locations = [];
     const add = location => {
@@ -41,68 +46,19 @@ export function createDataInventory({ registry = [], business = {}, storage = {}
       const root = typeof app.source === 'string' && !isAbsolute(app.source) ? resolve(sourceRoot, app.source) : null;
       if (root && inside(sourceRoot, root)) file(label, 'source', join(root, suffix), description);
     };
-    if (id === 'intelligence') {
-      if (intelligenceRuntime?.preview === true) source('只读预览材料', 'fixtures/preview.json', '应用自带合成材料，用于界面预览；正式业务文件尚未启用。');
-      else if (intelligenceRuntime?.preview === false && safePath(intelligenceRuntime.hostPath)) add({ label: '情报集与材料', kind: 'json', hostPath: join(intelligenceRuntime.hostPath, 'data.json'), containerPath: '/data/intelligence/data.json' });
-      else add({ label: '情报数据', kind: 'unknown', description: '运行模式或正式数据挂载尚未核验。' });
-    } else if (id === 'reminder') {
-      for (const path of paths(reminderSpaces)) file('业务空间任务', 'json', path);
-    } else if (['knowledge', 'projects', 'memo'].includes(id)) {
-      if (safePath(config.dataDir)) file(id === 'memo' ? '记录、照片与场景指南' : id === 'knowledge' ? '笔记与版本' : '项目记录', 'sqlite', join(config.dataDir, `${id}.db`));
-    } else if (id === 'travel') file('行程记录', 'directory', config.dataDir);
-    else if (id === 'tingproof') file('听校数据库', 'sqlite', config.dataFile);
-    else if (id === 'slides') {
-      file('文稿、版本、素材与导出', 'directory', config.dataDir);
-      for (const path of paths(slidesSpaces)) file('业务空间文稿', 'json', path);
-    } else if (id === 'polaris' && object(polaris)) {
-      if (safePath(polaris.observationsFile)) file('Read-only workspace observations', 'json', polaris.observationsFile);
-      if (safePath(polaris.dataRoot)) {
-        file('业务数据根', 'directory', polaris.dataRoot);
-        file('当前控制数据库', 'sqlite', join(polaris.dataRoot, 'control/state/control.sqlite'));
-        if (workspaceId) file('工作区运行配置与 Vault 定义', 'directory', join(polaris.dataRoot, 'control/workspaces', workspaceId));
-        file('采集断点和快照', 'directory', join(polaris.dataRoot, 'collection-jobs'));
-        file('工作区与执行数据', 'directory', join(polaris.dataRoot, 'vault-data'));
-      }
-      file('浏览器资料与状态', 'directory', polaris.browserProfiles);
-      file('浏览器二进制缓存', 'cache', polaris.browserCache, '缓存不等同于业务事实数据。');
-      file('独立工具会话', 'directory', polaris.codexHome);
-    } else if (id === 'praxis') {
+    if (id === 'praxis') {
+
       file('用户、权限与授权', 'sqlite', business.database);
       file('事件与同步元数据', 'sqlite', business.eventsDatabase);
       file('体验与性能日志', 'sqlite', business.observationsFile);
+    } else {
+      const projection = integrations.getApp(app.id)?.integration.storage?.inventory?.project;
+      projection?.({ id, config, working, workspaceId, storage, ...inputs, locations, add, file, source, safePath, paths, object });
     }
-    for (const record of sources.filter(item => item?.id === id && id !== 'finance')) {
+    for (const record of sources.filter(item => item?.id === id && !definition?.storage?.inventory?.omitRegisteredSources)) {
       const kind = ['json', 'sqlite', 'directory'].includes(record.kind) ? record.kind : 'unknown';
-      const label = id === 'slides' && record.target === 'decks' ? '原生文稿目录' : id === 'slides' && record.target === '.lattice' ? '原生编辑与素材状态' : '已登记数据';
+      const label = definition?.storage?.inventory?.sourceLabels?.[record.target] || '已登记数据';
       file(label, kind, record.source);
-    }
-    if (id === 'finance' && !locations.length) {
-      const mount = Array.isArray(financeMounts) && financeMounts.find(item => item?.Destination === '/data' && ['volume', 'bind'].includes(item.Type) && safePath(item.Source));
-      if (mount) {
-        add({ label: '收支、预算与资产', kind: mount.Type === 'volume' ? 'docker-volume' : 'json', hostPath: join(mount.Source, 'finance.json'), containerPath: '/data/finance.json', ...(mount.Type === 'volume' && typeof mount.Name === 'string' ? { volumeName: mount.Name } : {}) });
-      } else if (working) {
-        add({ label: '收支、预算与资产', kind: 'json', hostPath: working.finance, containerPath: '/data/finance.json', description: '生效配置中的位置；当前容器挂载尚未核验。' });
-      } else {
-        const project = financeProjectName || (typeof storage.workspaceId === 'string' ? `praxis-${storage.workspaceId.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}` : null);
-        add({ label: '收支、预算与资产', kind: 'docker-volume', containerPath: '/data/finance.json', ...(project ? { volumeName: `${project}_finance-data` } : {}), description: '容器位置已登记，宿主持久卷位置暂未核验。' });
-      }
-    }
-    if (id === 'memo') {
-      add({ label: working ? '旧设备待导入记录' : '凭证与照片', kind: 'browser', storageKey: 'memo.records.v1', description: working ? '旧设备记录会在成功连接后受控导入；尚未打开的浏览器仍保留待导入副本。' : '保存在实际使用的设备、浏览器与站点来源中，使用Memo的完整JSON导出恢复；服务器卷不包含它。' });
-      add({ label: '偏好与流程', kind: 'browser', storageKey: 'memo.prefs.v1 / memo.flow.v1', description: '浏览器本地状态，随原有完整JSON备份迁移。' });
-    }
-    if (id === 'knowledge' && !working) {
-      source('发布基线文档', 'src/content/docs', '原稿属于版本化源码；受控编辑与历史版本在上方数据库中。');
-      source('发布图片与参考页面', 'public');
-    }
-    if (id === 'travel' && !working) {
-      source('静态照片', 'public', '源码静态资源，不替代当前受控行程目录。');
-      source('初始路线与历史基线', 'data');
-      add({ label: '旧冰岛清单状态', kind: 'browser', storageKey: 'iceland-check-*', description: '仅适用于曾使用旧页面的浏览器；并非当前行程主存储。' });
-    }
-    if (id === 'tingproof') {
-      add({ label: '音频文件句柄', kind: 'browser', storageKey: 'IndexedDB: tingproof', description: '本机浏览器保存文件关联，换浏览器后需要重新关联。' });
-      add({ label: '原始音频', kind: 'unknown', description: '位于用户选择的原文件位置，服务器未登记其路径；听校数据库不包含媒体。' });
     }
     if (!locations.length) add({ label: '数据位置', kind: 'unknown', description: '尚未登记可核实的数据位置。' });
     return { id: app.id, name: app.name, locations };
@@ -130,32 +86,13 @@ async function dockerOutput(args) {
   const { stdout } = await exec('docker', args, { encoding: 'utf8', timeout: 5000, maxBuffer: 262144 });
   return stdout;
 }
-export async function inspectFinanceMounts(storage, runDocker = dockerOutput) {
-  const project = process.env.PRAXIS_COMPOSE_PROJECT || (typeof storage?.workspaceId === 'string' ? `praxis-${storage.workspaceId.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}` : null);
-  if (!project || !/^[a-z0-9][a-z0-9_-]{0,120}$/.test(project)) return [];
-  try {
-    const ids = String(await runDocker(['ps', '--all', '--filter', `label=com.docker.compose.project=${project}`, '--filter', 'label=com.docker.compose.service=finance', '--format', '{{.ID}}'])).trim().split(/\s+/).filter(Boolean);
-    if (ids.length !== 1 || !/^[a-f0-9]{12,64}$/.test(ids[0])) return [];
-    const value = JSON.parse(await runDocker(['inspect', '--format', '{{json .Mounts}}', ids[0]]));
-    return Array.isArray(value) ? value : [];
-  } catch { return []; }
+export async function inspectInventoryInput(key, storage, runDocker = dockerOutput, integrations = DEFAULT_APP_REGISTRY) {
+  const inspection = integrations.apps.map(app => app.integration.storage?.inventory?.inspection).find(value => value?.input === key);
+  return inspection?.read(storage, runDocker, safePath);
 }
-
-export async function inspectIntelligenceRuntime(storage, runDocker = dockerOutput) {
-  const project = process.env.PRAXIS_COMPOSE_PROJECT || (typeof storage?.workspaceId === 'string' ? `praxis-${storage.workspaceId.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}` : null);
-  if (!project || !/^[a-z0-9][a-z0-9_-]{0,120}$/.test(project)) return undefined;
-  try {
-    const ids = String(await runDocker(['ps', '--all', '--filter', `label=com.docker.compose.project=${project}`, '--filter', 'label=com.docker.compose.service=intelligence', '--format', '{{.ID}}'])).trim().split(/\s+/).filter(Boolean);
-    if (ids.length !== 1 || !/^[a-f0-9]{12,64}$/.test(ids[0])) return undefined;
-    const metadata = JSON.parse(await runDocker(['inspect', '--format', '{"environment":{{json .Config.Env}},"mounts":{{json .Mounts}}}', ids[0]]));
-    if (!Array.isArray(metadata.environment) || !Array.isArray(metadata.mounts)) return undefined;
-    const modes = metadata.environment.filter(value => typeof value === 'string' && value.startsWith('INTELLIGENCE_PREVIEW='));
-    if (modes.length !== 1 || !['INTELLIGENCE_PREVIEW=0', 'INTELLIGENCE_PREVIEW=1'].includes(modes[0])) return undefined;
-    if (modes[0].endsWith('=1')) return { preview: true };
-    const mount = metadata.mounts.find(item => item.Type === 'bind' && item.Destination === '/data/intelligence' && item.RW === false && safePath(item.Source));
-    return mount ? { preview: false, hostPath: mount.Source } : undefined;
-  } catch { return undefined; }
-}
+// Named CLI compatibility exports delegate to the currently installed app declaration.
+export const inspectFinanceMounts = (...args) => inspectInventoryInput('financeMounts', ...args);
+export const inspectIntelligenceRuntime = (...args) => inspectInventoryInput('intelligenceRuntime', ...args);
 
 async function publish(file, value, { sourceRoot, inputFiles }) {
   if (!safePath(file) || inside(sourceRoot, file) || !/^[a-z][a-z0-9-]{0,63}\.json$/.test(file.split('/').at(-1))) throw new Error('Inventory requires a private JSON destination outside source.');
@@ -180,27 +117,38 @@ export async function main(args = [], options = {}) {
   if (command !== 'publish') throw new Error('Usage: data-inventory.mjs publish [--config PATH] [--storage-config PATH] [--polaris-config PATH] [--output PATH]');
   const parsed = {};
   for (let i = 0; i < flags.length; i += 2) {
-    if (!['--config', '--storage-config', '--polaris-config', '--output'].includes(flags[i]) || !flags[i + 1] || parsed[flags[i]]) throw new Error('Inventory options require unique configuration paths.');
+    if (!['--config', '--storage-config', '--output', ...DEFAULT_APP_REGISTRY.apps.flatMap(app => app.integration.storage?.relocation?.legacyConfiguration ? ['--' + app.integration.storage.relocation.legacyConfiguration.input + '-config'] : [])].includes(flags[i]) || !flags[i + 1] || parsed[flags[i]]) throw new Error('Inventory options require unique configuration paths.');
     parsed[flags[i]] = flags[i + 1];
   }
   const sourceRoot = resolve(options.sourceRoot || repository), base = join(options.home || homedir(), '.config/praxis');
   const businessFile = parsed['--config'] || options.businessConfigFile || join(base, 'business.json');
   const business = await readMetadata(businessFile, { optional: true }) || {};
   const storageFile = parsed['--storage-config'] || options.storageConfigFile || business.console?.storageConfigFile || join(base, 'storage.json');
-  const polarisFile = parsed['--polaris-config'] || options.polarisConfigFile || join(base, 'polaris.json');
   const registryFile = join(sourceRoot, 'config/installed-apps.json');
   const registry = await readApps(sourceRoot, { publicUrlsFile: null });
   const storage = await readMetadata(storageFile, { optional: true }) || {};
-  const polaris = await readMetadata(polarisFile, { optional: true });
-  const reminderFile = business.apps?.reminder?.spacesFile, slidesFile = business.apps?.slides?.spacesFile;
-  const reminderSpaces = reminderFile ? await readMetadata(reminderFile) : undefined;
-  const slidesSpaces = slidesFile ? await readMetadata(slidesFile) : undefined;
-  const financeMounts = registry.some(app => app.id === 'finance') ? await inspectFinanceMounts(storage, options.runDocker) : [];
-  if (storage.workingData) assertAppBindings(storage, business, { reminderSpaces: reminderSpaces?.spaces, slidesSpaces: slidesSpaces?.spaces, polaris });
-  const intelligenceRuntime = registry.some(app => app.id === 'intelligence') ? await inspectIntelligenceRuntime(storage, options.runDocker) : undefined;
-  const value = createDataInventory({ registry, business, storage, reminderSpaces, slidesSpaces, polaris, financeMounts, intelligenceRuntime, financeProjectName: process.env.PRAXIS_COMPOSE_PROJECT, sourceRoot, ...(options.now ? { now: options.now } : {}) });
+  const inputs = {}, bindingInputs = {}, appInputFiles = [];
+  const integrations = options.integrations || DEFAULT_APP_REGISTRY;
+  for (const app of integrations.apps) {
+    const definition = app.integration, declaration = definition.storage || {}, inventory = declaration.inventory || {};
+    const adapterId = definition.business?.adapterId || app.id, configured = business.apps?.[adapterId];
+    if (inventory.mapping) {
+      const filename = configured?.[inventory.mapping.field];
+      if (filename) { inputs[inventory.mapping.input] = await readMetadata(filename); appInputFiles.push(filename); }
+      const assertion = declaration.relocation?.spaceMap?.assertionInput;
+      if (assertion) bindingInputs[assertion] = inputs[inventory.mapping.input]?.spaces;
+    }
+    const legacy = declaration.relocation?.legacyConfiguration;
+    if (legacy) {
+      const filename = parsed['--' + legacy.input + '-config'] || options[legacy.input + 'ConfigFile'] || join(base, legacy.input + '.json');
+      inputs[legacy.input] = await readMetadata(filename, { optional: true }); bindingInputs[legacy.input] = inputs[legacy.input]; appInputFiles.push(filename);
+    }
+    if (inventory.inspection) inputs[inventory.inspection.input] = await inspectInventoryInput(inventory.inspection.input, storage, options.runDocker, integrations);
+  }
+  if (storage.workingData) assertAppBindings(storage, business, { ...bindingInputs, registry: integrations });
+  const value = createDataInventory({ registry, business, storage, integrations, ...inputs, sourceRoot, ...(options.now ? { now: options.now } : {}) });
   const outputFile = parsed['--output'] || options.outputFile || business.console?.dataInventoryFile || join(base, 'data-inventory/locations.json');
-  const protectedInputs = [businessFile, storageFile, polarisFile, registryFile, reminderFile, slidesFile,
+  const protectedInputs = [businessFile, storageFile, registryFile, ...appInputFiles,
     business.console?.storageStatusFile, storage.stateRoot,
     ...Object.values(object(business.apps) ? business.apps : {}).flatMap(config => object(config) ? [config.keyFile, config.spacesFile, config.businessConfigFile] : []),
     ...(Array.isArray(storage.repositories) ? storage.repositories : []).flatMap(config => object(config) ? [config.path, config.passwordFile, config.credentialsFile, config.rcloneConfigFile] : []),

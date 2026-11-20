@@ -181,3 +181,10 @@ test('app release and PRD location refresh from the app declaration without a pl
   assert.equal(after.title, 'App-owned updated requirements');
   assert.equal(after.source, 'third_party/reminder/docs/current.md');
 });
+
+test('explicit integer document revisions take precedence over app releases and historical rows', () => {
+  for (const line of ['Document revision: 3', '**Document revision**: **3**', '文档修订：3', '**文档修订号**：**3**']) {
+    assert.equal(prdMetadata('App release: 0.2.0\nVersion: 0.2.0\n' + line + '\n| 0.1.9 | Previous app release |\n', 'Projects').version, '3');
+  }
+  assert.equal(prdMetadata('App release: 0.2.0\nDocument revision: 3.1.2.4', 'Projects').version, null);
+});

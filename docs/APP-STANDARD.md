@@ -43,6 +43,13 @@ A declaration has this shape (the icon and documents are app-relative files):
 
 The platform's `config/installed-apps.json` contains only `{"schemaVersion":1,"apps":[{"source":"third_party/lab-notes"}]}` references. `source` and `builtin` are injected by installation discovery. Optional app-owned `iconAliases` preserve reviewed icon addresses without platform artwork copies. Installed source selection is not a permission grant.
 
+### Supply a reviewed integration module
+
+App-owned `praxis-integration.mjs` exports `createIntegration({z})`, whose result includes `schemaVersion: 1` and the canonical `appId`. Only the pinned installed source is eligible; module URLs and user-supplied executable paths are not accepted. The factory owns app-specific web descriptors, typed operations/tools and guidance, normalization/authorization requirements, installation recipes and storage descriptors. The platform validates and consumes them through the shared registry, keeping authorization and secret custody in generic primitives. Hooks receive narrow callbacks bound to the current app and grant. Capability registration is not a permission grant. See the [loading audit and contract](APP-LOADING-AUDIT.en.md) for exact responsibilities, lifecycle and parity acceptance.
+
+Keep the reviewed integration helper closure in the app repository. Use the provided `z` for tool schemas; bundle any additional integration-only dependencies with the reviewed helpers rather than relying on another app or a platform source import. Native runtime dependencies belong to the app's own build. `deployment.localCompose` owns local services/volumes, `native.dockerfile` owns the build, and `platformFiles` lists extra source-build inputs where needed. Static `web.directory`/`assets` and the owned icon select their build-context files automatically. After installing the source, run `npm run apps:refresh` to regenerate both the Compose snapshot and Docker source-context allowlist. `node scripts/generate-compose.mjs --check` detects drift. An optional `deployment.demo` supplies an isolated source-demo recipe; the platform handles temporary HOME, environment and cleanup. No discovery or recipe refresh starts a backend or touches business records.
+
+
 ### Supply read-only workbench cards
 
 Maintain a reviewed `praxis-provider.mjs` at the app repository root. Its version-1 `describe`, `getCards` and `getDataInventory` exports own the card projection and storage descriptors; Praxis discovers them from the installed catalog. The current distribution has thirteen card sources. Polaris is classified as a runtime component and supplies inventory metadata, without contributing workbench cards. All fourteen apps remain in the data inventory. [Provider contract](APP-PROVIDERS.md#english)
@@ -104,6 +111,13 @@ For inclusion in the maintained distribution, document the user task, screenshot
 在应用自己的仓库维护 `praxis-app.json`、引用的图标和登记示例。版本 1 的声明负责正式应用 ID、英中名称及描述、相对图标与 PRD 路径、默认入口、启动展示及应用发行版本。示例引用该声明，不复制平台应用总表。Praxis 仅维护已安装源码引用与私有部署覆盖，从经审核的声明导出启动器、供数和文档元数据。元数据不启用后端、不分配角色，也不授予业务操作。
 
 应用发行版本严格使用三段数字 `MAJOR.MINOR.PATCH`。同一应用发行版的 package／lock、清单和运行时版本响应须一致；静态阅读器以自身清单为发行版本来源。各应用独立升版。明确区分需求文档修订与应用发行版本，保留 schema、协议、算法及记录的独立版本。发布检查拒绝缺失声明和发行版本冲突。
+
+### 提供经审核的集成模块
+
+应用自己的 `praxis-integration.mjs` 导出 `createIntegration({z})`，其返回值包含 `schemaVersion: 1` 与正式 `appId`。仅固定的已安装源码可加载，不接收模块 URL 或调用者指定的可执行路径。factory 负责应用专属网页描述、类型化操作／工具及指南、转换／授权需求、安装配方和存储描述；平台通过共用 registry 验证和消费，通用原语保留授权与密钥保管。hook 仅获得绑定当前应用及授权的窄回调。登记能力不代表授权，准确职责、生命周期和等价验收见[加载审计合同](APP-LOADING-AUDIT.md)。
+
+经审核的集成辅助模块及其依赖闭包保留在应用仓库中。工具 schema 使用提供的 `z`；额外的集成专用依赖随审核后的 helper 打包，不依赖其他应用或平台源码。原生运行依赖由应用自己的构建负责。`deployment.localCompose` 维护本机服务/卷，`native.dockerfile` 维护构建，必要时用 `platformFiles` 声明额外源码构建输入。静态 `web.directory`/`assets` 及自有图标自动决定相应构建上下文文件。安装源码后运行 `npm run apps:refresh`，同时重建 Compose 快照及 Docker 源码上下文白名单；`node scripts/generate-compose.mjs --check` 检查漂移。可选的 `deployment.demo` 提供隔离源码演示配方，由平台管理临时 HOME、环境与清理。发现或刷新配方均不启动后端，也不处理业务记录。
+
 
 ### 提供只读工作台卡片
 

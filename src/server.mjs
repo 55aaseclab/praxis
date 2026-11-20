@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from './default-app-registry.mjs';
 import { createHash } from 'node:crypto';
 import { AppProviderRegistry } from './business/app-providers.mjs';
 import { createServer } from 'node:http';
@@ -12,7 +13,7 @@ import { renderPrdMarkdown } from './prd-renderer.mjs';
 import { catalogPage, documentPage } from './pages.mjs';
 import { ObservationStore, createBrowserIngress, observeResponse } from './observability.mjs';
 import { createPlatformProxy } from './platform-proxy.mjs';
-import { createWebGateway, canonicalRedirect, gatewayApps, canOpenApp } from './web-gateway.mjs';
+import { createWebGateway, canonicalRedirect, gatewayApps, canOpenApp, publicEntry } from './web-gateway.mjs';
 import { createPublicMcpHandler } from './public-mcp.mjs';
 import { injectSystemNavigation, navigationContext } from './system-navigation.mjs';
 import { createPrivateDocumentHandler } from './private-documents.mjs';
@@ -28,35 +29,29 @@ function send(request, response, status, body, type = 'text/html; charset=utf-8'
   response.end(request.method === 'HEAD' ? undefined : bytes);
 }
 
-export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(root, 'public'), publicUrlsFile, businessUrl = process.env.PRAXIS_BUSINESS_URL, observationsFile = process.env.PRAXIS_OBSERVATIONS_FILE, observationsOrigin = process.env.PRAXIS_OBSERVATIONS_ORIGIN, consoleUpstream = process.env.PRAXIS_CONSOLE_UPSTREAM, consoleHost = process.env.PRAXIS_CONSOLE_HOST, consoleOrigin = process.env.PRAXIS_CONSOLE_ORIGIN, webGateway, canonicalUrl, demoApp, developmentApps = [] } = {}) {
+export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(root, 'public'), publicUrlsFile, businessUrl = process.env.PRAXIS_BUSINESS_URL, observationsFile = process.env.PRAXIS_OBSERVATIONS_FILE, observationsOrigin = process.env.PRAXIS_OBSERVATIONS_ORIGIN, consoleUpstream = process.env.PRAXIS_CONSOLE_UPSTREAM, consoleHost = process.env.PRAXIS_CONSOLE_HOST, consoleOrigin = process.env.PRAXIS_CONSOLE_ORIGIN, webGateway, canonicalUrl, demoApp, developmentApps = [], registry = DEFAULT_APP_REGISTRY } = {}) {
   const appProviders = new AppProviderRegistry({ root });
-  const privateApps = Object.fromEntries(['letters', 'profiles'].map(id => {
-    const serve = createManagedStaticHandler(resolve(root, 'third_party', id, 'public'), ['/app.css', '/app.js']);
-    const documents = createPrivateDocumentHandler(webGateway?.privateDocumentRoots?.[id]);
-    return [id, (request, response, pathname, navigation, reauthorize) => pathname.startsWith('/api/')
-      ? documents(request, response, pathname, reauthorize)
-      : serve(request, response, pathname, navigation, reauthorize)];
+  const privateApps = Object.fromEntries(registry.apps.filter(app=>app.integration.web.kind==='private-documents').map(app=>{
+    const web=app.integration.web,serve=createManagedStaticHandler(resolve(root,app.source,web.directory),web.assets||[]);
+    const documents=createPrivateDocumentHandler(webGateway?.privateDocumentRoots?.[app.id]);
+    return [app.id,(request,response,pathname,navigation,reauthorize)=>pathname.startsWith('/api/')?documents(request,response,pathname,reauthorize):serve(request,response,pathname,navigation,reauthorize)];
   }));
-  const localStatic = {
-    calendar: { directory: resolve(root, 'third_party/calendar/public'), assets: ['/calendar.js', '/calendar.css', '/calendar-events.js'] },
-    'matrix-reader': { directory: resolve(root, 'third_party/matrix-reader/dist'), assets: [] },
-  };
-  const staticReaders = Object.fromEntries(Object.entries(localStatic).map(([id, app]) =>
-    [id, async (request,response,pathname,navigation,reauthorize) => {
-      if(id==='calendar'&&pathname==='/api/agenda'&&webGateway?.enabled){
-        if(!['GET','HEAD'].includes(request.method))return send(request,response,405,'Method not allowed.','text/plain',{Allow:'GET, HEAD'});
-        await reauthorize();
-        const upstream=new URL('/api/business/workbench/agenda',webGateway.coreUrl||'http://127.0.0.1:4326');
-        const reply=await fetch(upstream,{method:'GET',headers:{host:new URL(webGateway.canonicalUrl).host,cookie:request.headers.cookie||'',Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(7000)});
-        const bytes=await reply.arrayBuffer();if(bytes.byteLength>2*1024*1024)throw new Error('Calendar source too large.');
-        await reauthorize();
-        return send(request,response,reply.status,Buffer.from(bytes),'application/json; charset=utf-8',{Vary:'Cookie'});
-      }
-      return createManagedStaticHandler(app.directory,app.assets)(request,response,pathname,navigation,reauthorize);
-    }]));
+  const localStatic = Object.fromEntries(registry.apps.filter(app=>app.integration.web.kind==='static').map(app=>[app.id,{directory:resolve(root,app.source,app.integration.web.directory),assets:app.integration.web.assets||[]}]));
+  const staticReaders=Object.fromEntries(Object.entries(localStatic).map(([id,app])=>[id,async(request,response,pathname,navigation,reauthorize)=>{
+    const read=registry.getWeb(id).coreReads?.find(read=>read.path===pathname);
+    if(read&&webGateway?.enabled){
+      if(!['GET','HEAD'].includes(request.method))return send(request,response,405,'Method not allowed.','text/plain',{Allow:'GET, HEAD'});
+      await reauthorize();
+      const upstream=new URL(read.upstream,webGateway.coreUrl||'http://127.0.0.1:4326');
+      const reply=await fetch(upstream,{method:'GET',headers:{host:new URL(webGateway.canonicalUrl).host,cookie:request.headers.cookie||'',Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(7000)});
+      const chunks=[];let size=0;for await(const chunk of reply.body){size+=chunk.length;if(size>Math.min(read.maximumBytes||2*1024*1024,8*1024*1024))throw Error('App source exceeds its size limit.');chunks.push(chunk);}
+      await reauthorize();return send(request,response,reply.status,Buffer.concat(chunks),'application/json; charset=utf-8',{Vary:'Cookie'});
+    }
+    return createManagedStaticHandler(app.directory,app.assets)(request,response,pathname,navigation,reauthorize);
+  }]));
   async function localEntry(app) {
     const { id, kind, name, description, labels, icon, version } = app;
-    const entry = { id, kind, name, description, labels, icon, version, ...(app.launcher === false && { launcher: false }) };
+    const entry = { ...registry.publicFacts().find(fact => fact.id === id), id, kind, name, description, labels, icon, version, entry: publicEntry(registry,id), ...(app.launcher === false && { launcher: false }) };
     if (app.url) return { ...entry, url: app.url };
     if (!app.builtin) return { ...entry, path: app.path, ...(app.port !== undefined && { port: app.port }) };
     if (!app.adminOnly && demoApp?.id === app.id) return { ...entry, launcher: true, url: `http://127.0.0.1:${demoApp.port}/` };
@@ -68,6 +63,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
     return { ...entry, unavailable: 'managed' };
   }
   const gateway = webGateway?.enabled ? createWebGateway({
+    registry,
     readAppCatalog: () => readApps(root, { publicUrlsFile: null }),
     ...webGateway,
     staticApps: {
@@ -77,7 +73,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
   }) : null;
   const projectInfo = gateway && createPublicProjectHandler(gateway.origin);
   const publicGuide = webGateway?.enabled ? createPublicMcpHandler({ origin: webGateway.canonicalUrl }) : null;
-  const observations = new ObservationStore({ file: observationsFile });
+  const observations = new ObservationStore({ file: observationsFile, registry });
   const browserIngress = createBrowserIngress({ store: observations, origin: observationsOrigin });
   const platformProxy = createPlatformProxy({ upstream: consoleUpstream, host: consoleHost, origin: consoleOrigin });
   const server = createServer(async (request, response) => {
@@ -98,9 +94,11 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       if (!['GET', 'HEAD'].includes(request.method)) return send(request, response, 405, 'Method not allowed.', 'text/plain; charset=utf-8', { Allow: 'GET, HEAD' });
       let path;
       try { path = decodeURIComponent(url.pathname); } catch { return send(request, response, 400, 'Invalid URL.', 'text/plain; charset=utf-8'); }
-      const reader = !gateway && /^\/apps\/(calendar|matrix-reader)(\/.*)$/.exec(path);
+      const readerMatch = !gateway && /^\/apps\/([a-z][a-z0-9-]{0,79})(\/.*)$/.exec(path);
+      const readerApp=readerMatch&&registry.webApps.find(app=>app.kind==='static'&&app.slug===readerMatch[1]);
+      const reader=readerApp&&[readerMatch[0],readerApp.id,readerMatch[2]];
       if (reader) {
-        const context = navigationContext(request, reader[2], reader[1]);
+        const context = navigationContext(request, reader[2], reader[1], {registry});
         return await staticReaders[reader[1]](request, response, reader[2], context && { ...context, canonicalOrigin: url.origin }, async () => {});
       }
       if (path.includes('\0') || path.includes('\\') || path.split('/').some(part => part.startsWith('.'))) return send(request, response, 404, 'Not found.', 'text/plain; charset=utf-8');
@@ -118,14 +116,14 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       }
       if (path === '/api/workbench/providers' || /^\/app-providers\/[a-z][a-z0-9-]*\.mjs$/.test(path)) {
         if(!['GET','HEAD'].includes(request.method))return send(request,response,405,'Method not allowed.','text/plain',{Allow:'GET, HEAD'});
-        const available=(await appProviders.providers()).filter(value=>!value.error&&value.descriptor.cards.supported&&value.descriptor.cards.execution==='browser'&&(gateway?canOpenApp(request.webAccess,value.app.id):!value.app.adminOnly));
+        const available=(await appProviders.providers()).filter(value=>!value.error&&value.descriptor.cards.supported&&value.descriptor.cards.execution==='browser'&&(gateway?canOpenApp(request.webAccess,value.app.id,registry):!value.app.adminOnly));
         if(path==='/api/workbench/providers'){
           const providers=await Promise.all(available.map(async value=>{
             const bytes=await readFile(resolve(root,value.app.source,'praxis-provider.mjs'));
             const version=createHash('sha256').update(bytes).digest('hex').slice(0,20);
             return{appId:value.app.id,moduleUrl:`/app-providers/${value.app.id}.mjs?v=${version}`,dataExecution:'server'};
           }));
-          return send(request,response,200,JSON.stringify({schemaVersion:1,providers}),'application/json; charset=utf-8',{Vary:'Cookie'});
+          return send(request,response,200,JSON.stringify({schemaVersion:1,providers,apps:registry.publicFacts().filter(app=>!gateway||canOpenApp(request.webAccess,app.id,registry))}),'application/json; charset=utf-8',{Vary:'Cookie'});
         }
         const appId=path.slice('/app-providers/'.length,-4),provider=available.find(value=>value.app.id===appId);
         if(!provider)return send(request,response,404,'Not found.','text/plain');
@@ -133,7 +131,7 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       }
       if (path === '/api/apps') {
         const apps = await readApps(root, { publicUrlsFile: gateway ? null : publicUrlsFile });
-        const visibleApps = gateway ? gatewayApps(apps, request.webAccess, gateway.origin) : [...await Promise.all(apps.filter(app => !app.adminOnly).map(localEntry)), ...developmentApps];
+        const visibleApps = gateway ? gatewayApps(apps, request.webAccess, gateway.origin,registry) : [...await Promise.all(apps.filter(app => !app.adminOnly).map(localEntry)), ...developmentApps];
         return send(request, response, 200, JSON.stringify({ apps: visibleApps }), 'application/json; charset=utf-8');
       }
       if (path === '/business' || path === '/business/') {

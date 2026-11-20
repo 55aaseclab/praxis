@@ -6,9 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createPrivateDocumentHandler } from '../src/private-documents.mjs';
+import { setAppFacts } from '../public/app-registry.js';
 import { validateCard } from '../public/app-providers.js';
 import * as lettersProvider from '../third_party/letters/praxis-provider.mjs';
 import * as profilesProvider from '../third_party/profiles/praxis-provider.mjs';
+setAppFacts(['letters', 'profiles'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + id + '/', policy: 'document-owner' } })));
 
 async function fixture(t, { authorize, configured = true } = {}) {
   const area = await mkdtemp(join(tmpdir(), 'private-doc-store-'));

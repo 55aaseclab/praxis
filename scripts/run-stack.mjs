@@ -1,3 +1,5 @@
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
+import { storageEntries } from '../src/storage/app-paths.mjs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -18,9 +20,18 @@ export async function validateWorkingData({ storageConfig, businessConfig, polar
   const storage = await json(storageConfig || process.env.PRAXIS_STORAGE_CONFIG || join(homedir(), '.config/praxis/storage.json'));
   if (!storage.workingData) return;
   const business = await json(businessConfig);
-  const reminder = await json(business.apps.reminder.spacesFile), slides = await json(business.apps.slides.spacesFile);
-  const polaris = await json(polarisConfig || process.env.PRAXIS_POLARIS_CONFIG || join(homedir(), '.config/praxis/polaris.json'));
-  return assertAppBindings(storage, business, { reminderSpaces: reminder.spaces, slidesSpaces: slides.spaces, polaris });
+  const inputs = {};
+  for (const { storage: declaration, adapterId } of storageEntries()) {
+    const mapping = declaration.relocation?.spaceMap, app = business.apps[adapterId];
+    const field = declaration.activation?.mappingFileField || (mapping ? 'spacesFile' : null);
+    if (mapping && app?.[field]) inputs[mapping.assertionInput] = (await json(app[field])).spaces;
+    const legacy = declaration.relocation?.legacyConfiguration;
+    if (legacy) {
+      const filename = polarisConfig || process.env['PRAXIS_' + legacy.input.toUpperCase() + '_CONFIG'] || join(homedir(), '.config/praxis/' + legacy.input + '.json');
+      inputs[legacy.input] = await json(filename);
+    }
+  }
+  return assertAppBindings(storage, business, inputs);
 }
 
 export async function businessOperation(args) {
@@ -30,12 +41,12 @@ export async function businessOperation(args) {
   const deployment = installed ? null : await deploymentOverrides(configFile);
   const plan = await businessStackPlan(configFile, { serviceName: installed?.serviceName || deployment?.coreService || 'core' });
   const expectedServices = installed?.item.services || plan.services;
-  if (!plan.override.services.reminder) throw new Error('The unified stack requires explicitly managed Reminder in the core project.');
+  for (const { adapterId, storage } of storageEntries()) if (storage.activation?.requireManaged && !plan.override.services[adapterId]) throw new Error('The unified stack requires explicitly managed application services.');
   if (command === 'validate') return { services: expectedServices };
   const output = await runBusinessStack(command, { configFile, deferDeploymentFacade: options.includes('--defer-deployment-facade') });
   if (command !== 'status') return output;
   let rows; try { const value = JSON.parse(output || '[]'); rows = Array.isArray(value) ? value : [value]; } catch { rows = String(output).trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
-  const services = expectedServices.map(name => { const row = rows.find(value => value.Service === name); return { name, ...(name === 'storage-status' ? {} : { port: { core: 4326, business: 4326, reminder: 4322, projects: 4327, 'slides-business': 4328 }[name] }), state: row?.State || 'absent', health: row?.Health || 'unknown' }; });
+  const services = expectedServices.map(name => { const row = rows.find(value => value.Service === name); return { name, ...(name === 'storage-status' ? {} : { port: Number(Object.entries(plan.servicePorts).find(([, service]) => service === name)?.[0]) }), state: row?.State || 'absent', health: row?.Health || 'unknown' }; });
   return { healthy: services.every(service => service.state === 'running' && service.health === 'healthy'), expectedServices, services };
 }
 
@@ -62,7 +73,9 @@ export async function main(args = process.argv.slice(2), operations = { stack: a
   const storageOptions = storageConfig ? ['--config', storageConfig] : [];
   const businessOptions = ['--config', businessConfig];
   const polarisOptions = polarisConfig ? ['--config', polarisConfig] : [];
-  const bindingOptions = ['--source-mode', 'registered', '--without-reminder', ...storageOptions];
+  const excludedServices = storageEntries().filter(({ storage }) => storage.activation?.skipService).map(({ adapterId }) => adapterId);
+  const activationFlags = storageEntries().flatMap(({ storage }) => storage.activation?.stackFlag ? [storage.activation.stackFlag] : []);
+  const bindingOptions = ['--source-mode', 'registered', ...activationFlags, ...storageOptions];
   const deploymentEnabled = operations.deployment && (await operations.deployment(['enabled', ...businessOptions]))?.enabled;
   const deferred = deploymentEnabled ? ['--defer-deployment-facade'] : [];
   let businessInventory;
@@ -73,8 +86,8 @@ export async function main(args = process.argv.slice(2), operations = { stack: a
         const group = await operation(parameters);
         result.groups[name] = group ?? { healthy: false };
         result.services.push(...(group?.services || []));
-        const expected = name === 'apps' ? Object.keys(SERVICES).filter(service => service !== 'reminder') : name === 'core' ? businessInventory || group?.expectedServices || [group?.services?.find(service => ['core', 'business'].includes(service.name))?.name || 'core', 'reminder'] : ['storage'];
-        if (name === 'core' && (!Array.isArray(expected) || ![2, 3, 4, 5].includes(expected.length) || expected.filter(service => ['core', 'business'].includes(service)).length !== 1 || !expected.includes('reminder') || expected.some(service => !['core', 'business', 'reminder', 'projects', 'slides-business', 'storage-status'].includes(service)) || new Set(expected).size !== expected.length)) { result.healthy = false; continue; }
+        const expected = name === 'apps' ? Object.keys(SERVICES).filter(service => !excludedServices.includes(service)) : name === 'core' ? businessInventory || group?.expectedServices || [group?.services?.find(service => ['core', 'business'].includes(service.name))?.name || 'core', ...excludedServices] : ['storage'];
+        if (name === 'core' && (!Array.isArray(expected) || expected.length < 1 || expected.filter(service => ['core', 'business'].includes(service)).length !== 1 || excludedServices.some(service => !expected.includes(service)) || expected.some(service => !['core', 'business', 'storage-status', ...DEFAULT_APP_REGISTRY.apps.flatMap(app => app.integration.deployment?.managedServices || [])].includes(service)) || new Set(expected).size !== expected.length)) { result.healthy = false; continue; }
         const actual = group?.services?.map(service => service.name).sort() || [];
         if (!group?.healthy || JSON.stringify(actual) !== JSON.stringify(expected.sort())) result.healthy = false;
       } catch (error) { result.groups[name] = { healthy: false, error: error.code || 'UNAVAILABLE' }; result.healthy = false; }

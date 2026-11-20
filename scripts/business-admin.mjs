@@ -1,11 +1,12 @@
 #!/usr/bin/env node
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 import { mkdir, readFile, writeFile, lstat, access } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { AuthStore, WEB_APP_IDS } from '../src/business/auth.mjs';
+import { AuthStore } from '../src/business/auth.mjs';
 import { loadBusinessConfig, DEFAULT_BUSINESS_CONFIG } from '../src/business/config.mjs';
 import { assertOutsideWorkspace } from '../src/storage/config.mjs';
 
@@ -15,32 +16,36 @@ async function privateWrite(file, value) {
   await writeFile(file, typeof value === 'string' || Buffer.isBuffer(value) ? value : `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
   return file;
 }
-export async function initializeBusiness({ file = DEFAULT_BUSINESS_CONFIG, issuer, reminderData, stateRoot = resolve(homedir(), '.local/share/praxis/business'), username = 'owner' }) {
+export async function initializeBusiness({ file = DEFAULT_BUSINESS_CONFIG, issuer, stateRoot = resolve(homedir(), '.local/share/praxis/business'), username = 'owner', appId, data, registry = DEFAULT_APP_REGISTRY, ...inputs }) {
+  const candidates = registry.apps.filter(app => app.integration.deployment?.adminBootstrap);
+  const installed = appId ? registry.getApp(appId) : candidates.find(app => inputs[app.integration.deployment.adminBootstrap.input] !== undefined);
+  const bootstrap = installed?.integration.deployment?.adminBootstrap, business = installed?.integration.business;
+  if (!bootstrap || !business) throw new Error('Select an installed app bootstrap and an explicit data mapping.');
+  data ??= inputs[bootstrap.input];
   file = resolve(file); stateRoot = resolve(stateRoot); assertOutsideWorkspace(file); assertOutsideWorkspace(stateRoot);
   try { await access(file); throw new Error('Business configuration already exists; nothing was overwritten.'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const url = new URL(issuer); if (url.pathname !== '/' || url.search || url.hash) throw new Error('Issuer must be an origin without a path.');
-  if (!reminderData || !resolve(reminderData).startsWith('/')) throw new Error('An explicit Reminder data mapping is required.');
+  if (typeof data !== 'string' || !data || !resolve(data).startsWith('/')) throw new Error('An explicit app data mapping is required.');
   const ownerId = randomUUID(), spaceId = randomUUID(), password = randomBytes(24).toString('base64url');
   const secretRoot = resolve(dirname(file), 'secrets');
-  const reminderKey = resolve(secretRoot, 'business-reminder.key'), tingproofKey = resolve(secretRoot, 'business-tingproof.key');
-  const spacesFile = resolve(dirname(file), 'reminder-business-spaces.json');
+  const keyFile = resolve(secretRoot, 'business-' + business.adapterId + '.key');
+  const recipe = bootstrap.create({ data: resolve(data), directory: dirname(file), keyFile, spaceId });
   await mkdir(stateRoot, { recursive: true, mode: 0o700 });
   const config = {
     issuer: url.origin, database: resolve(stateRoot, 'auth.db'), eventsDatabase: resolve(stateRoot, 'events.db'),
     allowedHosts: ['127.0.0.1:4326', 'localhost:4326'],
-    apps: { reminder: { url: 'http://127.0.0.1:4322/api/business', keyFile: reminderKey, spacesFile, spaces: [spaceId] } },
+    apps: { [business.adapterId]: { ...recipe.configuration, keyFile, spaces: [spaceId] } },
   };
   // Validate the issuer before creating credentials or any account metadata.
-  const auth = new AuthStore({ file: config.database, issuer: config.issuer });
+  const auth = new AuthStore({ file: config.database, issuer: config.issuer, registry });
   try {
     auth.createUser({ id: ownerId, username, password }); auth.createSpace({ id: spaceId, type: 'personal', ownerId });
     auth.setPlatformAdmin({ userId: ownerId, enabled: true });
-    auth.setWebAccess({ userId: ownerId, apps: [...WEB_APP_IDS], workbench: true, prds: true });
-    auth.grantResource({ userId: ownerId, spaceId, appId: 'reminder', resources: ['*'], actions: ['read', 'create', 'update', 'complete', 'delete'] });
+    auth.setWebAccess({ userId: ownerId, apps: [...registry.webAppIds], workbench: true, prds: true });
+    auth.grantResource({ userId: ownerId, spaceId, appId: business.adapterId, resources: ['*'], actions: business.actions });
   } finally { auth.close(); }
-  await privateWrite(reminderKey, randomBytes(48)); await privateWrite(tingproofKey, randomBytes(48));
-  await privateWrite(spacesFile, { spaces: { [spaceId]: resolve(reminderData) } });
-  await privateWrite(resolve(dirname(file), 'reminder-managed.json'), { REMINDER_MANAGED: '1', REMINDER_BUSINESS_KEY_FILE: reminderKey, REMINDER_BUSINESS_SPACES_FILE: spacesFile });
+  await privateWrite(keyFile, randomBytes(48));
+  for (const entry of recipe.files) await privateWrite(entry.file, entry.value);
   await privateWrite(resolve(secretRoot, 'business-owner.json'), { username, password, loginUrl: `${config.issuer}/auth/login` });
   await privateWrite(file, config);
   return { configFile: file, credentialsFile: resolve(secretRoot, 'business-owner.json'), ownerId, spaceId };
@@ -60,9 +65,9 @@ export async function administerBusiness({ command, configFile, specFile, output
 }
 export async function runCoreAdmin(argv = process.argv.slice(2)) {
   try {
-    const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { config: { type: 'string', default: process.env.PRAXIS_CORE_CONFIG || process.env.PRAXIS_BUSINESS_CONFIG }, issuer: { type: 'string' }, 'reminder-data': { type: 'string' }, 'state-root': { type: 'string' }, username: { type: 'string' }, spec: { type: 'string' }, out: { type: 'string' } } });
+    const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { config: { type: 'string', default: process.env.PRAXIS_CORE_CONFIG || process.env.PRAXIS_BUSINESS_CONFIG }, issuer: { type: 'string' }, ...Object.fromEntries(DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.deployment?.adminBootstrap).map(app => [app.integration.deployment.adminBootstrap.flag, { type: 'string' }])), app: { type: 'string' }, data: { type: 'string' }, 'state-root': { type: 'string' }, username: { type: 'string' }, spec: { type: 'string' }, out: { type: 'string' } } });
     if (!values.config) throw new Error('Pass --config with a private configuration path.');
-    const result = positionals[0] === 'init' ? await initializeBusiness({ file: values.config, issuer: values.issuer, reminderData: values['reminder-data'], stateRoot: values['state-root'], username: values.username }) : await administerBusiness({ command: positionals[0], configFile: values.config, specFile: values.spec, outputFile: values.out });
+    const result = positionals[0] === 'init' ? await initializeBusiness({ file: values.config, issuer: values.issuer, appId: values.app, data: values.data, ...Object.fromEntries(DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.deployment?.adminBootstrap).map(app => { const definition = app.integration.deployment.adminBootstrap; return [definition.input, values[definition.flag]]; })), stateRoot: values['state-root'], username: values.username }) : await administerBusiness({ command: positionals[0], configFile: values.config, specFile: values.spec, outputFile: values.out });
     console.log(JSON.stringify(result));
   } catch (error) { console.error(`Core administration failed: ${error.code || 'INVALID_INPUT'}`); process.exitCode = 1; }
 }

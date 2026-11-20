@@ -14,9 +14,9 @@ The built-in apps are useful products in their own right. They show what a caref
 
 **Read.** Ask, “How does this hiring packet say we should set starting pay?” Once the packet is imported and indexed, an authorized agent can find the relevant passages and check their context. Knowledge supplies the source file and passage location. The agent returns a conclusion that the person can verify against the exact clause, such as when an example differs from approved policy. [Knowledge requirements](../third_party/knowledge/docs/PRD.en.md) · [Knowledge agent skill](../skills/knowledge-mcp/SKILL.md)
 
-**Watch.** Ask, “Prepare the approved project update for the meeting.” With the required deck permissions, an agent can update the Lattice slides and inspect the rendered result. The presenter opens the finished deck for the meeting. [Lattice authoring contract](../skills/mcp-slides/SKILL.md)
+**Watch.** Ask, “Prepare the approved project update for the meeting.” With the required deck permissions, an agent can update the Lattice slides and inspect the rendered result. The presenter opens the finished deck for the meeting. [Lattice authoring contract](../third_party/lattice/skills/mcp-slides/SKILL.md)
 
-**Listen.** Ask, “Prepare the corrections to this interview for review.” TingProof binds each submitted correction to its assigned segment and checks the revision. A reviewer with separate access to the recording, linked in the native editor, can play the relevant timestamp and compare the spoken words with the proposed text. [TingProof listening experience](../third_party/tingproof/docs/PRD.en.md) · [Correction and readback](../skills/mcp-tingproof/SKILL.md)
+**Listen.** Ask, “Prepare the corrections to this interview for review.” TingProof binds each submitted correction to its assigned segment and checks the revision. A reviewer with separate access to the recording, linked in the native editor, can play the relevant timestamp and compare the spoken words with the proposed text. [TingProof listening experience](../third_party/tingproof/docs/PRD.en.md) · [Correction and readback](../third_party/tingproof/skills/mcp-tingproof/SKILL.md)
 
 ## How the approaches compare
 
@@ -50,9 +50,9 @@ Agent harnesses such as Codex CLI complement Praxis. The harness runs the agent 
 
 **读。** 用户问「这份招聘资料里，入职薪资应该怎么定？」资料入库并建立索引后，获授权的智能体可以查找相关段落并回读上下文。Knowledge 提供原文件与段落位置。智能体给出结论，用户可以回到具体条款查证，例如确认一段话究竟是示例还是正式制度。[Knowledge 需求](../third_party/knowledge/docs/PRD.md) · [Knowledge 操作技能](../skills/knowledge-mcp/SKILL.md)
 
-**看。** 用户说「把已经确认的项目进展整理成开会用的演示稿」。拿到相应文稿权限后，智能体可以更新 Lattice 幻灯片并检查渲染结果。主讲人可以直接打开完成的演示稿开会。[Lattice 制作合同](../skills/mcp-slides/SKILL.md)
+**看。** 用户说「把已经确认的项目进展整理成开会用的演示稿」。拿到相应文稿权限后，智能体可以更新 Lattice 幻灯片并检查渲染结果。主讲人可以直接打开完成的演示稿开会。[Lattice 制作合同](../third_party/lattice/skills/mcp-slides/SKILL.md)
 
-**听。** 用户说「把这段访谈的字幕校正准备好，交给我复核」。TingProof 将提交的校正绑定到获分配的字幕片段，并核对版本。复核者另行获得录音访问权限并在原生编辑器中关联录音后，就能播放对应时间点的原声，与拟修正的文本对照。[TingProof 听校体验](../third_party/tingproof/docs/听校_PRD_V1.0.0.md) · [校正提交与回读](../skills/mcp-tingproof/SKILL.md)
+**听。** 用户说「把这段访谈的字幕校正准备好，交给我复核」。TingProof 将提交的校正绑定到获分配的字幕片段，并核对版本。复核者另行获得录音访问权限并在原生编辑器中关联录音后，就能播放对应时间点的原声，与拟修正的文本对照。[TingProof 听校体验](../third_party/tingproof/docs/听校_PRD_V1.0.0.md) · [校正提交与回读](../third_party/tingproof/skills/mcp-tingproof/SKILL.md)
 
 ## 不同应用形态如何交付结果
 

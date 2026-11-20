@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveMemoRuntime, memoComposeService } from '../src/memo-runtime.mjs';
+import { pathToFileURL } from 'node:url';
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
+const { resolveMemoRuntime, memoComposeService } = await import(pathToFileURL(join(DEFAULT_APP_REGISTRY.root, DEFAULT_APP_REGISTRY.getApp('memo').source, 'praxis/stack.mjs')).href);
 
 test('Memo mounts private guides separately from credentials and browser records', async t => {
   const root = await mkdtemp(join(tmpdir(), 'memo-runtime-'));

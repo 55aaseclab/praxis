@@ -11,25 +11,32 @@ import { loadBusinessConfig, DEFAULT_BUSINESS_CONFIG, DEFAULT_CORE_CONFIG } from
 import { writePrivateJson, assertOutsideWorkspace, isWithin, loadConfig } from '../src/storage/config.mjs';
 import { validateStorageStatusDestination } from '../src/storage/status.mjs';
 import { validateObservationsDirectory } from './stack.mjs';
-import { resolveSlidesModelCaches } from '../src/business/slides-model-caches.mjs';
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 import { installationProject } from './managed-compose.mjs';
 import { deploymentOverrides } from '../src/deployment/integration.mjs';
 
 const workspace = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
-const reminderDataRoot = resolve(workspace, 'third_party/reminder/data');
+const sourceDataRoots = DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.deployment?.allowSourceData).map(app => resolve(DEFAULT_APP_REGISTRY.root, app.source, app.integration.deployment.allowSourceData));
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const overlaps = (left, right) => isWithin(left, right) || isWithin(right, left);
 const ownerOnly = info => (info.mode & 0o077) === 0 && (typeof process.getuid !== 'function' || info.uid === process.getuid());
 export const BUSINESS_HEALTHCHECK = `(async()=>{
 const config=JSON.parse(require('node:fs').readFileSync(process.env.PRAXIS_BUSINESS_CONFIG,'utf8'));
+const {DEFAULT_APP_REGISTRY:registry}=await import('./src/default-app-registry.mjs');
 const check=async(url,options,accepted)=>{const response=await fetch(url,{...options,redirect:'error',signal:AbortSignal.timeout(2000)});await response.body?.cancel();if(!accepted.includes(response.status))throw new Error('Unhealthy endpoint');};
-await Promise.all([check(process.env.HEALTH_URL,{},[200]),...Object.entries(config.apps).map(([appId,app])=>check(app.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:({reminder:'list',travel:'list_itineraries',projects:'list_projects',knowledge:'list_libraries',memo:'list_topics',slides:'list_decks'})[appId]||'list_assignments',spaceId:app.spaces[0],...(appId==='tingproof'?{resourceId:'assignments'}:{})})},[401,403]))]);
+await Promise.all([check(process.env.HEALTH_URL,{},[200]),...Object.entries(config.apps).map(([appId,app])=>{
+const declared=registry.getApp(registry.webId(appId)).integration.deployment?.unsignedProbe;
+const operation=declared?.operation||Object.entries(registry.getBusiness(appId).operations).find(([,definition])=>definition.action==='read'&&!definition.mutation)?.[0];
+if(!operation||registry.getBusiness(appId).operations[operation]?.mutation)throw new Error('No declared read probe');
+return check(app.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation,spaceId:app.spaces[0],...(declared?.resourceId?{resourceId:declared.resourceId}:{})})},[401,403]);
+})]);
 })().catch(()=>process.exit(1));`;
+
 
 async function privatePath(source, { directory = false, allowMissing = false, data = false, maxSize = 256 * 1024 } = {}) {
   if (typeof source !== 'string' || !isAbsolute(source) || resolve(source) !== source) fail('UNSAFE_PATH', 'Private paths must be canonical and absolute.');
   if (!data) assertOutsideWorkspace(source);
-  else if (isWithin(workspace, source) && !isWithin(reminderDataRoot, source)) fail('UNSAFE_DATA_PATH', 'Only the independent Reminder data directory may be mounted within the workspace.');
+  else if (isWithin(workspace, source) && !sourceDataRoots.some(root => isWithin(root, source))) fail('UNSAFE_DATA_PATH', 'Only declared independent app data may be mounted within the workspace.');
   if (source.split('/').some(part => ['.git', '.ssh', '.gnupg', '.aws', '.kube', '.docker'].includes(part))) fail('UNSAFE_PATH', 'Source-control, host credentials and Docker control directories cannot be mounted.');
   if (directory) {
     const broad = new Set(['/', '/tmp', '/var', '/var/lib', '/run', '/etc', '/opt', '/mnt', '/media', '/home', homedir()]);
@@ -53,14 +60,14 @@ export async function coreConfigFile(explicit) {
   try { await lstat(DEFAULT_CORE_CONFIG); return DEFAULT_CORE_CONFIG; }
   catch (error) { if (error.code === 'ENOENT') return DEFAULT_BUSINESS_CONFIG; throw error; }
 }
-export async function businessStackPlan(configFile, { port = 4326, projectName = 'praxis-core', serviceName = 'core' } = {}) {
+export async function businessStackPlan(configFile, { port = 4326, projectName = 'praxis-core', serviceName = 'core', registry = DEFAULT_APP_REGISTRY } = {}) {
   if (!['core', 'business'].includes(serviceName)) fail('INVALID_CORE_SERVICE', 'Core service must be core or legacy business.');
   port = Number(port);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('INVALID_PORT', 'Core port must be between 1024 and 65535.');
   if (typeof projectName !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,62}$/.test(projectName)) fail('INVALID_PROJECT', 'Compose project name is invalid.');
   configFile = resolve(await coreConfigFile(configFile));
   await privatePath(configFile);
-  const config = await loadBusinessConfig(configFile);
+  const config = await loadBusinessConfig(configFile, { registry });
   if (config.database === config.eventsDatabase) fail('OVERLAPPING_STATE', 'Identity and event databases require different files.');
   for (const name of ['allowedHosts', 'allowedOrigins']) if (config[name] !== undefined && (!Array.isArray(config[name]) || config[name].some(value => typeof value !== 'string' || /[\s\\]/.test(value)))) fail('INVALID_CONFIG', 'Host and origin allowlists must be explicit arrays.');
   const healthHost = `127.0.0.1:${port}`;
@@ -89,85 +96,22 @@ export async function businessStackPlan(configFile, { port = 4326, projectName =
     healthcheck: { test: ['CMD', 'node', '-e', BUSINESS_HEALTHCHECK] },
     volumes: [...stateDirectories.map(directory => mount(directory)), ...readOnlyFiles.map(file => mount(file, true))],
   } } };
-  const ports = [port], reminder = config.apps.reminder;
-  const appDirectories = [];
-  if (reminder?.managed !== undefined && typeof reminder.managed !== 'boolean') fail('INVALID_MANAGED_SETTING', 'Managed Reminder must be explicitly true or false.');
-  if (reminder?.managed === true) {
-    const endpoint = new URL(reminder.url);
-    if (endpoint.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(endpoint.hostname) || endpoint.port !== '4322' || endpoint.pathname !== '/api/business' || endpoint.search || endpoint.hash || endpoint.username || endpoint.password) fail('INVALID_MANAGED_ENDPOINT', 'Managed Reminder requires its fixed loopback port4322 endpoint.');
-    await privatePath(reminder.spacesFile);
-    const mapping = JSON.parse(await readFile(reminder.spacesFile, 'utf8'));
-    if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping) || Object.keys(mapping).some(key => key !== 'spaces') || !mapping.spaces || typeof mapping.spaces !== 'object' || Array.isArray(mapping.spaces) || Object.keys(mapping.spaces).sort().join('\0') !== [...reminder.spaces].sort().join('\0')) fail('INVALID_SPACE_MAPPING', 'Reminder mapping must exactly match its configured business spaces.');
-    const dataFiles = Object.values(mapping.spaces);
-    if (new Set(dataFiles).size !== dataFiles.length || dataFiles.some(file => typeof file !== 'string' || !file.endsWith('.json'))) fail('INVALID_SPACE_MAPPING', 'Reminder spaces require distinct JSON data files.');
-    for (const file of dataFiles) await privatePath(file, { allowMissing: true, data: true, maxSize: Infinity });
-    const dataDirectories = distinctDirectories(dataFiles.map(file => dirname(file)));
-    appDirectories.push(...dataDirectories);
-    for (const directory of dataDirectories) {
-      await privatePath(directory, { directory: true, data: true });
-      if (stateDirectories.some(state => overlaps(state, directory)) || readOnlyFiles.concat(reminder.spacesFile).some(file => isWithin(directory, file)) || isWithin(directory, controlDirectory)) fail('OVERLAPPING_DATA_MOUNT', 'Reminder data must stay separate from identity state, secrets and Docker controls.');
+  const ports = [port], appDirectories = [], servicePorts = { [port]: serviceName };
+  for (const installed of registry.apps) {
+    const adapterId = installed.integration.business?.adapterId, app = config.apps[adapterId];
+    const deployment = installed.integration.deployment;
+    if (!app || typeof deployment?.managedService !== 'function') continue;
+    const sourceRoot = resolve(registry.root, installed.source);
+    const build = { context: sourceRoot, dockerfile: deployment.native.dockerfile, args: { PRAXIS_UID: String(uid), PRAXIS_GID: String(gid) } };
+    const readPrivateJson = async path => { await privatePath(path); return JSON.parse(await readFile(path, 'utf8')); };
+    const result = await deployment.managedService({ app, config, corePort: port, uid, gid, workspace, controlDirectory, stateDirectories, appDirectories, readOnlyFiles, privatePath, readPrivateJson, distinctDirectories, mount, overlaps, isWithin, fail, build });
+    for (const [name, service] of Object.entries(result.services)) {
+      if (!/^[a-z][a-z0-9-]{0,79}$/.test(name) || Object.hasOwn(override.services, name)) fail('INVALID_APP_SERVICE', 'Duplicate or invalid app service.');
+      override.services[name] = service;
+      const index = service.command?.indexOf('--port');
+      if (index >= 0) servicePorts[Number(service.command[index + 1])] = name;
     }
-    override.services.reminder = {
-      image: 'praxis-business/reminder:local',
-      build: { context: join(workspace, 'third_party/reminder'), dockerfile: '../../Dockerfile.builtins', target: 'reminder', args: { PRAXIS_UID: String(uid), PRAXIS_GID: String(gid) } },
-      command: ['node', 'src/server.js', '--host', config.webGateway?.enabled === true ? '127.0.0.1' : '0.0.0.0', '--port', '4322'],
-      network_mode: 'host', init: true, user: `${uid}:${gid}`, read_only: true, restart: 'unless-stopped',
-      cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'], tmpfs: ['/tmp:rw,nosuid,nodev,size=64m,mode=1777'], stop_grace_period: '30s',
-      environment: { REMINDER_MANAGED: '1', REMINDER_BUSINESS_KEY_FILE: reminder.keyFile, REMINDER_BUSINESS_SPACES_FILE: reminder.spacesFile, REMINDER_BUSINESS_UI_URL: `${config.issuer}/business/reminder/` },
-      healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4322/health').then(async r=>{const h=await r.json();if(!r.ok||h.managed!==true)process.exit(1)}).catch(()=>process.exit(1))"], interval: '10s', timeout: '5s', retries: 3, start_period: '10s' },
-      logging: { driver: 'json-file', options: { 'max-size': '10m', 'max-file': '3' } },
-      volumes: [...dataDirectories.map(directory => mount(directory)), mount(reminder.keyFile, true), mount(reminder.spacesFile, true)],
-    };
-    ports.push(4322);
-  }
-  const projects = config.apps.projects;
-  if (projects) {
-    if (projects.managed !== true || projects.url !== 'http://127.0.0.1:4327/api/business') fail('INVALID_MANAGED_ENDPOINT', 'Projects requires its managed fixed loopback adapter.');
-    await privatePath(projects.dataDir, { directory: true, data: true });
-    await privatePath(projects.businessConfigFile);
-    await privatePath(resolve(projects.dataDir, 'projects.db'), { allowMissing: true, data: true, maxSize: Infinity });
-    const mapping = JSON.parse(await readFile(projects.businessConfigFile, 'utf8'));
-    if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping) || Object.keys(mapping).some(key => !['version', 'spaces'].includes(key)) || mapping.version !== 1 || !Array.isArray(mapping.spaces) || !mapping.spaces.length || new Set(mapping.spaces).size !== mapping.spaces.length || JSON.stringify([...mapping.spaces].sort()) !== JSON.stringify([...projects.spaces].sort())) fail('INVALID_SPACE_MAPPING', 'Projects mapping must match its configured spaces exactly.');
-    if (stateDirectories.concat(appDirectories).some(directory => overlaps(directory, projects.dataDir)) || readOnlyFiles.concat(projects.businessConfigFile).some(file => isWithin(projects.dataDir, file)) || isWithin(projects.dataDir, controlDirectory)) fail('OVERLAPPING_DATA_MOUNT', 'Projects data must remain separate from identity, other applications, credentials and controls.');
-    appDirectories.push(projects.dataDir);
-    override.services.projects = {
-      image: 'praxis-business/projects:local',
-      build: { context: join(workspace, 'third_party/projects'), dockerfile: '../../Dockerfile.builtins', target: 'projects', args: { PRAXIS_UID: String(uid), PRAXIS_GID: String(gid) } },
-      command: ['node', 'src/server.mjs', '--host', '127.0.0.1', '--port', '4327'],
-      network_mode: 'host', init: true, user: `${uid}:${gid}`, read_only: true, restart: 'unless-stopped',
-      cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'], tmpfs: ['/tmp:rw,nosuid,nodev,size=64m,mode=1777'], stop_grace_period: '30s',
-      environment: { PROJECTS_MANAGED: '1', PROJECTS_DATA_DIR: projects.dataDir, PROJECTS_BUSINESS_KEY_FILE: projects.keyFile, PROJECTS_BUSINESS_CONFIG_FILE: projects.businessConfigFile, PROJECTS_KNOWLEDGE_BASE_URL: '/apps/knowledge/' },
-      healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4327/health').then(async r=>{const h=await r.json();if(!r.ok||h.managed!==true)process.exit(1)}).catch(()=>process.exit(1))"], interval: '10s', timeout: '5s', retries: 3, start_period: '10s' },
-      logging: { driver: 'json-file', options: { 'max-size': '10m', 'max-file': '3' } },
-      volumes: [mount(projects.dataDir), mount(projects.keyFile, true), mount(projects.businessConfigFile, true)],
-    };
-    ports.push(4327);
-  }
-  const slides = config.apps.slides;
-  if (slides) {
-    if (slides.managed !== true || slides.url !== 'http://127.0.0.1:4328/api/business') fail('INVALID_MANAGED_ENDPOINT', 'Slides requires its managed fixed loopback adapter.');
-    await privatePath(slides.dataDir, { directory: true, data: true });
-    await privatePath(slides.spacesFile);
-    const mapping = JSON.parse(await readFile(slides.spacesFile, 'utf8'));
-    if (!mapping || Object.keys(mapping).some(key => key !== 'spaces') || !mapping.spaces || typeof mapping.spaces !== 'object' || Array.isArray(mapping.spaces) || JSON.stringify(Object.keys(mapping.spaces).sort()) !== JSON.stringify([...slides.spaces].sort())) fail('INVALID_SPACE_MAPPING', 'Slides mapping must match its configured spaces exactly.');
-    const files = Object.values(mapping.spaces);
-    if (new Set(files).size !== files.length || files.some(file => typeof file !== 'string' || dirname(file) !== slides.dataDir || !file.endsWith('.json'))) fail('INVALID_SPACE_MAPPING', 'Slides spaces require separate JSON files in their registered data directory.');
-    for (const file of files) await privatePath(file, { allowMissing: true, data: true, maxSize: Infinity });
-    if (stateDirectories.concat(appDirectories).some(directory => overlaps(directory, slides.dataDir)) || readOnlyFiles.concat(slides.spacesFile).some(file => isWithin(slides.dataDir, file)) || isWithin(slides.dataDir, controlDirectory)) fail('OVERLAPPING_DATA_MOUNT', 'Slides data must remain separate from identity, other applications, credentials and controls.');
-    appDirectories.push(slides.dataDir);
-    const modelCaches = await resolveSlidesModelCaches(slides.modelCaches, { uid, protectedPaths: [workspace, controlDirectory, ...stateDirectories, ...appDirectories, ...readOnlyFiles, slides.spacesFile, config.observationsFile && dirname(config.observationsFile), config.console?.storageStatusFile && dirname(config.console.storageStatusFile), config.console?.storageConfigFile, ...Object.values(config.apps).flatMap(app => [app.keyFile && dirname(app.keyFile), app.spacesFile && dirname(app.spacesFile), app.dataDir, app.dataFile && dirname(app.dataFile)])] });
-    override.services['slides-business'] = {
-      image: 'praxis-business/slides:local',
-      build: { context: join(workspace, 'third_party/lattice'), dockerfile: '../../Dockerfile.builtins', target: 'lattice', args: { PRAXIS_UID: String(uid), PRAXIS_GID: String(gid) } },
-      command: ['node', 'src/business/server.mjs', '--host', '127.0.0.1', '--port', '4328'],
-      network_mode: 'host', init: true, user: `${uid}:${gid}`, read_only: true, restart: 'unless-stopped',
-      cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'], tmpfs: ['/tmp:rw,nosuid,nodev,size=1024m,mode=1777'], shm_size: '1gb', stop_grace_period: '30s',
-      environment: { SLIDES_BUSINESS_KEY_FILE: slides.keyFile, SLIDES_BUSINESS_SPACES_FILE: slides.spacesFile, SLIDES_BUSINESS_AUTHORIZATION_URL: `http://127.0.0.1:${port}/api/business/slides/authorize-job`, SLIDES_BUSINESS_AUTHORIZATION_HOST: new URL(config.issuer).host, ...modelCaches.environment },
-      healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4328/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: '10s', timeout: '5s', retries: 3, start_period: '10s' },
-      logging: { driver: 'json-file', options: { 'max-size': '10m', 'max-file': '3' } },
-      volumes: [mount(slides.dataDir), mount(slides.keyFile, true), mount(slides.spacesFile, true), ...modelCaches.volumes],
-    };
-    ports.push(4328);
+    ports.push(...result.ports);
   }
   let observationsDirectory;
   if (config.observationsFile !== undefined) {
@@ -246,7 +190,7 @@ export async function businessStackPlan(configFile, { port = 4326, projectName =
     catch { fail('UNSAFE_INVENTORY_PATH', 'Data inventory requires a separate private metadata directory.'); }
     override.services[serviceName].volumes.push(mount(dataInventoryDirectory, true));
   }
-  return { config, configFile, port, projectName, serviceName, uid, gid, ports, stateDirectories, observationsDirectory, storageStatusDirectory, dataInventoryDirectory, services: Object.keys(override.services), controlDirectory, overrideFile, override };
+  return { config, configFile, port, projectName, serviceName, uid, gid, ports, servicePorts, stateDirectories, observationsDirectory, storageStatusDirectory, dataInventoryDirectory, services: Object.keys(override.services), controlDirectory, overrideFile, override };
 }
 export function coreInstallation(config) {
   if (!config?.projects || (!config.projects.core && !config.projects.business)) return null;
@@ -306,7 +250,7 @@ export async function runBusinessStack(command, { configFile, execute = executeD
   if (command === 'up') {
     const rows = composeRows(await execute('docker', [...args, 'ps', '--format', 'json'], options));
     for (const targetPort of plan.ports) {
-      const service = targetPort === plan.port ? serviceName : targetPort === 4327 ? 'projects' : targetPort === 4328 ? 'slides-business' : 'reminder';
+      const service = plan.servicePorts[targetPort];
       if (!(await portProbe(targetPort))) continue;
       const row = rows.find(item => item.Service === service && item.State === 'running' && typeof item.ID === 'string');
       let ownPort = false;

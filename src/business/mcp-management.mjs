@@ -1,9 +1,10 @@
-import { BUSINESS_TOOLS, MCP_CONTROL_TOOLS } from './mcp.mjs';
+import { MCP_CONTROL_TOOLS } from './mcp.mjs';
 import { requireConsoleAdmin } from './console.mjs';
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 
 export const MCP_MANAGEMENT_PATH = '/api/business/admin/mcp';
 const MAX_BYTES = 128 * 1024, WINDOW_MS = 7 * 86400000;
-const APP_NAMES = Object.freeze({ memo: 'Memo', reminder: 'Reminder', tingproof: '听校', travel: 'Travel', projects: 'Projects', knowledge: 'Knowledge', slides: 'Lattice' });
+
 const iso = value => new Date(value).toISOString();
 
 function activity(observations, appId, now) {
@@ -28,16 +29,16 @@ function guideTool(tool) {
   return { name: tool.name, description: tool.description, action: 'read', readOnly: true, destructive: false, openWorld: false, inputFields: Object.keys(tool.schema.shape) };
 }
 
-export async function readMcpManagement({ config, observations, guideRegistry, guideEnabled = false, clock = Date.now }) {
+export async function readMcpManagement({ config, observations, guideRegistry, guideEnabled = false, clock = Date.now, registry = config.appRegistry || DEFAULT_APP_REGISTRY }) {
   const now = clock();
-  const tools = [...MCP_CONTROL_TOOLS, ...BUSINESS_TOOLS].map(businessTool);
-  const apps = [...new Set(BUSINESS_TOOLS.map(tool => tool.appId))].map(appId => {
+  const tools = [...MCP_CONTROL_TOOLS, ...registry.tools].map(businessTool);
+  const apps = [...new Set(registry.tools.map(tool => tool.appId))].map(appId => {
     const app = Object.hasOwn(config.apps || {}, appId) ? config.apps[appId] : undefined;
     return {
-      appId, name: APP_NAMES[appId], adapter: app ? 'configured' : 'not_configured',
+      appId, name: registry.getApp(registry.webId(appId))?.name || appId, adapter: app ? 'configured' : 'not_configured',
       mode: app?.managed === true ? 'managed' : app?.managed === false ? 'standalone' : 'unknown',
       toolCount: tools.filter(tool => tool.appId === appId).length,
-      ...activity(observations, appId, now),
+      ...activity(observations, registry.webId(appId), now),
     };
   });
   const endpoints = [{
@@ -75,7 +76,7 @@ export function createMcpManagementHandler({ auth, config, observations, guideRe
       requireConsoleAdmin(request, { auth, config });
       if (request.method !== 'GET') { reply(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET' }); return true; }
       if (request.url !== MCP_MANAGEMENT_PATH || url.search) { reply(response, 400, { code: 'INVALID_REQUEST' }); return true; }
-      const value = await readMcpManagement({ config, observations, guideRegistry, guideEnabled, clock });
+      const value = await readMcpManagement({ config, observations, guideRegistry, guideEnabled, clock, registry: auth.registry });
       requireConsoleAdmin(request, { auth, config });
       reply(response, 200, value);
     } catch (error) {

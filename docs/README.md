@@ -28,6 +28,7 @@ Start with the [platform manual](PLATFORM.en.md) for user journeys and the [app 
 | Brand / 品牌 | [Logo](LOGO.md) | [徽标](LOGO.md) |
 | Verification / 验收 | [Current procedures](VERIFICATION.en.md) | [验收方案及历史台账](VERIFICATION.md) |
 | UI/UX audit / 交互审计 | [19 November 2026](UI-UX-AUDIT-2026-11-19.en.md) | [2026-11-19](UI-UX-AUDIT-2026-11-19.md) |
+| App loading audit / 应用加载审计 | [Registry and ownership](APP-LOADING-AUDIT.en.md) | [注册表与所属边界](APP-LOADING-AUDIT.md) |
 | App providers / 应用供数 | [Read-only cards and data inventory](APP-PROVIDERS.md#english) | [只读卡片与数据清单](APP-PROVIDERS.md#简体中文) |
 | New apps / 新应用 | [App standard](APP-STANDARD.md#english) | [应用标准](APP-STANDARD.md#简体中文) |
 | Paseo | [External client](PASEO.md#external-paseo-client) | [独立客户端](PASEO.md#独立-paseo-客户端) |
@@ -46,23 +47,23 @@ Start with the app’s installation and requirements at the platform’s pinned 
 | Document / 文档 | English | 简体中文 |
 | --- | --- | --- |
 | Praxis operator skill / 平台运维技能 | [English](../skills/praxis-operator/SKILL.md) | [简体中文](../skills/praxis-operator/SKILL.zh-CN.md) |
-| Intelligence roadmap / 路线图 | [English](https://github.com/55aaseclab/intelligence/blob/d9bcc1e03bd15b6d557cdbcf23e050ae872ace9e/docs/ROADMAP.en.md) | [简体中文](https://github.com/55aaseclab/intelligence/blob/d9bcc1e03bd15b6d557cdbcf23e050ae872ace9e/docs/ROADMAP.md) |
-| Memo roadmap / 路线图 | [English](https://github.com/55aaseclab/memo/blob/85626c8f1e591879117f60bf731a6c843763f811/docs/ROADMAP.en.md) | [简体中文](https://github.com/55aaseclab/memo/blob/85626c8f1e591879117f60bf731a6c843763f811/docs/ROADMAP.md) |
-| TingProof business API / 受控业务接口 | [English](https://github.com/55aaseclab/tingproof/blob/b1007d43110c124d586d4b2787d13a04e9d5880d/docs/BUSINESS_API.en.md) | [简体中文](https://github.com/55aaseclab/tingproof/blob/b1007d43110c124d586d4b2787d13a04e9d5880d/docs/BUSINESS_API.md) |
-| TingProof roadmap / 路线图 | [English](https://github.com/55aaseclab/tingproof/blob/b1007d43110c124d586d4b2787d13a04e9d5880d/ROADMAP.en.md) | [简体中文](https://github.com/55aaseclab/tingproof/blob/b1007d43110c124d586d4b2787d13a04e9d5880d/ROADMAP.md) |
-| Reminder | [App guide](https://github.com/55aaseclab/reminder/blob/f6c5a8612bdd5befcd97abdce00ad05ae8380d09/README.md) | [应用指南](https://github.com/55aaseclab/reminder/blob/f6c5a8612bdd5befcd97abdce00ad05ae8380d09/README.zh-CN.md) |
-| Knowledge | [App guide](https://github.com/55aaseclab/knowledge/blob/0ef2db3634387a07bc7fcfc9ded2daeaeb94fcdc/README.md) | [应用指南](https://github.com/55aaseclab/knowledge/blob/0ef2db3634387a07bc7fcfc9ded2daeaeb94fcdc/README.zh-CN.md) |
-| Lattice Slides | [App guide](https://github.com/55aaseclab/lattice/blob/386de1a4c8cc10be26256b773875b3c2abf5b3c9/README.md) | [应用指南](https://github.com/55aaseclab/lattice/blob/386de1a4c8cc10be26256b773875b3c2abf5b3c9/README.zh-CN.md) |
-| Travel | [App guide](https://github.com/55aaseclab/travel/blob/66ab9346c72fb4e3dc244141aa3678b5cfa55332/README.md) | [应用指南](https://github.com/55aaseclab/travel/blob/66ab9346c72fb4e3dc244141aa3678b5cfa55332/README.zh-CN.md) |
-| TingProof | [App guide](https://github.com/55aaseclab/tingproof/blob/b1007d43110c124d586d4b2787d13a04e9d5880d/README.md) | [应用指南](https://github.com/55aaseclab/tingproof/blob/b1007d43110c124d586d4b2787d13a04e9d5880d/README.zh-CN.md) |
-| Memo | [App guide](https://github.com/55aaseclab/memo/blob/85626c8f1e591879117f60bf731a6c843763f811/README.md) | [应用指南](https://github.com/55aaseclab/memo/blob/85626c8f1e591879117f60bf731a6c843763f811/README.zh-CN.md) |
-| Finance | [App guide](https://github.com/55aaseclab/finance/blob/2a04f6ca84a4f43e0a62ce4d822c7f09b5e2c0fa/README.md) | [应用指南](https://github.com/55aaseclab/finance/blob/2a04f6ca84a4f43e0a62ce4d822c7f09b5e2c0fa/README.zh-CN.md) |
-| Intelligence | [App guide](https://github.com/55aaseclab/intelligence/blob/d9bcc1e03bd15b6d557cdbcf23e050ae872ace9e/README.md) | [应用指南](https://github.com/55aaseclab/intelligence/blob/d9bcc1e03bd15b6d557cdbcf23e050ae872ace9e/README.zh-CN.md) |
+| Intelligence roadmap / 路线图 | [English](https://github.com/55aaseclab/intelligence/blob/1a4c7c2bbe797bbe155a89ae5e1ecd733c4eb883/docs/ROADMAP.en.md) | [简体中文](https://github.com/55aaseclab/intelligence/blob/1a4c7c2bbe797bbe155a89ae5e1ecd733c4eb883/docs/ROADMAP.md) |
+| Memo roadmap / 路线图 | [English](https://github.com/55aaseclab/memo/blob/0b134bde6b52f29dd3cc16aa8f156248084e1033/docs/ROADMAP.en.md) | [简体中文](https://github.com/55aaseclab/memo/blob/0b134bde6b52f29dd3cc16aa8f156248084e1033/docs/ROADMAP.md) |
+| TingProof business API / 受控业务接口 | [English](https://github.com/55aaseclab/tingproof/blob/a829aa648aa4152395396b778530f6156980d75f/docs/BUSINESS_API.en.md) | [简体中文](https://github.com/55aaseclab/tingproof/blob/a829aa648aa4152395396b778530f6156980d75f/docs/BUSINESS_API.md) |
+| TingProof roadmap / 路线图 | [English](https://github.com/55aaseclab/tingproof/blob/a829aa648aa4152395396b778530f6156980d75f/ROADMAP.en.md) | [简体中文](https://github.com/55aaseclab/tingproof/blob/a829aa648aa4152395396b778530f6156980d75f/ROADMAP.md) |
+| Reminder | [App guide](https://github.com/55aaseclab/reminder/blob/8c2284687e07558a6a62d9b13cff3c6fda14b2c9/README.md) | [应用指南](https://github.com/55aaseclab/reminder/blob/8c2284687e07558a6a62d9b13cff3c6fda14b2c9/README.zh-CN.md) |
+| Knowledge | [App guide](https://github.com/55aaseclab/knowledge/blob/e1c644e652c6bebc3389397206c463f3617ef40b/README.md) | [应用指南](https://github.com/55aaseclab/knowledge/blob/e1c644e652c6bebc3389397206c463f3617ef40b/README.zh-CN.md) |
+| Lattice Slides | [App guide](https://github.com/55aaseclab/lattice/blob/7ef77a0bfb933712ff9404d2777d0fa42669c2e3/README.md) | [应用指南](https://github.com/55aaseclab/lattice/blob/7ef77a0bfb933712ff9404d2777d0fa42669c2e3/README.zh-CN.md) |
+| Travel | [App guide](https://github.com/55aaseclab/travel/blob/9e2d5aed7a66afc259b49ef80f0419de34b1e572/README.md) | [应用指南](https://github.com/55aaseclab/travel/blob/9e2d5aed7a66afc259b49ef80f0419de34b1e572/README.zh-CN.md) |
+| TingProof | [App guide](https://github.com/55aaseclab/tingproof/blob/a829aa648aa4152395396b778530f6156980d75f/README.md) | [应用指南](https://github.com/55aaseclab/tingproof/blob/a829aa648aa4152395396b778530f6156980d75f/README.zh-CN.md) |
+| Memo | [App guide](https://github.com/55aaseclab/memo/blob/0b134bde6b52f29dd3cc16aa8f156248084e1033/README.md) | [应用指南](https://github.com/55aaseclab/memo/blob/0b134bde6b52f29dd3cc16aa8f156248084e1033/README.zh-CN.md) |
+| Finance | [App guide](https://github.com/55aaseclab/finance/blob/d1514793ba0093f7d98eacd670e6e06a7d50799a/README.md) | [应用指南](https://github.com/55aaseclab/finance/blob/d1514793ba0093f7d98eacd670e6e06a7d50799a/README.zh-CN.md) |
+| Intelligence | [App guide](https://github.com/55aaseclab/intelligence/blob/1a4c7c2bbe797bbe155a89ae5e1ecd733c4eb883/README.md) | [应用指南](https://github.com/55aaseclab/intelligence/blob/1a4c7c2bbe797bbe155a89ae5e1ecd733c4eb883/README.zh-CN.md) |
 | Polaris | [App guide](https://github.com/55aaseclab/polaris/blob/17947aed634d02dabb72344de632b1cacb1d8360/README.md) | [应用指南](https://github.com/55aaseclab/polaris/blob/17947aed634d02dabb72344de632b1cacb1d8360/README.zh-CN.md) |
-| Letters | [App guide](https://github.com/55aaseclab/letters/blob/7ecb79eb66681e683fcc4ae130d39e4440c30932/README.md) | [应用指南](https://github.com/55aaseclab/letters/blob/7ecb79eb66681e683fcc4ae130d39e4440c30932/README.md#简体中文) |
-| Profiles | [App guide](https://github.com/55aaseclab/profiles/blob/ebd90a32fc6082a60a61a5c84245390451394e10/README.md) | [应用指南](https://github.com/55aaseclab/profiles/blob/ebd90a32fc6082a60a61a5c84245390451394e10/README.md#简体中文) |
-| Projects | [App guide](https://github.com/55aaseclab/projects/blob/09e50d4ac31aaf5fb0260c5238fe7bdfdcad29fd/README.md) | [应用指南](https://github.com/55aaseclab/projects/blob/09e50d4ac31aaf5fb0260c5238fe7bdfdcad29fd/README.zh-CN.md) |
-| Calendar | [App guide](https://github.com/55aaseclab/calendar/blob/c67733e675f60aa197f20c55ed9b886189d928b0/README.md) | [应用指南](https://github.com/55aaseclab/calendar/blob/c67733e675f60aa197f20c55ed9b886189d928b0/README.md) |
-| Matrix Reader | [App guide](https://github.com/55aaseclab/matrix-reader/blob/6c0a455440dc3de6b9c54353df576a73dc10275c/README.md) | [应用指南](https://github.com/55aaseclab/matrix-reader/blob/6c0a455440dc3de6b9c54353df576a73dc10275c/README.md#matrix-reader-中文说明) |
+| Letters | [App guide](https://github.com/55aaseclab/letters/blob/ddbd871d9201c8525bb68a0df1244ead77f39c2e/README.md) | [应用指南](https://github.com/55aaseclab/letters/blob/ddbd871d9201c8525bb68a0df1244ead77f39c2e/README.md#简体中文) |
+| Profiles | [App guide](https://github.com/55aaseclab/profiles/blob/22c72f76f2c317bf9b65b0e4d0a9b73d78512a0e/README.md) | [应用指南](https://github.com/55aaseclab/profiles/blob/22c72f76f2c317bf9b65b0e4d0a9b73d78512a0e/README.md#简体中文) |
+| Projects | [App guide](https://github.com/55aaseclab/projects/blob/78d70f7ab283a9370747f102b37dd17ced73ccd4/README.md) | [应用指南](https://github.com/55aaseclab/projects/blob/78d70f7ab283a9370747f102b37dd17ced73ccd4/README.zh-CN.md) |
+| Calendar | [App guide](https://github.com/55aaseclab/calendar/blob/e1ff1f8c9d2c581975dce2d2d986156443a3f275/README.md) | [应用指南](https://github.com/55aaseclab/calendar/blob/e1ff1f8c9d2c581975dce2d2d986156443a3f275/README.md) |
+| Matrix Reader | [App guide](https://github.com/55aaseclab/matrix-reader/blob/03df20c80c3f9433a3decd54e71103fd4bb18925/README.md) | [应用指南](https://github.com/55aaseclab/matrix-reader/blob/03df20c80c3f9433a3decd54e71103fd4bb18925/README.md#matrix-reader-中文说明) |
 
 [Interface verification and limitations / 界面验证与限制](LANGUAGE-COVERAGE.md)

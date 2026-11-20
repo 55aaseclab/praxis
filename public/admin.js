@@ -1,7 +1,7 @@
+import { appNames, loadAppFacts, grantApps, entryApps, clearAppFacts } from './app-registry.js';
 import { message as t, locale } from './i18n.js';
 const language = locale() === 'en' ? 'en' : 'zh-CN';
 const base = '/api/business/admin', accountBase = '/api/business/account';
-const appNames = { reminder: 'Reminder', travel: 'Travel', knowledge: 'Knowledge', memo: 'Memo', 'lattice-slides': 'Slides', tingproof: t("TingProof", "听校"), projects: 'Projects', finance: 'Finance', intelligence: 'Intelligence', 'matrix-reader': 'Matrix Reader', calendar: 'Calendar' };
 const actionNames = { read: t("Read", "读取"), create: t("Create", "新增"), update: t("Update", "修改"), complete: t("Complete", "完成"), delete: t("Delete", "删除"), submit: t("Submit corrections", "提交校正"), assign: t("Assign tasks", "分配任务"), manage_members: t("Manage members", "管理成员"), manage_sharing: t("Manage sharing", "管理共享"), manage_delegation: t("Manage delegations", "管理委托") };
 const titles = { general: t('General', '通用'), overview: t("Overview", "状态概览"), data: t("Data management", "数据管理"), mcp: 'MCP', users: t("Users", "用户"), access: t("App access", "入口权限"), grants: t("Agent delegations", "智能体委托") };
 const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入内容。"), READ_TIMEOUT: t("Read timed out. Try again.", "读取超时，请重试。"), WRITE_TIMEOUT: t("Request timed out. Refresh to check whether it was saved.", "请求超时，尚未确认是否保存。请先刷新核对结果。"), INVALID_REQUEST: t("Check the form fields.", "请检查输入内容。"), NOT_FOUND: t("This record no longer exists. Refresh to continue.", "这条记录已不存在，请刷新。"), CONFLICT: t("Account already exists or its state changed. Check and try again.", "账号已存在或状态已变化，请检查后重试。"), LAST_ADMIN_REQUIRED: t("Keep at least one active platform administrator.", "至少需要保留一名启用的平台管理员。"), POLICY_BUSY: t("Authorization is being updated. Try again shortly.", "授权正在更新，请稍后重试。"), CSRF_REJECTED: t("Session changed. Sign in again.", "登录状态已变化，请重新登录。"), UNAVAILABLE: t("Service unavailable. Try again later.", "服务暂时不可用，请稍后重试。"), DATA_INVENTORY_UNAVAILABLE: t("Could not load data locations. Refresh to retry.", "暂时无法读取数据位置，请稍后刷新。"), ADMIN_DEFAULT_ACCESS: t("Platform administrators have access to all app entries.", "平台管理员默认拥有全部入口，无需单独授权。") };
@@ -55,6 +55,7 @@ function setSession(value) {
   if (typeof value?.platformAdmin !== 'boolean' || !value.user || typeof value.csrfToken !== 'string' || !value.access || !Array.isArray(value.access.apps) || !Array.isArray(value.capabilities)) { terminal(403); return false; }
   if (!Number.isSafeInteger(value.expiresAt) || value.expiresAt <= Date.now()) { terminal(401); return false; }
   if (session && (session.platformAdmin !== value.platformAdmin || session.user.id !== value.user.id)) {
+    clearAppFacts();
     if (session.user.id !== value.user.id) view = null;
     epoch++; for (const controller of controllers) controller.abort(); overview?.clear();
     users = []; nextCursor = null; selectedId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
@@ -76,6 +77,7 @@ function message(text = '', kind = '') { notice.replaceChildren(document.createT
 function time(value) { if (value === null || value === undefined) return t("No expiry", "未设置期限"); const date = new Date(value); return Number.isNaN(date.valueOf()) ? t("Time unconfirmed", "时间待确认") : date.toLocaleString(language, { hour12: false }); }
 function terminal(status, text) {
   if (ended) return;
+  clearAppFacts();
   ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; nextCursor = null; selectedId = null;
   for (const controller of controllers) controller.abort();
   overview?.clear(); dataController?.destroy(); dataController = null; document.querySelector('#overview-controls').hidden = true;
@@ -192,13 +194,13 @@ function check(label, name, value) {
 function localDate(value) { if (value === null || value === undefined) return ''; const date = new Date(value); return new Date(date.valueOf() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
 function renderAccess(user, access) {
   if (access.source === 'administrator') {
-    content.append(el('p', 'section-note', t("Platform administrators can open every app, the workbench and product documents.", "平台管理员默认拥有全部应用、工作台与 PRD集合入口，无需单独授权。")), el('p', 'access-status', t("Apps: {0}", "应用：{0}", Object.values(appNames).join('、'))));
+    content.append(el('p', 'section-note', t("Platform administrators can open every app, the workbench and product documents.", "平台管理员默认拥有全部应用、工作台与 PRD集合入口，无需单独授权。")), el('p', 'access-status', t("Apps: {0}", "应用：{0}", entryApps().map(app => appNames[app.id] || app.name).join('、'))));
     const link = el('a', 'inline-link', t("Open workbench", "打开工作台")); link.href = '/'; content.append(link); return;
   }
   content.append(el('p', 'section-note', t("Each signed-in user has a workbench. These settings control which apps and documents they can open. Business resource access and agent delegations are separate.", "每位用户登录后都有自己的工作台。这里设置可打开的应用与文档，不授予业务记录权限，也不代替智能体委托。")));
   content.append(el('p', 'access-status', access.configured ? t("Access expires: {0}", "授权期限：{0}", access.expiresAt === null ? t("No expiry", "不设期限") : time(access.expiresAt)) : t("No app or document entries configured.", "尚未配置应用或文档入口。")));
   const form = el('form', 'form-panel'), apps = el('fieldset', 'access-group'), appGrid = el('div', 'checkbox-grid'); apps.append(el('legend', '', t("Apps", "应用")));
-  const checks = Object.keys(appNames).map(id => { const entry = check(appNames[id], id, access.apps?.includes(id)); appGrid.append(entry.root); return [id, entry.input]; }); apps.append(appGrid);
+  const checks = grantApps().map(app => { const id = app.id; const entry = check(appNames[id] || app.name, id, access.apps?.includes(id)); appGrid.append(entry.root); return [id, entry.input]; }); apps.append(appGrid);
   const workspace = el('fieldset', 'access-group'), workspaceGrid = el('div', 'checkbox-grid'); workspace.append(el('legend', '', t("Documents", "文档")));
   const prds = check(t("Product documents", "PRD集合"), 'prds', access.prds); workspaceGrid.append(prds.root); workspace.append(workspaceGrid);
   const expiry = field(t("Expires on", "有效期至"), 'expiresAt', 'datetime-local'); expiry.root.classList.add('access-expiry'); expiry.input.value = localDate(access.expiresAt); expiry.root.append(el('small', '', t("Leave blank for access without an expiry date.", "留空表示不设期限。")));
@@ -328,13 +330,14 @@ async function boot() {
   try {
     const metadata = await api(`${accountBase}/session`); if (ended || current !== epoch) return;
     if (!setSession(metadata)) return; current = epoch;
+    await loadAppFacts(); if (ended || current !== epoch) return;
     document.querySelector('#account-name').textContent = session.user.username;
     if (session.platformAdmin && ['users', 'access', 'grants'].includes(view)) {
       const result = await api('/users?limit=50'); if (ended || current !== epoch) return;
       users = result.users; nextCursor = result.nextCursor; usersLoaded = true; if (!selected()) selectedId = null;
     }
     message(); await render();
-  } catch (error) { report(error); if (!ended) content.setAttribute('aria-busy', 'false'); }
+  } catch (error) { if ([401, 403].includes(error.status)) terminal(error.status); else report(error); if (!ended) content.setAttribute('aria-busy', 'false'); }
   finally {
     if (loading === bootRevision) {
       booting = false;

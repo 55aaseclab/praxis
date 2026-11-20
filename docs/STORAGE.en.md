@@ -149,3 +149,11 @@ Preserve source files and private configuration after the move. For a same-files
 For a Finance named-volume migration, inspect the original file after stopping its writer. Keep the original volume as a recovery source. Restore device-only Memo records through the owning app’s import/export workflow. A successful server snapshot cannot establish that every offline device was exported.
 
 Validate relocated mounts from inside each service. For slot pairs follow the paused rebind and startup sequence in the [managed deployment guide](MANAGED-DEPLOYMENT.md). Keep the migration receipt private. [Docker guide](DOCKER.en.md) · [Verification](VERIFICATION.en.md)
+
+## Application-owned integration
+
+Installed apps declare storage aliases, source formats, read-only schema validators, backup coverage and relocation inputs through their reviewed `praxis-integration.mjs` storage contract. Deployment recipes own runtime defaults and initial empty files. The platform supplies canonical-path, single-writer, inode/hash, SQLite WAL/Online Backup and rollback checks; it does not maintain a second application storage table. Keep explicitly registered private paths and configuration overrides when filling missing defaults.
+
+Recovery source discovery reads declared configuration metadata and the coordinator's used-space cursors/events, not business bodies. A used or independently known source that disappears fails the backup. An unused mapped source can remain an explicit opaque omission; the worker mounts its declared parent without claiming that the missing file was backed up. Browser originals, exports and credentials retain their separate coverage boundaries.
+
+`app-data.mjs plan` reports unavailable relocation paths. Migration stops before moving files or writing its journal when a legacy execution tree needs an unsupported application-owned export. It never imports or runs an archived execution engine. Preserve the original tree and rollback material; the supported physical relocation path copies or renames verified bytes without interpreting business content.

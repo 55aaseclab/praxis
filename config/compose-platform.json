@@ -1,0 +1,250 @@
+{
+  "name": "praxis-local",
+  "services": {
+    "initialize": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": ".",
+        "dockerfile": "Dockerfile",
+        "target": "praxis"
+      },
+      "cap_add": [
+        "CHOWN",
+        "SETUID",
+        "SETGID"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "scripts/builtin-install.mjs"
+      ],
+      "environment": {
+        "PRAXIS_CANONICAL_URL": "${PRAXIS_CANONICAL_URL:-}",
+        "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+        "PRAXIS_OWNER_USERNAME": "${PRAXIS_OWNER_USERNAME:-owner}",
+        "PRAXIS_PORT": "${PRAXIS_PORT:-4321}",
+        "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+      },
+      "image": "${PRAXIS_PLATFORM_IMAGE:-praxis-platform:local}",
+      "network_mode": "none",
+      "read_only": true,
+      "restart": "no",
+      "user": "root",
+      "volumes": [
+        {
+          "source": "core-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "core-data",
+          "target": "/data/core",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "web-data",
+          "target": "/data/web",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "web-config",
+          "target": "/app-config/web",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "core": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": ".",
+        "dockerfile": "Dockerfile",
+        "target": "praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/core/server.mjs",
+        "--config",
+        "/config/core.json",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "4326"
+      ],
+      "depends_on": {
+        "initialize": {
+          "condition": "service_completed_successfully",
+          "required": true
+        }
+      },
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4326/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "${PRAXIS_PLATFORM_IMAGE:-praxis-platform:local}",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "default": null
+      },
+      "ports": [
+        "${PRAXIS_BIND_ADDRESS:-127.0.0.1}:${PRAXIS_PORT:-4321}:4321"
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "core-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "core-data",
+          "target": "/data/core",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "praxis": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": ".",
+        "dockerfile": "Dockerfile",
+        "target": "praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "scripts/serve-builtin-workbench.mjs"
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4321/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "${PRAXIS_PLATFORM_IMAGE:-praxis-platform:local}",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "web-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "web-data",
+          "target": "/data/web",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    }
+  },
+  "volumes": {
+    "core-config": {},
+    "core-data": {},
+    "web-config": {},
+    "web-data": {}
+  },
+  "configs": {
+    "native-launcher": {
+      "file": "./scripts/launch-builtin.mjs"
+    }
+  }
+}

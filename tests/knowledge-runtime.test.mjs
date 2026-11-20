@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveKnowledgeRuntime, knowledgeComposeService } from '../src/knowledge-runtime.mjs';
+import { pathToFileURL } from 'node:url';
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
+const { resolveKnowledgeRuntime, knowledgeComposeService } = await import(pathToFileURL(join(DEFAULT_APP_REGISTRY.root, DEFAULT_APP_REGISTRY.getApp('knowledge').source, 'praxis/stack.mjs')).href);
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'praxis-knowledge-runtime-'));

@@ -45,7 +45,7 @@ test('fresh native Lattice registration uses the merged application root', async
 test('all built-in source repositories and build recipes are registered with existing ancillary sources', async t => {
   const { root, config } = await fixture(t);
   for (const target of ['decks', '.lattice']) await mkdir(join(root, 'third_party/lattice', target));
-  for (const file of ['Dockerfile.builtins', 'Dockerfile.builtins.dockerignore', 'compose.apps.yaml', 'compose.business.yaml', 'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml']) {
+  for (const file of ['compose.apps.yaml', 'compose.business.yaml', 'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml']) {
     await writeFile(join(root, file), '# Synthetic recipe');
   }
   await mkdir(join(root, 'packaging'));
@@ -58,7 +58,7 @@ test('all built-in source repositories and build recipes are registered with exi
   }
   assert.deepEqual(result.sourceRepos.find(item => item.id === ancillary.id), ancillary);
   const paths = result.sourceRepos.find(item => item.id === 'praxis').paths;
-  for (const path of ['Dockerfile.builtins', 'Dockerfile.builtins.dockerignore', 'packaging', 'compose.apps.yaml', 'compose.business.yaml', 'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml']) assert.ok(paths.includes(path));
+  for (const path of ['packaging', 'compose.apps.yaml', 'compose.business.yaml', 'compose.polaris-viewer.yaml', 'compose.polaris-observations.yaml']) assert.ok(paths.includes(path));
   assert.equal(result.appSources.some(item => item.source.includes('polaris')), false);
   await rm(join(root, 'third_party/finance/.git'), { recursive: true });
   await assert.rejects(registerWorkspace(config, root), /Required source repository is missing: finance/);

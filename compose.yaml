@@ -1,696 +1,1324 @@
-name: praxis-local
-
-x-runtime: &runtime
-  init: true
-  restart: unless-stopped
-  read_only: true
-  cap_drop: [ALL]
-  security_opt: [no-new-privileges:true]
-  tmpfs: ["/tmp:rw,nosuid,nodev,size=512m,mode=1777"]
-  stop_grace_period: 30s
-  logging:
-    driver: json-file
-    options: {max-size: "10m", max-file: "3"}
-  healthcheck: &health
-    test: ["CMD", "node", "-e", "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-    interval: 10s
-    timeout: 5s
-    start_period: 10s
-    retries: 6
-
-x-platform: &platform
-  image: ${PRAXIS_PLATFORM_IMAGE:-praxis-platform:local}
-  build:
-    context: .
-    target: praxis
-    args: &identity-build-args
-      PRAXIS_UID: ${PRAXIS_UID:-1000}
-      PRAXIS_GID: ${PRAXIS_GID:-1000}
-
-services:
-  initialize:
-    <<: *platform
-    user: root
-    restart: "no"
-    network_mode: none
-    cap_drop: [ALL]
-    cap_add: [CHOWN, SETUID, SETGID]
-    read_only: true
-    command: [node, scripts/builtin-install.mjs]
-    environment:
-      PRAXIS_CANONICAL_URL: ${PRAXIS_CANONICAL_URL:-}
-      PRAXIS_PORT: ${PRAXIS_PORT:-4321}
-      PRAXIS_OWNER_USERNAME: ${PRAXIS_OWNER_USERNAME:-owner}
-      PRAXIS_UID: ${PRAXIS_UID:-1000}
-      PRAXIS_GID: ${PRAXIS_GID:-1000}
-    volumes:
-      - type: volume
-        source: core-config
-        target: /config
-        volume:
-          nocopy: true
-      - type: volume
-        source: reminder-data
-        target: /data/reminder
-        volume:
-          nocopy: true
-      - type: volume
-        source: knowledge-data
-        target: /data/knowledge
-        volume:
-          nocopy: true
-      - type: volume
-        source: travel-data
-        target: /data/travel
-        volume:
-          nocopy: true
-      - type: volume
-        source: projects-data
-        target: /data/projects
-        volume:
-          nocopy: true
-      - type: volume
-        source: memo-data
-        target: /data/memo
-        volume:
-          nocopy: true
-      - type: volume
-        source: tingproof-data
-        target: /data/tingproof
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-data
-        target: /data/slides
-        volume:
-          nocopy: true
-      - type: volume
-        source: finance-data
-        target: /data/finance
-        volume:
-          nocopy: true
-      - type: volume
-        source: intelligence-data
-        target: /data/intelligence
-        volume:
-          nocopy: true
-      - type: volume
-        source: polaris-data
-        target: /data/polaris
-        volume:
-          nocopy: true
-      - type: volume
-        source: core-data
-        target: /data/core
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-decks
-        target: /data/slides-decks
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-state
-        target: /data/slides-state
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-exports
-        target: /data/slides-exports
-        volume:
-          nocopy: true
-      - type: volume
-        source: web-data
-        target: /data/web
-        volume:
-          nocopy: true
-      - type: volume
-        source: letters-data
-        target: /data/letters
-        volume:
-          nocopy: true
-      - type: volume
-        source: profiles-data
-        target: /data/profiles
-        volume:
-          nocopy: true
-      - type: volume
-        source: reminder-config
-        target: /app-config/reminder
-        volume:
-          nocopy: true
-      - type: volume
-        source: knowledge-config
-        target: /app-config/knowledge
-        volume:
-          nocopy: true
-      - type: volume
-        source: travel-config
-        target: /app-config/travel
-        volume:
-          nocopy: true
-      - type: volume
-        source: projects-config
-        target: /app-config/projects
-        volume:
-          nocopy: true
-      - type: volume
-        source: memo-config
-        target: /app-config/memo
-        volume:
-          nocopy: true
-      - type: volume
-        source: tingproof-config
-        target: /app-config/tingproof
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-config
-        target: /app-config/slides
-        volume:
-          nocopy: true
-      - type: volume
-        source: finance-config
-        target: /app-config/finance
-        volume:
-          nocopy: true
-      - type: volume
-        source: intelligence-config
-        target: /app-config/intelligence
-        volume:
-          nocopy: true
-      - type: volume
-        source: polaris-config
-        target: /app-config/polaris
-        volume:
-          nocopy: true
-      - type: volume
-        source: web-config
-        target: /app-config/web
-        volume:
-          nocopy: true
-
-  core:
-    <<: [*runtime, *platform]
-    command: [node, src/core/server.mjs, --config, /config/core.json, --host, "127.0.0.1", --port, "4326"]
-    environment:
-      HEALTH_URL: http://127.0.0.1:4326/health
-    ports:
-      - "${PRAXIS_BIND_ADDRESS:-127.0.0.1}:${PRAXIS_PORT:-4321}:4321"
-    depends_on:
-      initialize:
-        condition: service_completed_successfully
-    volumes:
-      - type: volume
-        source: core-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: core-data
-        target: /data/core
-        volume:
-          nocopy: true
-
-  praxis:
-    <<: [*runtime, *platform]
-    command: [node, scripts/serve-builtin-workbench.mjs]
-    network_mode: service:core
-    environment:
-      HEALTH_URL: http://127.0.0.1:4321/health
-    depends_on:
-      core:
-        condition: service_healthy
-      reminder:
-        condition: service_healthy
-      knowledge:
-        condition: service_healthy
-      travel:
-        condition: service_healthy
-      projects:
-        condition: service_healthy
-      memo:
-        condition: service_healthy
-      tingproof:
-        condition: service_healthy
-      slides:
-        condition: service_healthy
-      finance:
-        condition: service_healthy
-      intelligence:
-        condition: service_healthy
-      polaris:
-        condition: service_healthy
-      slides-business:
-        condition: service_healthy
-    volumes:
-      - type: volume
-        source: web-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: web-data
-        target: /data/web
-        volume:
-          nocopy: true
-      - type: volume
-        source: letters-data
-        target: /data/letters
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: profiles-data
-        target: /data/profiles
-        read_only: true
-        volume:
-          nocopy: true
-
-  reminder:
-    <<: *runtime
-    command: [node, src/server.js]
-    image: praxis-builtins/reminder:local
-    build:
-      context: ./third_party/reminder
-      dockerfile: ../../Dockerfile.builtins
-      target: reminder
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:4322/health
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: reminder-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: reminder-data
-        target: /data/reminder
-        volume:
-          nocopy: true
-
-  knowledge:
-    <<: *runtime
-    command: [node, src/runtime/server.mjs]
-    image: praxis-builtins/knowledge:local
-    build:
-      context: ./third_party/knowledge
-      dockerfile: ../../Dockerfile.builtins
-      target: knowledge
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:14324/health
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: knowledge-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: knowledge-data
-        target: /data/knowledge
-        volume:
-          nocopy: true
-
-  travel:
-    <<: *runtime
-    command: [node, src/server.js]
-    image: praxis-builtins/travel:local
-    build:
-      context: ./third_party/travel
-      dockerfile: ../../Dockerfile.builtins
-      target: travel
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:4323/health
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: travel-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: travel-data
-        target: /data/travel
-        volume:
-          nocopy: true
-
-  projects:
-    <<: *runtime
-    command: [node, src/server.mjs, --host, "127.0.0.1", --port, "4327"]
-    image: praxis-builtins/projects:local
-    build:
-      context: ./third_party/projects
-      dockerfile: ../../Dockerfile.builtins
-      target: projects
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:4327/health
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: projects-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: projects-data
-        target: /data/projects
-        volume:
-          nocopy: true
-
-  memo:
-    <<: *runtime
-    command: [node, src/main.mjs]
-    image: praxis-builtins/memo:local
-    build:
-      context: ./third_party/memo
-      dockerfile: ../../Dockerfile.builtins
-      target: memo
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:4325/health
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: memo-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: memo-data
-        target: /data/memo
-        volume:
-          nocopy: true
-
-  tingproof:
-    <<: *runtime
-    command: [node, dist-server/main.js]
-    image: praxis-builtins/tingproof:local
-    build:
-      context: ./third_party/tingproof
-      dockerfile: ../../Dockerfile.builtins
-      target: tingproof
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:15173/
-      PRAXIS_TINGPROOF_NATIVE: "1"
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: tingproof-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: tingproof-data
-        target: /data/tingproof
-        volume:
-          nocopy: true
-
-  slides:
-    <<: *runtime
-    read_only: false
-    command: [node, /opt/praxis/scripts/start-lattice.mjs]
-    image: praxis-builtins/lattice:local
-    build:
-      context: ./third_party/lattice
-      dockerfile: ../../Dockerfile.builtins
-      target: lattice
-      args: *identity-build-args
-      additional_contexts:
-        platform: .
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:14666/_business/
-    shm_size: 1gb
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: slides-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-data
-        target: /data/slides
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-decks
-        target: /app/decks
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-state
-        target: /app/.lattice
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-exports
-        target: /app/dist/static-decks
-        volume:
-          nocopy: true
-
-  finance:
-    <<: *runtime
-    command: [node, src/server.mjs]
-    image: praxis-builtins/finance:local
-    build:
-      context: ./third_party/finance
-      dockerfile: ../../Dockerfile.builtins
-      target: finance
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:4329/health
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: finance-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: finance-data
-        target: /data/finance
-        volume:
-          nocopy: true
-
-  intelligence:
-    <<: *runtime
-    command: [node, src/server.mjs]
-    image: praxis-builtins/intelligence:local
-    build:
-      context: ./third_party/intelligence
-      dockerfile: ../../Dockerfile.builtins
-      target: intelligence
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:4330/health
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: intelligence-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: intelligence-data
-        target: /data/intelligence
-        volume:
-          nocopy: true
-
-  polaris:
-    <<: *runtime
-    command: [node, server.mjs]
-    image: praxis-builtins/polaris:local
-    build:
-      context: ./third_party/polaris
-      dockerfile: ../../Dockerfile.builtins
-      target: polaris
-      args: *identity-build-args
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:18787/health
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: polaris-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: polaris-data
-        target: /data/polaris
-        volume:
-          nocopy: true
-
-  slides-business:
-    <<: *runtime
-    read_only: false
-    image: praxis-builtins/lattice:local
-    build:
-      context: ./third_party/lattice
-      dockerfile: ../../Dockerfile.builtins
-      target: lattice
-      args: *identity-build-args
-      additional_contexts:
-        platform: .
-    network_mode: service:core
-    entrypoint: [node, /opt/praxis/launch-builtin.mjs]
-    environment:
-      HEALTH_URL: http://127.0.0.1:4328/health
-    shm_size: 1gb
-    command: [node, src/business/server.mjs, --host, "127.0.0.1", --port, "4328"]
-    depends_on:
-      core:
-        condition: service_started
-    configs:
-      - source: native-launcher
-        target: /opt/praxis/launch-builtin.mjs
-    volumes:
-      - type: volume
-        source: slides-config
-        target: /config
-        read_only: true
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-data
-        target: /data/slides
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-decks
-        target: /app/decks
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-state
-        target: /app/.lattice
-        volume:
-          nocopy: true
-      - type: volume
-        source: slides-exports
-        target: /app/dist/static-decks
-        volume:
-          nocopy: true
-
-configs:
-  native-launcher:
-    file: ./scripts/launch-builtin.mjs
-
-volumes:
-  core-config:
-  reminder-data:
-  knowledge-data:
-  travel-data:
-  projects-data:
-  memo-data:
-  tingproof-data:
-  slides-data:
-  finance-data:
-  intelligence-data:
-  polaris-data:
-  core-data:
-  web-data:
-  letters-data:
-  profiles-data:
-  reminder-config:
-  knowledge-config:
-  travel-config:
-  projects-config:
-  memo-config:
-  tingproof-config:
-  slides-config:
-  finance-config:
-  intelligence-config:
-  polaris-config:
-  web-config:
-  slides-decks:
-  slides-state:
-  slides-exports:
+# Generated by node scripts/generate-compose.mjs from installed app-owned recipes.
+{
+  "name": "praxis-local",
+  "services": {
+    "initialize": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": ".",
+        "dockerfile": "Dockerfile",
+        "target": "praxis"
+      },
+      "cap_add": [
+        "CHOWN",
+        "SETUID",
+        "SETGID"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "scripts/builtin-install.mjs"
+      ],
+      "environment": {
+        "PRAXIS_CANONICAL_URL": "${PRAXIS_CANONICAL_URL:-}",
+        "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+        "PRAXIS_OWNER_USERNAME": "${PRAXIS_OWNER_USERNAME:-owner}",
+        "PRAXIS_PORT": "${PRAXIS_PORT:-4321}",
+        "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+      },
+      "image": "${PRAXIS_PLATFORM_IMAGE:-praxis-platform:local}",
+      "network_mode": "none",
+      "read_only": true,
+      "restart": "no",
+      "user": "root",
+      "volumes": [
+        {
+          "source": "core-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "core-data",
+          "target": "/data/core",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "web-data",
+          "target": "/data/web",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "web-config",
+          "target": "/app-config/web",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "core": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": ".",
+        "dockerfile": "Dockerfile",
+        "target": "praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/core/server.mjs",
+        "--config",
+        "/config/core.json",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "4326"
+      ],
+      "depends_on": {
+        "initialize": {
+          "condition": "service_completed_successfully",
+          "required": true
+        }
+      },
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4326/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "${PRAXIS_PLATFORM_IMAGE:-praxis-platform:local}",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "default": null
+      },
+      "ports": [
+        "${PRAXIS_BIND_ADDRESS:-127.0.0.1}:${PRAXIS_PORT:-4321}:4321"
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "core-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "core-data",
+          "target": "/data/core",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "praxis": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": ".",
+        "dockerfile": "Dockerfile",
+        "target": "praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "scripts/serve-builtin-workbench.mjs"
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "reminder": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "knowledge": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "slides": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "slides-business": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "travel": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "tingproof": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "memo": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "finance": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "intelligence": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "polaris": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "projects": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4321/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "${PRAXIS_PLATFORM_IMAGE:-praxis-platform:local}",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "web-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "web-data",
+          "target": "/data/web",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "reminder": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/reminder",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/server.js"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4322/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/reminder:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "reminder-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "reminder-data",
+          "target": "/data/reminder",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "knowledge": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/knowledge",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/runtime/server.mjs"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:14324/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/knowledge:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "knowledge-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "knowledge-data",
+          "target": "/data/knowledge",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "slides": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/lattice",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "/opt/praxis/scripts/start-lattice.mjs"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:14666/_business/"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/lattice:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": false,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "shm_size": "1gb",
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "slides-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "slides-data",
+          "target": "/data/slides",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "slides-decks",
+          "target": "/app/decks",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "slides-state",
+          "target": "/app/.lattice",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "slides-exports",
+          "target": "/app/dist/static-decks",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "slides-business": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/lattice",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/business/server.mjs",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "4328"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4328/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/lattice:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": false,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "shm_size": "1gb",
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "slides-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "slides-data",
+          "target": "/data/slides",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "slides-decks",
+          "target": "/app/decks",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "slides-state",
+          "target": "/app/.lattice",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "slides-exports",
+          "target": "/app/dist/static-decks",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "travel": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/travel",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/server.js"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4323/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/travel:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "travel-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "travel-data",
+          "target": "/data/travel",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "tingproof": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/tingproof",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "praxis/native-entry.mjs"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:15173/"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/tingproof:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "tingproof-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "tingproof-data",
+          "target": "/data/tingproof",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "memo": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/memo",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/main.mjs"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4325/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/memo:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "memo-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "memo-data",
+          "target": "/data/memo",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "finance": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/finance",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/server.mjs"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4329/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/finance:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "finance-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "finance-data",
+          "target": "/data/finance",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "intelligence": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/intelligence",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/server.mjs"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4330/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/intelligence:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "intelligence-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "intelligence-data",
+          "target": "/data/intelligence",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "polaris": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/polaris",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "server.mjs"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:18787/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/polaris:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "polaris-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "polaris-data",
+          "target": "/data/polaris",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    },
+    "projects": {
+      "build": {
+        "args": {
+          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
+          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
+        },
+        "context": "./third_party/projects",
+        "dockerfile": "Dockerfile.praxis"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "node",
+        "src/server.mjs",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "4327"
+      ],
+      "configs": [
+        {
+          "source": "native-launcher",
+          "target": "/opt/praxis/launch-builtin.mjs"
+        }
+      ],
+      "depends_on": {
+        "core": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": [
+        "node",
+        "/opt/praxis/launch-builtin.mjs"
+      ],
+      "environment": {
+        "HEALTH_URL": "http://127.0.0.1:4327/health"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "10s",
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ],
+        "timeout": "5s"
+      },
+      "image": "praxis-builtins/projects:local",
+      "init": true,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "network_mode": "service:core",
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
+      ],
+      "volumes": [
+        {
+          "read_only": true,
+          "source": "projects-config",
+          "target": "/config",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        },
+        {
+          "source": "projects-data",
+          "target": "/data/projects",
+          "type": "volume",
+          "volume": {
+            "nocopy": true
+          }
+        }
+      ]
+    }
+  },
+  "volumes": {
+    "core-config": {},
+    "core-data": {},
+    "web-config": {},
+    "web-data": {},
+    "reminder-config": {},
+    "reminder-data": {},
+    "knowledge-config": {},
+    "knowledge-data": {},
+    "slides-config": {},
+    "slides-data": {},
+    "slides-decks": {},
+    "slides-exports": {},
+    "slides-state": {},
+    "travel-config": {},
+    "travel-data": {},
+    "tingproof-config": {},
+    "tingproof-data": {},
+    "memo-config": {},
+    "memo-data": {},
+    "finance-config": {},
+    "finance-data": {},
+    "intelligence-config": {},
+    "intelligence-data": {},
+    "polaris-config": {},
+    "polaris-data": {},
+    "letters-data": {},
+    "profiles-data": {},
+    "projects-config": {},
+    "projects-data": {}
+  },
+  "configs": {
+    "native-launcher": {
+      "file": "./scripts/launch-builtin.mjs"
+    }
+  }
+}

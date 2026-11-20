@@ -15,7 +15,7 @@ const example = `
 
 function startDemo(port) {
   return spawn(process.execPath, ['--import', preload, '-e', example, String(port)], {
-    env: { PRAXIS_DEMO_APP: 'finance' },
+    env: { PRAXIS_DEMO_APP: 'finance', ...(process.env.PRAXIS_APP_SOURCE_ROOT ? { PRAXIS_APP_SOURCE_ROOT: process.env.PRAXIS_APP_SOURCE_ROOT } : {}) },
     stdio: ['ignore', 'pipe', 'ignore'],
   });
 }
@@ -24,7 +24,10 @@ test('demo workbench links the app served by its own process', { timeout: 10000 
   const child = startDemo(0);
   t.after(() => child.kill());
   const output = createInterface({ input: child.stdout });
-  const [line] = await once(output, 'line');
+  const [line] = await Promise.race([
+    once(output, 'line'),
+    once(child, 'close').then(([code]) => { throw new Error(`The isolated demo exited before announcing its workbench (exit ${code}).`); }),
+  ]);
   const origin = new URL(line.replace(/^Demo workbench: /, ''));
   assert.equal(origin.hostname, '127.0.0.1');
   const { apps } = await (await fetch(new URL('/api/apps', origin))).json();

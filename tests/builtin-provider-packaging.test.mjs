@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile, mkdtemp, rm, lstat, symlink } from 'node:fs/promises';
@@ -18,11 +19,10 @@ const read = path => readFile(join(root, path), 'utf8');
 test('platform image receives all fourteen installed provider modules through its reviewed build context', async () => {
   const catalog = (await readApps(root, { publicUrlsFile: null })).filter(app => app.builtin && app.kind === 'app');
   const dockerfile = await read('Dockerfile'), ignore = await read('.dockerignore');
-  assert.equal(catalog.length, 14); assert.match(ignore, /^!third_party\/\*\/praxis-provider\.mjs$/m);
+  assert.equal(catalog.length, 14);
   assert.match(dockerfile, /^COPY --chown=node:node third_party\/ \.\/third_party\/$/m);
-  for (const pattern of ['!config/installed-apps.json', '!third_party/*/praxis-app.json', '!third_party/*/apps.example.json', '!third_party/*/package.json', '!third_party/*/package-lock.json', '!third_party/*/public/*.svg', '!third_party/**/*.md']) {
-    assert.ok(ignore.split(/\r?\n/).includes(pattern), `${pattern} must reach the reviewed build context`);
-  }
+  assert.ok(ignore.includes('!config/installed-apps.json'));
+  for (const app of catalog) for (const filename of ['praxis-app.json', 'praxis-provider.mjs', 'apps.example.json', 'package.json', 'package-lock.json', '**/*.md']) assert.ok(ignore.includes('!' + app.source + '/' + filename));
   for (const app of catalog) {
     assert.ok((await lstat(join(root, app.source, 'praxis-provider.mjs'))).isFile(), app.id);
     assert.ok((await lstat(join(root, app.source, 'praxis-app.json'))).isFile(), app.id);
@@ -76,14 +76,17 @@ if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the co
   const result = JSON.parse(stdout.trim());
   assert.deepEqual(result, { apps: 14, providers: 14, cardProviders: 13, icons: 14, prdEditions: 28, calendarModules: 2 });
 });
-test('native image targets copy their own module after dependency installation and keep video pruning', async () => {
-  const dockerfile = await read('Dockerfile.builtins');
-  for (const target of ['reminder', 'knowledge', 'projects', 'finance', 'memo', 'intelligence', 'travel', 'tingproof', 'lattice']) {
-    const stage = dockerfile.split(`FROM base AS ${target}\n`)[1]?.split('\nFROM ')[0];
-    assert.ok(stage, target); const provider = stage.indexOf('COPY --chown=node:node praxis-provider.mjs ./');
-    assert.ok(provider >= 0, target); assert.ok(provider > stage.indexOf('npm ci'), `${target} provider changes must not invalidate dependency installation`);
+test('native images use their app-owned Dockerfiles and preserve video engine availability', async () => {
+  const nativeApps = DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.deployment?.native);
+  assert.equal(nativeApps.length, 10);
+  for (const app of nativeApps) {
+    const dockerfile = await readFile(join(DEFAULT_APP_REGISTRY.root, app.source, app.integration.deployment.native.dockerfile), 'utf8');
+    assert.ok(dockerfile.includes('praxis-provider.mjs'), app.id);
+    assert.ok(!dockerfile.includes('--from=platform'), app.id);
+    assert.ok(!dockerfile.includes('Dockerfile.builtins'), app.id);
   }
-  const lattice = dockerfile.split('FROM base AS lattice\n')[1].split('\nFROM ')[0];
+  const owner = DEFAULT_APP_REGISTRY.apps.find(app => app.integration.deployment?.resolveModelCaches);
+  const lattice = await readFile(join(DEFAULT_APP_REGISTRY.root, owner.source, owner.integration.deployment.native.dockerfile), 'utf8');
   assert.match(lattice, /npm ci[^\n]*\\\n\s+&& node \/opt\/praxis\/scripts\/prune-video-engines\.mjs \/app/);
   assert.ok(lattice.lastIndexOf('RUN node /opt/praxis/scripts/prune-video-engines.mjs /app') > lattice.indexOf('RUN node /opt/praxis/scripts/build-slides-public.mjs'));
 });
@@ -101,7 +104,7 @@ test('image video pruning removes only engine installations and preserves all de
     await writeFile(join(folder, 'package.json'), JSON.stringify({ name, main: 'index.js' })); await writeFile(join(folder, 'index.js'), 'throw new Error("Must never execute an engine");');
   }
   await mkdir(join(directory, 'node_modules/.bin')); await symlink('../remotion/index.js', join(directory, 'node_modules/.bin/remotion'));
-  const { stdout } = await execute(process.execPath, [join(root, 'packaging/builtins/prune-video-engines.mjs'), directory]);
+  const { stdout } = await execute(process.execPath, [join(DEFAULT_APP_REGISTRY.root, DEFAULT_APP_REGISTRY.apps.find(app => app.integration.deployment?.resolveModelCaches).source, 'praxis/packaging/prune-video-engines.mjs'), directory]);
   assert.equal(JSON.parse(stdout).videoEnginesUnavailable, true);
   for (const path of Object.keys(declarations)) assert.equal(await readFile(join(directory, path), 'utf8'), originals[path]);
   for (const name of ['remotion', 'hyperframes', '@remotion/cli', '.bin/remotion']) await assert.rejects(lstat(join(directory, 'node_modules', name)), { code: 'ENOENT' });

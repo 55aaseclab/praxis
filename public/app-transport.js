@@ -48,10 +48,10 @@ export function createAppTransport(appId, { onChange = () => {}, onRevoked = () 
   return { initialize, invoke, selectContext, subscribe, disconnect, get context() { return context; } };
 }
 
-export function populateContexts(contexts, appId) {
+export function populateContexts(contexts, { types = {}, fallback } = {}) {
   const picker = document.querySelector('#context-picker'), select = document.querySelector('#space');
-  const types = appId === 'reminder' ? { personal: t("Personal reminders", '个人提醒'), family: t("Family reminders", '家庭提醒'), company: t("Team reminders", '团队提醒') } : { personal: t("Personal tasks", '个人任务'), family: t("Family tasks", '家庭任务'), company: t("Team tasks", '团队任务') };
+  const defaults = { personal: t("Personal tasks", '个人任务'), family: t("Family tasks", '家庭任务'), company: t("Team tasks", '团队任务') };
   select.replaceChildren();
-  for (const context of contexts) { const option = document.createElement('option'); option.value = context.id; option.textContent = context.name || types[context.type] || (appId === 'reminder' ? t("Reminder lists", '提醒列表') : t("Task scope", '任务范围')); select.append(option); }
+  for (const context of contexts) { const option = document.createElement('option'); option.value = context.id; option.textContent = context.name || types[context.type] || defaults[context.type] || fallback || t("Task scope", '任务范围'); select.append(option); }
   picker.hidden = contexts.length < 2;
 }

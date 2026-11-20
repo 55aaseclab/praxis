@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { localizedText, nativeHref, providerReadHref, validateCard, validateCardEnvelope, validatePreferences, personalCardState, laterTime, readBrowserProviders } from '../public/app-providers.js';
+import { setAppFacts } from '../public/app-registry.js';
 import { mergeBrowserInventory, validateDataManagement } from '../public/admin-data.js';
 
 const origin = 'https://workbench.example.test';
+const registeredFacts = ['reminder', 'projects', 'lattice-slides', 'memo', 'calendar'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + (id === 'lattice-slides' ? 'slides' : id) + '/', policy: 'grant', legacyPaths: id === 'reminder' ? ['/business/reminder/'] : [] } }));
+setAppFacts(registeredFacts);
 const card = (overrides = {}) => ({ id: 'reminder:sample:record-a', appId: 'reminder', spaceId: 'sample', resourceId: 'record-a', revision: '7', kind: 'reminder', title: 'Keep this original title', preview: 'Source-authored <script>text</script>', reason: { en: 'A reminder you set.', zh: '你设置的提醒。' }, source: { name: 'Reminder' }, primaryAction: { label: { en: 'Open reminder', zh: '打开提醒' }, href: '/business/reminder/?space=sample&item=record-a' }, evidence: [{ label: 'Original note', excerpt: 'Keep the author’s language.', href: '/business/reminder/?space=sample&item=record-a', revision: '7' }], ...overrides });
 const envelope = items => ({ schemaVersion: 1, items, sources: [{ appId: 'reminder', status: 'ready' }], partial: false, generatedAt: '2026-11-19T12:00:00.000Z' });
 const reply = value => ({ ok: true, json: async () => value });

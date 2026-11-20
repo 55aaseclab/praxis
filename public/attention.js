@@ -1,6 +1,7 @@
 import { getIdentity, identityReady } from './identity.js';
 import { t, locale } from './i18n.js';
 import { localizedText, validateCardEnvelope, validatePreferences, personalCardState, laterTime, readBrowserProviders } from './app-providers.js';
+import { appFact, loadAppFacts, setAppFacts } from './app-registry.js';
 
 const root = typeof document === 'undefined' ? null : document.getElementById('attention-program');
 const viewSwitch = typeof document === 'undefined' ? null : document.getElementById('workbench-view-switch');
@@ -10,8 +11,8 @@ let owner = '', deniedOwner = '', request, preferenceRequest, preferences = null
 let opened = new Set(), menu = '', mutation = null, lastAction = null, personalError = '', restoring = null;
 let listDialog, toast, timer;
 const origin = () => location.origin;
-const identityKey = value => value?.workbench && value?.apps?.some(id => id === 'reminder' || id === 'projects' || id !== 'polaris')
-  ? JSON.stringify([value.userId || value.username, value.csrfToken, value.apps, value.documentOwner === true]) : '';
+const identityKey = value => value?.workbench && (value?.apps?.length || value.documentOwner === true || value.platformAdmin === true)
+  ? JSON.stringify([value.userId || value.username, value.csrfToken, value.apps, value.documentOwner === true, value.documentOwners || []]) : '';
 const label = value => localizedText(value, locale());
 const visibleItems = () => items.filter(item => !preferences || personalCardState(item, preferences) === 'visible');
 const currentItem = () => visibleItems().find(item => item.id === selected) || visibleItems()[0];
@@ -140,8 +141,7 @@ function render({ preserve = false, focusCard = false } = {}) {
 function renderCard(item) {
   const card = element('article', 'attention-deck'); card.id = 'result-card'; card.tabIndex = 0; card.setAttribute('aria-labelledby', 'card-title'); card.dataset.card = item.id;
   const top = element('div', 'attention-card-top'), source = element('div', 'attention-source');
-  const iconPaths = { 'lattice-slides': 'slides', 'matrix-reader': 'matrix-reader' };
-  const image = element('img'); image.src = `/${iconPaths[item.appId] || item.appId}-icon.svg`; image.alt = ''; image.width = 25; image.height = 25;
+  const image = element('img'); image.src = appFact(item.appId)?.icon || '/praxis.svg'; image.alt = ''; image.width = 25; image.height = 25;
   source.append(image, element('span', '', item.source.name));
   const version = element('span', 'attention-version', t('Version ', '版本 ') + (item.revision.length > 12 ? item.revision.slice(0, 8) + '…' : item.revision)); version.title = item.revision;
   top.append(source, version); card.append(top, element('p', 'attention-reason', label(item.reason)));
@@ -294,11 +294,13 @@ async function refresh() {
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     const options = { credentials: 'same-origin', mode: 'same-origin', redirect: 'error', cache: 'no-store', signal: controller.signal };
-    const [response, preferenceResponse] = await Promise.all([fetch('/api/business/workbench/attention', options), fetch('/api/business/workbench/preferences', options)]);
+    const [response, preferenceResponse] = await Promise.all([fetch('/api/business/workbench/attention', options), fetch('/api/business/workbench/preferences', options), loadAppFacts({ signal: controller.signal })]);
     if (owner !== key || request !== controller || identityKey(getIdentity()) !== key) return;
     if ([response.status, preferenceResponse.status].some(status => status === 401 || status === 403)) { accessLost(key); return; }
     if (!response.ok || !preferenceResponse.ok) throw new Error('Cards could not be refreshed.');
     const [raw, rawPreferences] = await Promise.all([response.json(), preferenceResponse.json()]);
+    if (owner !== key || request !== controller || identityKey(getIdentity()) !== key) return;
+    if (raw.apps !== undefined) setAppFacts(raw.apps);
     const projection = validateCardEnvelope(raw, origin()), nextPreferences = validatePreferences(rawPreferences);
     let browser = [];
     try { browser = await readBrowserProviders({ kind: 'cards', identity, signal: controller.signal, origin: origin() }); }
@@ -321,8 +323,9 @@ async function refresh() {
       requestAnimationFrame(() => { if (owner === key && contentArea()) contentArea().scrollTop = position; });
     } else render({ preserve: true });
     if (listDialog?.open) renderList();
-  } catch {
+  } catch (error) {
     if (owner !== key || request !== controller || identityKey(getIdentity()) !== key) return;
+    if ([401, 403].includes(error.status)) { accessLost(key); return; }
     items = []; pendingCards = null; sources = []; state = 'error'; render({ preserve: true });
   } finally { clearTimeout(timeout); if (request === controller) request = null; }
 }

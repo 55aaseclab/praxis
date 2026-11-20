@@ -78,12 +78,12 @@ export function deduplicateMounts(input) {
 
 export async function planWorker(config, configFile, { uid = process.env.PRAXIS_UID || process.getuid?.() || 1000, gid = process.env.PRAXIS_GID || process.getgid?.() || 1000, createDirectories = true } = {}) {
   config = validateConfig(config); runtime(config);
-  let business;
+  let business; const declaredSources = [];
   if (config.businessConfigFile) {
     const { loadBusinessConfig } = await import('../src/business/config.mjs');
     const { withBusinessBackupSources } = await import('../src/business/backup-sources.mjs');
     business = await loadBusinessConfig(config.businessConfigFile);
-    config = await withBusinessBackupSources(config, business);
+    config = await withBusinessBackupSources(config, business, { onDeclaredSource: source => declaredSources.push(source) });
   }
   uid = String(uid); gid = String(gid);
   if (!/^[1-9]\d*$/.test(uid) || !/^[1-9]\d*$/.test(gid)) fail('The worker requires a non-root UID and GID');
@@ -127,10 +127,11 @@ export async function planWorker(config, configFile, { uid = process.env.PRAXIS_
   if (business) {
     await addFile(config.businessConfigFile);
     for (const app of Object.values(business.apps)) { await addFile(app.keyFile); if (app.spacesFile) await addFile(app.spacesFile); }
-    if (business.apps.reminder) {
-      // Mount configured data parents before a new space creates its first JSON file.
-      const mapping = JSON.parse(await readFile(business.apps.reminder.spacesFile, 'utf8'));
-      for (const file of Object.values(mapping.spaces)) await add(dirname(file), true);
+    // Include declared, not-yet-created sources through the same owned recovery
+    // projection, so a later first write does not require a broader mount.
+    for (const source of declaredSources) {
+      const parent = dirname(source.source), eventParent = parent === dirname(business.eventsDatabase);
+      await add(parent, !eventParent);
     }
     await add(dirname(business.eventsDatabase), false);
   }

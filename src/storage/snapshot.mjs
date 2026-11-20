@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 import { constants, createReadStream } from 'node:fs';
 import { open, mkdir, readFile, writeFile, readdir, lstat, rename, rm, realpath } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -70,17 +71,15 @@ async function copyDirectory(source, target) {
   if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error('Directory changed during snapshot; retry after writers settle');
   return before.length;
 }
-function validateJson(document, schema) {
-  if (schema === 'memo-backup-v1') {
-    if (!document || document.format !== 'memo-backup' || document.schemaVersion !== 1 || !/^\d+\.\d+\.\d+$/.test(document.appVersion ?? '') || !Number.isFinite(Date.parse(document.exportedAt)) || !document.data || !Array.isArray(document.data.records) || !document.data.prefs || typeof document.data.prefs !== 'object' || Array.isArray(document.data.prefs) || !(document.data.flow === null || typeof document.data.flow === 'object')) throw new Error('Invalid Memo backup document');
-  }
-  if (schema === 'reminder-v2') {
-    if (!document || document.version !== 2) throw new Error('Reminder schema version 2 is required');
-    for (const key of ['recurring', 'plans', 'pool', 'history']) {
-      if (!Array.isArray(document[key]) || document[key].some(item => !item || typeof item.id !== 'string' || typeof item.text !== 'string' || !Array.isArray(item.tags))) throw new Error('Invalid Reminder document');
-    }
-  }
+function validateJson(document, schema, registry = DEFAULT_APP_REGISTRY) {
+  if (schema === undefined || schema === null) return;
+  const validators = registry.apps.flatMap(app => Object.entries(app.integration?.storage?.validators || {})).filter(([id]) => id === schema);
+  if (validators.length !== 1 || typeof validators[0][1] !== 'function') throw new Error('The application snapshot schema has no unique installed validator.');
+  const before = JSON.stringify(document);
+  try { validators[0][1](document); if (JSON.stringify(document) !== before) throw new Error('mutated'); }
+  catch { throw new Error('Application schema version or document validation failed.'); }
 }
+
 function checkDatabase(file) {
   const database = new DatabaseSync(file, { readOnly: true });
   try {
@@ -155,7 +154,7 @@ async function exportSource(repository, destination) {
   if (head !== endHead || diff !== endDiff || JSON.stringify(beforeUntracked) !== JSON.stringify(afterUntracked)) throw new Error('Source changed during export; retry after code edits settle');
   return { id, commit: head, workingPatch: Boolean(diff), untrackedFiles: beforeUntracked.length };
 }
-export async function createSnapshot(config) {
+export async function createSnapshot(config, { registry = DEFAULT_APP_REGISTRY } = {}) {
   safeId(config.workspaceId); safeId(config.deviceId);
   if (config.activeWriterDeviceId !== config.deviceId) throw new Error('This device is not the active writer');
   if (!Array.isArray(config.appSources) || !config.appSources.length) throw new Error('No application sources registered; refusing an empty backup');
@@ -177,7 +176,7 @@ export async function createSnapshot(config) {
       else if (item.kind === 'json') {
         await copyStable(source, output);
         const value = JSON.parse(await readFile(output, 'utf8'));
-        validateJson(value, item.schema);
+        validateJson(value, item.schema, registry);
         schemaVersion = value?.version ?? value?.schemaVersion ?? null;
       } else if (item.kind === 'sqlite') {
         schemaVersion = await exportDatabase(source, output);
@@ -190,12 +189,12 @@ export async function createSnapshot(config) {
     for (const file of await walk(pending)) files.push({ path: file.path, size: file.size, sha256: await hash(join(pending, file.path)) });
     const manifest = { schemaVersion: 1, workspaceId: config.workspaceId, snapshotId, parentSnapshotId: config.parentSnapshotId ?? null, writerDeviceId: config.deviceId, createdAt: new Date().toISOString(), apps, files, sourceVersion, coverage: { included: apps.map(a => `${a.id}/${a.target}`), omitted: config.coverage?.omitted ?? [], browserDataRequiresExport: true } };
     await writeFile(join(pending, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
-    await verifySnapshot(pending);
+    await verifySnapshot(pending, { registry });
     await rename(pending, directory);
     return { directory, manifest };
   } catch (error) { await rm(pending, { recursive: true, force: true }); throw error; }
 }
-export async function verifySnapshot(directory) {
+export async function verifySnapshot(directory, { registry = DEFAULT_APP_REGISTRY } = {}) {
   await assertDirectory(directory);
   await assertRegular(join(directory, 'manifest.json'));
   const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'));
@@ -221,7 +220,7 @@ export async function verifySnapshot(directory) {
     const file = join(directory, 'apps', app.id, app.target);
     if (app.kind === 'json') {
       const value = JSON.parse(await readFile(file, 'utf8'));
-      validateJson(value, app.schema);
+      validateJson(value, app.schema, registry);
       if ((value?.version ?? value?.schemaVersion ?? null) !== app.schemaVersion) throw new Error('JSON schema version does not match its snapshot manifest');
     } else if (app.kind === 'sqlite') {
       if (checkDatabase(file) !== app.schemaVersion) throw new Error('SQLite schema version does not match its snapshot manifest');

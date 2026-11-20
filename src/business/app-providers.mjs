@@ -1,3 +1,4 @@
+import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 import { lstat, realpath } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -15,13 +16,13 @@ function copyText(value, maximum = 1024) {
   if (plain(value) && text(value.en, maximum) && text(value.zh, maximum)) return { en: value.en, zh: value.zh };
   throw invalid();
 }
-export function providerHref(appId, raw) {
+export function providerHref(appId, raw, { registry = DEFAULT_APP_REGISTRY } = {}) {
   if (!text(raw, 4096) || !raw.startsWith('/') || raw.startsWith('//') || /[\\\r\n]/.test(raw)) throw invalid();
   const rawPath=raw.split(/[?#]/,1)[0];
   if(/%(?:2e|2f|5c)/i.test(rawPath)||/(?:^|\/)\.{1,2}(?:\/|$)/.test(rawPath))throw invalid();
   const url = new URL(raw, 'http://praxis.invalid');
-  const slug = appId === 'lattice-slides' ? 'slides' : appId;
-  const prefixes = [`/apps/${slug}/`, `/business/${slug}/`];
+  const web=registry.getWeb(appId);if(!web)throw invalid();
+  const prefixes=[`/apps/${web.slug}/`,...(web.legacyPaths||[])];
   if (url.origin !== 'http://praxis.invalid' || /%(?:2e|2f|5c)/i.test(url.pathname) || !prefixes.some(prefix => url.pathname.startsWith(prefix))) throw invalid();
   return url.pathname + url.search + url.hash;
 }
@@ -38,14 +39,14 @@ export function providerEvidenceHref(raw) {
   if(url.protocol!=='https:')throw invalid();
   return url.href;
 }
-export function normalizeProviderCard(appId, value) {
+export function normalizeProviderCard(appId, value, { registry = DEFAULT_APP_REGISTRY } = {}) {
   if (!plain(value) || !text(value.id) || !text(value.revision, 256) || !kinds.has(value.kind) || !text(value.title, 1000) || !text(value.resourceId || value.source?.resourceId, 512) || value.reason === undefined || !plain(value.primaryAction)) throw invalid();
   if (value.appId && value.appId !== appId) throw invalid();
   if (!value.resourceId && value.source?.resourceId) value={...value,resourceId:value.source.resourceId};
   if (!value.spaceId && value.source?.spaceId) value={...value,spaceId:value.source.spaceId};
   const id = value.id.startsWith(`${appId}:`) ? value.id : `${appId}:${value.id}`;
   const card = { id, appId, revision: value.revision, kind: value.kind, title: value.title,
-    primaryAction: { href: providerHref(appId, value.primaryAction.href), label: copyText(value.primaryAction.label, 160) },
+    primaryAction: { href: providerHref(appId, value.primaryAction.href, { registry }), label: copyText(value.primaryAction.label, 160) },
     evidence: [], source: { name: text(value.source?.name, 160) ? value.source.name : appId } };
   if (text(value.primaryAction.labels?.zh, 160) && typeof card.primaryAction.label === 'string') card.primaryAction.label = { en: card.primaryAction.label, zh: value.primaryAction.labels.zh };
   if (value.reason !== undefined) card.reason = copyText(value.reason, 1000);

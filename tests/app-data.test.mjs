@@ -67,3 +67,23 @@ test('Polaris environment follows typed data-root binding without altering priva
   assert.equal(rebasePolarisEnvironment('POLARIS_DATA_ROOT="/old/data"\nPRIVATE_VALUE=retained\n', '/old/data', '/new/data'), 'POLARIS_DATA_ROOT=/new/data\nPRIVATE_VALUE=retained\n');
   assert.throws(() => rebasePolarisEnvironment('POLARIS_DATA_ROOT=/unexpected\n', '/old/data', '/new/data'));
 });
+
+test('legacy execution-tree relocation fails before journals, physical moves or configuration writes', async t => {
+  const { main } = await import('../scripts/app-data.mjs');
+  const root = await mkdtemp(join(tmpdir(), 'praxis-legacy-unavailable-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const configRoot = join(root, 'config'); await mkdir(configRoot, { mode: 0o700 });
+  const workspaceId = '11111111-1111-4111-8111-111111111111', deviceId = '22222222-2222-4222-8222-222222222222';
+  const storage = { ...configuration(root), schemaVersion: 1, workspaceId, deviceId, activeWriterDeviceId: deviceId, repositories: [{ id: 'local', type: 'local', path: join(root, 'backups'), passwordFile: join(configRoot, 'key') }] };
+  const business = { database: join(root, 'old/auth.db'), eventsDatabase: join(root, 'old/events.db'), observationsFile: join(root, 'old/observations.db'), apps: {} };
+  const legacy = { enabled: true, dataRoot: join(root, 'legacy/data'), browserProfiles: join(root, 'legacy/browser'), browserCache: join(root, 'legacy/cache'), codexHome: join(root, 'legacy/codex') };
+  await mkdir(legacy.dataRoot, { recursive: true }); const original = join(legacy.dataRoot, 'synthetic.txt'); await writeFile(original, 'Faithful synthetic archive stays in place.');
+  const storageFile = join(configRoot, 'storage.json'), businessFile = join(configRoot, 'business.json'), legacyFile = join(configRoot, 'polaris.json');
+  const raw = new Map([[storageFile, JSON.stringify(storage)], [businessFile, JSON.stringify(business)], [legacyFile, JSON.stringify(legacy)]]);
+  await writeFile(join(configRoot, 'key'), 'Synthetic recovery key.', { mode: 0o600 });
+  for (const [file, value] of raw) await writeFile(file, value, { mode: 0o600 });
+  const plan = planAppData({ storage, business, polaris: legacy }); assert.equal(plan.unavailable[0].code, 'LEGACY_RELOCATION_UNAVAILABLE');
+  await assert.rejects(main(['migrate', '--config', storageFile, '--business-config', businessFile, '--writers-stopped'], { print() {} }), /Legacy execution-tree relocation/);
+  for (const [file, value] of raw) assert.equal(await readFile(file, 'utf8'), value);
+  assert.equal(await readFile(original, 'utf8'), 'Faithful synthetic archive stays in place.');
+  await assert.rejects(lstat(join(configRoot, 'data-migrations')), { code: 'ENOENT' });
+});
