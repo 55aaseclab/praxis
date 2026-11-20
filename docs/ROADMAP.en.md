@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.126
+Version: 0.1.127
 
 [简体中文](ROADMAP.md)
 
@@ -241,6 +241,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.120 | 2026-11-20 | Load app-owned integration contracts and deliver Projects planning |
 | v0.1.125 | 2026-11-20 | Remove per-app language toggles; apps follow the workbench language preference |
 | v0.1.126 | 2026-11-20 | Serve the public product homepage at the canonical origin and retire the About Praxis pages |
+| v0.1.127 | 2026-11-20 | Default the workbench to the card view and return to the public homepage after sign-out |
 
 ### Public applications with private collections
 

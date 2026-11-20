@@ -6,7 +6,7 @@ import { appFact, loadAppFacts, setAppFacts } from './app-registry.js';
 const root = typeof document === 'undefined' ? null : document.getElementById('attention-program');
 const viewSwitch = typeof document === 'undefined' ? null : document.getElementById('workbench-view-switch');
 const returnKey = 'praxis.workbench.card-return.v1';
-let program = 'apps', items = [], sources = [], selected = '', state = 'loading', partial = false;
+let program = 'apps', items = [], sources = [], selected = '', state = 'loading', partial = false, defaulted = false;
 let owner = '', deniedOwner = '', request, preferenceRequest, preferences = null, pendingCards = null;
 let opened = new Set(), menu = '', mutation = null, lastAction = null, personalError = '', restoring = null;
 let listDialog, toast, timer;
@@ -60,7 +60,7 @@ function readReturn(identity) {
 function clearReturn() { try { sessionStorage.removeItem(returnKey); } catch {} }
 function reset(value) {
   request?.abort(); preferenceRequest?.abort(); request = null; preferenceRequest = null;
-  owner = identityKey(value); deniedOwner = ''; items = []; sources = []; selected = ''; program = 'apps';
+  owner = identityKey(value); deniedOwner = ''; items = []; sources = []; selected = ''; program = 'apps'; defaulted = false;
   preferences = null; pendingCards = null; mutation = null; lastAction = null; personalError = ''; partial = false; state = 'loading'; opened.clear(); menu = '';
   restoring = value ? readReturn(value) : null;
   if (!value) clearReturn();
@@ -321,7 +321,10 @@ async function refresh() {
       if (selected === restoring.cardId && restoring.evidenceOpen === true) opened.add(selected);
       restoring = null; render();
       requestAnimationFrame(() => { if (owner === key && contentArea()) contentArea().scrollTop = position; });
-    } else render({ preserve: true });
+    } else {
+      if (!defaulted) { program = visibleItems().length ? 'attention' : 'apps'; defaulted = true; }
+      render({ preserve: true });
+    }
     if (listDialog?.open) renderList();
   } catch (error) {
     if (owner !== key || request !== controller || identityKey(getIdentity()) !== key) return;

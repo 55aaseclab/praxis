@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.126 · [简体中文](PRD.md)
+Version: 0.1.127 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -115,7 +115,7 @@ The workbench provides app and project navigation, Settings and product document
 
 ## Workbench views · v0.1.109
 
-The existing bottom navigation bar contains a single icon button that toggles **Apps / For you**. It has no visible text labels; its icon, tooltip and accessible name describe the destination view. It works with keyboard and touch, and stays available as the main area scrolls. Both views start at the top of the main area with consistent padding, including sparse and empty states. Apps shows app and project launchers. Due dates, reminder previews, task counts and attention cards appear only in For you. Changing views keeps the selector focused and preserves the selected attention card. When the account loses the required access, clear its attention content and return to Apps. Check both languages on desktop and at phone width.
+The existing bottom navigation bar contains a single icon button that toggles **Apps / For you**. It has no visible text labels; its icon, tooltip and accessible name describe the destination view. It works with keyboard and touch, and stays available as the main area scrolls. The workbench opens on the For you card view when readable cards exist, and on the Apps view when they do not; the switch keeps working both ways and restoring a saved card return still lands on that card. Both views start at the top of the main area with consistent padding, including sparse and empty states. Apps shows app and project launchers. Due dates, reminder previews, task counts and attention cards appear only in For you. Changing views keeps the selector focused and preserves the selected attention card. When the account loses the required access, clear its attention content and return to Apps. Check both languages on desktop and at phone width.
 
 ## Built-in apps
 
@@ -135,7 +135,7 @@ The intended users include individuals with private records, families and teams 
 - **Save and verify.** Use typed, allowlisted operations, resource IDs, expected revisions and idempotency. Results remain in the owning app. After an uncertain response, read or retry with the same key. Emit events after commit, recheck authorization for subsequent deliveries and make conflicts visible. Backup completion is distinct from a successful save.
 - **Use and check the result.** The app presents the saved work in its native view, such as a source passage, a rendered deck or a review segment. People can inspect evidence in context. Knowledge distinguishes notes, books, papers and source packages. Its controlled import, parsing and indexing tools provide retrievable passages and references, with unresolved coverage or parsing failures visible.
 - **Review work.** Projects is the authoritative source for project entries. Present related work to the current user within the effective scope. Any task or activity view must derive its contents from authorized records and link back to their owning app. Never infer a public company-wide feed from a user's membership.
-- **Open and return.** An authenticated account receives a personalized workbench. Offer visible apps and project entries according to current permissions, including an honest empty state. Open the selected object in the same tab. A managed app exposes the fixed lower-left Home control and supports keyboard, desktop and narrow-screen use. After sign-in restore a validated destination. Handle loading, stale data, revocation, conflicts and uncertain writes with explicit recovery.
+- **Open and return.** An authenticated account receives a personalized workbench. Offer visible apps and project entries according to current permissions, including an honest empty state. Open the selected object in the same tab. A managed app exposes the fixed lower-left Home control and supports keyboard, desktop and narrow-screen use. After sign-in restore a validated destination. Signing out returns the browser to the public product homepage. Handle loading, stale data, revocation, conflicts and uncertain writes with explicit recovery.
 - **Develop an app.** Maintain a documented interface/ownership boundary, locale support, first-run behavior, entry and return navigation, permissions, storage and checks. Local development should not publish an app or grant it production access. [App standard](APP-STANDARD.md)
 
 ## Operating requirements
@@ -204,6 +204,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.120 | 2026-11-20 | Load app-owned integration contracts and deliver Projects planning |
 | v0.1.125 | 2026-11-20 | Remove per-app language toggles; apps follow the workbench language preference |
 | v0.1.126 | 2026-11-20 | Serve the public product homepage at the canonical origin and retire the About Praxis pages |
+| v0.1.127 | 2026-11-20 | Default the workbench to the card view and return to the public homepage after sign-out |
 
 ### Letters and Profiles
 

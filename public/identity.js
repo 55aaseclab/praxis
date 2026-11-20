@@ -75,7 +75,7 @@ function renderAccount() {
         try {
           const response = await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin', mode: 'same-origin', redirect: 'error', referrerPolicy: 'same-origin', signal: request.signal, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: '{}' });
           if (!response.ok && response.status !== 401) throw new Error('Logout was not confirmed.');
-          location.assign('/auth/login?return_to=%2F');
+          location.assign('/');
         } catch {
           status.textContent = t('Sign-out was not confirmed. Try again.', '尚未确认退出，请重试。');
           retry.hidden = false; retry.disabled = false; reload.hidden = false; retry.focus();
