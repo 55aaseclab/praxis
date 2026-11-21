@@ -77,6 +77,7 @@ function setSession(value) {
   return true;
 }
 function el(tag, className = '', text) { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; }
+function controlRow(...controls) { const row = el('div', 'control-row'); row.append(...controls); return row; }
 function button(text, className, handler) { const node = el('button', className, text); node.type = 'button'; node.addEventListener('click', handler); return node; }
 function message(text = '', kind = '') { notice.replaceChildren(document.createTextNode(text)); notice.className = `notice ${kind}`; }
 function time(value) { if (value === null || value === undefined) return t("No expiry", "未设置期限"); const date = new Date(value); return Number.isNaN(date.valueOf()) ? t("Time unconfirmed", "时间待确认") : date.toLocaleString(language, { hour12: false }); }
@@ -150,12 +151,13 @@ function picker() {
 function createForm() {
   const panel = el('section', 'editor form-panel'); panel.setAttribute('aria-label', t("New user", "新增用户"));
   const heading = el('div', 'form-heading'); heading.append(el('h2', '', t("New user", "新增用户")), button(t("Cancel", "取消"), 'link-button', () => { createOpen = false; void render(); }));
-  const form = el('form'), fields = el('div', 'form-grid');
+  const form = el('form'), fields = controlRow();
   const username = field(t("Account", "账号"), 'username'), password = field(t("Initial password", "初始密码"), 'password', 'password');
   username.input.required = true; username.input.maxLength = 200; username.input.autocomplete = 'off';
   password.input.required = true; password.input.minLength = 12; password.input.maxLength = 1024; password.input.autocomplete = 'new-password';
   fields.append(username.root, password.root); const submit = el('button', 'primary', t("Create user", "创建用户")); submit.type = 'submit';
-  form.append(fields, el('p', 'section-note', t("Set app access, business permissions and administrator privileges separately after creating a user.", "新用户默认没有平台管理、应用入口或业务数据权限。创建后再分别授权。")), submit);
+  fields.append(submit);
+  form.append(fields, el('p', 'section-note', t("Set app access, business permissions and administrator privileges separately after creating a user.", "新用户默认没有平台管理、应用入口或业务数据权限。创建后再分别授权。")));
   form.addEventListener('submit', event => {
     event.preventDefault(); const body = { username: username.input.value.trim(), password: password.input.value };
     void mutate('/users', { method: 'POST', body }, value => { updateUser(value.user); selectedId = value.user.id; createOpen = false; renderUsers(); message(t("User created. Set their app access as needed.", "用户已创建，请按需设置入口权限。"), 'success'); });
@@ -174,7 +176,7 @@ function accountEditor(user) {
   const passwordForm = el('form', 'password-form'), password = field(t("New password", "新密码"), 'password', 'password');
   password.input.required = true; password.input.minLength = 12; password.input.maxLength = 1024; password.input.autocomplete = 'new-password';
   const submit = el('button', 'quiet-button', t("Reset password", "重置密码")); submit.type = 'submit';
-  passwordForm.append(el('h3', '', t("Reset password", "重置密码")), password.root, el('p', 'section-note', t("Use at least 12 characters. The user must sign in again after a reset.", "至少12个字符。重置后，该用户需要重新登录。")), submit);
+  passwordForm.append(el('h3', '', t("Reset password", "重置密码")), controlRow(password.root, submit), el('p', 'section-note', t("Use at least 12 characters. The user must sign in again after a reset.", "至少12个字符。重置后，该用户需要重新登录。")));
   passwordForm.addEventListener('submit', event => { event.preventDefault(); const body = { password: password.input.value }; void mutate(userPath(user, '/password'), { method: 'POST', body }, () => { renderUsers(); message(t("Password reset.", "密码已重置。"), 'success'); }); });
   panel.append(passwordForm); return panel;
 }
@@ -208,8 +210,8 @@ function renderAccess(user, access) {
   const checks = grantApps().map(app => { const id = app.id; const entry = check(appNames[id] || app.name, id, access.apps?.includes(id)); appGrid.append(entry.root); return [id, entry.input]; }); apps.append(appGrid);
   const workspace = el('fieldset', 'access-group'), workspaceGrid = el('div', 'checkbox-grid'); workspace.append(el('legend', '', t("Documents", "文档")));
   const prds = check(t("Product documents", "PRD集合"), 'prds', access.prds); workspaceGrid.append(prds.root); workspace.append(workspaceGrid);
-  const expiry = field(t("Expires on", "有效期至"), 'expiresAt', 'datetime-local'); expiry.root.classList.add('access-expiry'); expiry.input.value = localDate(access.expiresAt); expiry.root.append(el('small', '', t("Leave blank for access without an expiry date.", "留空表示不设期限。")));
-  const submit = el('button', 'primary', t("Save app access", "保存入口权限")); submit.type = 'submit'; form.append(apps, workspace, expiry.root, submit);
+  const expiry = field(t("Expires on", "有效期至"), 'expiresAt', 'datetime-local'); expiry.input.value = localDate(access.expiresAt);
+  const submit = el('button', 'primary', t("Save app access", "保存入口权限")); submit.type = 'submit'; form.append(apps, workspace, controlRow(expiry.root, submit), el('p', 'section-note', t("Leave blank for access without an expiry date.", "留空表示不设期限。")));
   form.addEventListener('submit', event => {
     event.preventDefault(); const expiresAt = expiry.input.value ? new Date(expiry.input.value).valueOf() : null;
     if (expiresAt !== null && (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now())) { message(t("Choose a future expiration date.", "请选择未来的有效期。"), 'error'); return; }
@@ -252,17 +254,18 @@ function renderGrants(user, value, own = false) {
   content.append(el('p', 'section-note', own ? t("View delegations granted to external agents. Current permissions are checked on every action; a grant alone does not establish a successful connection.", "这里展示你授予外部智能体的委托。授权记录不代表已经连接或成功调用；每次操作仍受你当前的应用与数据权限限制。") : t("Agents receive a delegation through OAuth and user consent. Current business permissions apply. Revocation stops further use of the grant.", "智能体通过 OAuth 登录与用户确认获得委托；委托范围仍受当前业务权限限制。撤销后，该智能体不能继续使用这份委托。")));
   const list = el('ul', 'grant-list');
   for (const grant of value.grants) {
-    const row = el('li', 'grant-row'), heading = el('div', 'grant-heading'); row.dataset.grant = grant.id;
+    const row = el('li', 'grant-row'), summary = el('div', 'control-summary'), controls = controlRow(summary), heading = el('div', 'grant-heading');
+    row.append(controls); row.dataset.grant = grant.id;
     const revoked = grant.revokedAt != null, expired = grant.expiresAt <= Date.now();
     const status = grant.status || (revoked ? 'revoked' : expired ? 'expired' : 'current'); row.dataset.status = status;
     heading.append(el('strong', '', grant.client.name), el('span', 'grant-status', ({ current: t("Unexpired", "未到期"), restricted: t("Scope restricted", "范围已受限"), expired: t("Expired", "已到期"), revoked: t("Revoked", "已撤销") })[status] || t("Status unconfirmed", "状态待确认")));
-    row.append(heading, el('span', 'meta', t("Expires {0}", "有效期至 {0}", time(grant.expiresAt))));
-    if (own && ['expired', 'revoked'].includes(status)) row.append(el('p', 'meta', t("Historical grant scope; current permissions may differ.", "以下为历史授权范围，不代表当前可用权限。")));
-    if (own && status === 'restricted') row.append(el('p', 'meta', t("App or resource access changed. The list shows the actions currently available.", "应用或资源权限已变化，当前可用操作以所列范围为准。")));
+    summary.append(heading, el('span', 'meta', t("Expires {0}", "有效期至 {0}", time(grant.expiresAt))));
+    if (own && ['expired', 'revoked'].includes(status)) summary.append(el('p', 'meta', t("Historical grant scope; current permissions may differ.", "以下为历史授权范围，不代表当前可用权限。")));
+    if (own && status === 'restricted') summary.append(el('p', 'meta', t("App or resource access changed. The list shows the actions currently available.", "应用或资源权限已变化，当前可用操作以所列范围为准。")));
     const scopes = el('ul', 'grant-scopes');
     for (const scope of grant.scopes) { const actions = scope.actions.map(action => actionNames[action] || t("Other capabilities", "其他能力")).join('、'); const resources = scope.allResources ? t("Permitted resources in scope", "范围内获准资源") : Number.isSafeInteger(scope.resourceCount) ? t("Resources: {0}", "{0}项资源", scope.resourceCount) : t("Resource scope unconfirmed", "资源范围待确认"); scopes.append(el('li', '', t("{0}: {1}; scopes: {2}, {3}", "{0}：{1}；{2}个范围，{3}", appNames[scope.appId] || t("Other apps", "其他应用"), actions, scope.spaceCount, resources))); }
-    row.append(grant.scopes.length ? scopes : el('p', 'meta', own && !['expired', 'revoked'].includes(status) ? t("No actions currently available.", "当前暂无可用操作。") : t("No recorded scopes.", "暂无范围记录。")));
-    if (!revoked && !expired && ['current', 'restricted'].includes(status)) row.append(button(t("Revoke delegation", "撤销委托"), 'danger-button', () => confirmAction(row, t("Revoke this delegation for {0}?", "撤销 {0} 的这份委托？", grant.client.name), () => own ? void revokeOwnGrant(grant.id) : void mutate(`/grants/${encodeURIComponent(grant.id)}`, { method: 'DELETE' }, async () => { await render(); message(t("Delegation revoked.", "委托已撤销。"), 'success'); }))));
+    summary.append(grant.scopes.length ? scopes : el('p', 'meta', own && !['expired', 'revoked'].includes(status) ? t("No actions currently available.", "当前暂无可用操作。") : t("No recorded scopes.", "暂无范围记录。")));
+    if (!revoked && !expired && ['current', 'restricted'].includes(status)) controls.append(button(t("Revoke delegation", "撤销委托"), 'danger-button', () => confirmAction(row, t("Revoke this delegation for {0}?", "撤销 {0} 的这份委托？", grant.client.name), () => own ? void revokeOwnGrant(grant.id) : void mutate(`/grants/${encodeURIComponent(grant.id)}`, { method: 'DELETE' }, async () => { await render(); message(t("Delegation revoked.", "委托已撤销。"), 'success'); }))));
     list.append(row);
   }
   content.append(value.grants.length ? list : el('p', 'empty', t("No agent delegations.", "暂无智能体委托。")));
@@ -297,7 +300,7 @@ async function renderSpaces(current) {
   content.replaceChildren();
   const create = el('form', 'form-panel'), type = selectField(t('Space type', '空间类型'), 'type', ['personal', 'family', 'company'].map(value => ({ value, label: spaceTypeName(value) })));
   const submit = el('button', 'primary', t('Create space', '创建空间')); submit.type = 'submit';
-  create.append(el('h2', '', t('New space', '新空间')), el('p', 'section-note', t('Enable apps and grant resource permissions after creating a space. Personal spaces have no other members.', '创建后再启用应用并授予资源权限。个人空间不能添加其他成员。')), type.root, submit);
+  create.append(el('h2', '', t('New space', '新空间')), el('p', 'section-note', t('Enable apps and grant resource permissions after creating a space. Personal spaces have no other members.', '创建后再启用应用并授予资源权限。个人空间不能添加其他成员。')), controlRow(type.root, submit));
   create.addEventListener('submit', event => {
     event.preventDefault();
     void mutateSpace(`${accountBase}/spaces`, { method: 'POST', body: { type: type.input.value } }, t('Space created. Enable apps to continue.', '空间已创建，请按需启用应用。'), result => { selectedSpaceId = result.id; });
@@ -332,15 +335,15 @@ async function renderSpaces(current) {
   if (owner && space.type !== 'personal') {
     const form = el('form', 'form-panel'), username = field(t('Registered username', '已注册的用户名'), 'username'); username.input.required = true; username.input.maxLength = 64; username.input.autocomplete = 'off';
     const add = el('button', 'quiet-button', t('Add member', '添加成员')); add.type = 'submit';
-    form.append(username.root, el('p', 'section-note', t('Adding a member grants no app or resource permissions.', '添加成员不会自动授予应用或资源权限。')), add);
+    form.append(controlRow(username.root, add), el('p', 'section-note', t('Adding a member grants no app or resource permissions.', '添加成员不会自动授予应用或资源权限。')));
     form.addEventListener('submit', event => { event.preventDefault(); void mutateSpace(spacePath('/members'), { method: 'POST', body: { username: username.input.value.trim(), role: 'member' } }, t('Member added. Grant permissions as needed.', '成员已添加，请按需授予权限。')); }); memberSection.append(form);
   }
   panel.append(memberSection);
   const permissionSection = el('section', 'editor'); permissionSection.append(el('h2', '', t('Resource permissions', '资源权限')));
   const permissionList = el('ul', 'grant-list');
   for (const permission of permissions) {
-    const row = el('li', 'grant-row'); row.append(el('strong', '', memberName(permission.userId)), el('span', 'meta', `${apps.find(app => app.id === permission.appId)?.name || permission.appId} · ${permission.actions.map(action => actionNames[action] || action).join(', ')}`), el('span', 'meta', permission.resources.includes('*') ? t('All resources in this app and space', '此应用在本空间内的所有资源') : t('Resources: {0}', '资源：{0}', permission.resources.join(', '))));
-    if (owner) row.append(button(t('Revoke permission', '撤销权限'), 'danger-button', () => confirmAction(row, t('Revoke this resource permission?', '撤销此资源权限？'), () => void mutateSpace(spacePath(`/permissions/${encodeURIComponent(permission.id)}`), { method: 'DELETE' }, t('Permission revoked.', '权限已撤销。')))));
+    const row = el('li', 'grant-row'), summary = el('div', 'control-summary'), controls = controlRow(summary); row.append(controls); summary.append(el('strong', '', memberName(permission.userId)), el('span', 'meta', `${apps.find(app => app.id === permission.appId)?.name || permission.appId} · ${permission.actions.map(action => actionNames[action] || action).join(', ')}`), el('span', 'meta', permission.resources.includes('*') ? t('All resources in this app and space', '此应用在本空间内的所有资源') : t('Resources: {0}', '资源：{0}', permission.resources.join(', '))));
+    if (owner) controls.append(button(t('Revoke permission', '撤销权限'), 'danger-button', () => confirmAction(row, t('Revoke this resource permission?', '撤销此资源权限？'), () => void mutateSpace(spacePath(`/permissions/${encodeURIComponent(permission.id)}`), { method: 'DELETE' }, t('Permission revoked.', '权限已撤销。')))));
     permissionList.append(row);
   }
   permissionSection.append(permissions.length ? permissionList : el('p', 'empty', t('No resource permissions granted.', '尚未授予资源权限。')));
@@ -355,7 +358,7 @@ async function renderSpaces(current) {
     function drawActions() { checks.replaceChildren(); for (const action of enabledApps.find(value => value.id === app.input.value)?.actions || []) checks.append(check(actionNames[action] || action, action, false).root); }
     app.input.addEventListener('change', drawActions); drawActions();
     const grant = el('button', 'primary', t('Grant resource permission', '授予资源权限')); grant.type = 'submit';
-    form.append(el('h3', '', t('Grant permission', '授予权限')), grid, resources.root, actions, grant);
+    form.append(el('h3', '', t('Grant permission', '授予权限')), grid, actions, controlRow(resources.root, grant));
     form.addEventListener('submit', event => {
       event.preventDefault(); const selectedActions = [...checks.querySelectorAll('input:checked')].map(input => input.name), selectedResources = [...new Set(resources.input.value.split(',').map(value => value.trim()).filter(Boolean))];
       if (!selectedActions.length || !selectedResources.length) { message(t('Choose at least one action and resource.', '请至少选择一项操作并填写资源。'), 'error'); return; }
@@ -477,3 +480,14 @@ setInterval(async () => { if (ended || writing || document.visibilityState === '
 void boot();
 
 document.querySelector('[data-language-preference]').addEventListener('change', () => location.reload());
+
+function reserveSelectSpace(event) {
+  const select = event.target;
+  if (!(select instanceof HTMLSelectElement) || window.innerWidth <= 390) return;
+  const clearance = Math.min(320, window.innerHeight * 0.4);
+  const bottom = select.getBoundingClientRect().bottom;
+  if (bottom > window.innerHeight - clearance) window.scrollBy({ top: bottom - window.innerHeight + clearance, behavior: 'instant' });
+}
+const main = document.querySelector('main');
+main.addEventListener('focusin', reserveSelectSpace);
+main.addEventListener('pointerdown', reserveSelectSpace);

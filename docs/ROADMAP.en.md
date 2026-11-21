@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.140
+Version: 0.1.141
 
 [简体中文](ROADMAP.md)
 
@@ -22,6 +22,10 @@ Deliver public bilingual registration from the homepage and sign-in page, with J
 ## OAuth consent callback redirects and empty selection
 
 Handle a verified empty selection on the existing external-agent consent page with an actionable English/Simplified Chinese error and retry form. Verify HTTP 400, no redirect and unchanged code/delegation counts with isolated synthetic fixtures; then select an action and complete the existing 303/code/S256 PKCE exchange. On verified consent and retry documents, narrowly allow the registered callback origin in CSP `form-action`; preserve the default restrictions elsewhere and reject unsafe CSP sources. Verify a real Chromium form POST, browser-followed cross-origin callback, no CSP violation and successful PKCE exchange, plus empty-selection failure and retry. Keep unchecked defaults and authorization boundaries. Run the platform suite and both PRD reader languages, commit, and build/deploy the affected web/core pair through the authorized test blue/green environment. Report running version and public readback separately from the independent business client's acceptance.
+
+## Consistent Settings control rows
+
+Define a shared field/action row and uniform note/section rhythm before implementation. Align all form and list actions to the same main-content right edge, with controls on the left; remove competing form width limits. Apply it across every management view, retaining native controls and desktop bottom clearance; stack rows only at 390 px and below. Verify all seven management views in Chromium at 1440/390 px, keyboard focus and touch targets, original space/member/enrollment/grant submissions and both workbench PRD languages using synthetic fixtures. Run the platform suite, align one PATCH and bilingual release rows, commit checked source, then build and release the existing web/core pair through the authorized test blue/green controller. Read back public settings entry behavior and actual runtime version; business acceptance belongs to the independent client.
 
 ## Self-service business spaces
 
@@ -274,6 +278,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.138 | 2026-11-21 | Add public self-service account registration with bounded abuse protection |
 | v0.1.139 | 2026-11-21 | Enable self-service spaces with owner-controlled app enrollment and consistent authorization |
 | v0.1.140 | 2026-11-21 | Allow verified OAuth callback redirects in consent CSP and show actionable empty-selection retries |
+| v0.1.141 | 2026-11-21 | Unify Settings control rows, note spacing and native select clearance across management views |
 
 ### Public applications with private collections
 

@@ -9,6 +9,8 @@ The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.m
 - Give each control a visible focus state and an accessible name. Reserve space for the workbench Home button at the bottom left, including the device's safe area. Check the complete trip from a tile into an app and back using a keyboard, desktop and a narrow viewport.
 - Start with English and add Simplified Chinese in the same change. Test long labels, wrapping and announcements. Keep user-authored content in its original language.
 
+- Settings forms and lists align controls to the main pane’s left edge and actions to its right edge, using a shared full-width row with a 12 px gap. Stack only at 390 px and below; keep section notes outside the row with 12 px above and 20 px below. Reserve native select menu clearance and inspect open menus, keyboard focus and both content edges at 1440/391/390 px. See the [control-row rules](../skills/praxis-operator/references/ui-style-guide.en.md#settings-control-rows-and-edge-alignment).
+
 - Preview/copy controls use a pointer cursor and reveal full values on hover or focus, with a touch-accessible equivalent. Use a viewport-bounded overlay and a reserved icon slot for copy feedback, plus a hidden status announcement. Do not add success/error lines that move the surrounding layout. Repeated actions and unchanged refreshes preserve the current preview, focus and scroll.
 
 ## 简体中文
@@ -19,5 +21,7 @@ The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.m
 - 明确区分空目录、加载中、失去授权和网络错误。安全重试时保留选择和位置，撤权后清除先前显示的私有内容。
 - 每个控件都有明确的无障碍名称和焦点状态。为左下角首页按钮和设备安全区留出空间。用键盘、桌面和窄屏走通从首页打开应用再返回的流程。
 - 先更新英文，再同步简体中文。检查长标签、换行和状态播报。用户撰写的内容保留原语言。
+
+- 设置表单与列表统一两端对齐：控件在主内容区左边缘，动作在右边缘，共用全宽行和 12 px 间距，仅在不超过 390 px 时纵向排列。说明在行外，统一上方 12 px、下方 20 px 间距。预留原生下拉菜单空间，在 1440/391/390 px 实际检查展开菜单、键盘焦点和左右边缘。详见[控件行规则](../skills/praxis-operator/references/ui-style-guide.md#设置控件行与两端对齐)。
 
 - 预览/复制控件使用小手光标，悬停、聚焦或触屏均可查看完整内容。预览浮层不超出视口，复制反馈使用预留图标位置及隐藏状态播报，不插入挤动布局的成功/失败行。连续操作和相同数据刷新保留当前预览、焦点与滚动位置。

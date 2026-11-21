@@ -131,6 +131,14 @@ Use a 4 px base with an 8 px spacing rhythm for content: 4–8 px within a tight
 
 The hierarchy and legibility principles follow Apple's [Typography](https://developer.apple.com/design/human-interface-guidelines/typography) guidance; the CSS sizes and spacing above are local starting points.
 
+### Settings control rows and edge alignment
+
+Management forms and lists share the main pane’s alignment guides: controls and object summaries begin at the left edge, and their action buttons end at the right edge. Keep one content width across sections. Do not give new-space, member, permission, account or password forms separate narrow containers that leave their actions ending at different horizontal positions. Use a full-width flex row with `justify-content: space-between`, bottom-aligned fields/actions and a defined 12 px gap; fields may grow while action buttons retain a readable width. Group related inputs on that row and place explanatory notes outside it, rather than inserting a note between a control and its button or leaving a detached submit row.
+
+For Settings, use 16 px between field groups and 24 px between sections. Every section note has 12 px above and 20 px below. At 390 CSS px and below, stack the row with the same 12 px gap, aligning controls and actions to both content edges. Above that breakpoint keep the control/action pair horizontal. Retain visible keyboard focus, native semantic controls and the existing touch target sizes; narrow-screen targets are at least 44 CSS px high.
+
+Keep native selects. Reserve bottom scrolling space and bring a low desktop select above its menu clearance when focused or opened, so the current value stays visible during normal selection. Native menu placement belongs to the browser/OS: inspect an actually open menu, including pointer and keyboard use, instead of inferring success from element geometry alone. Verify every management view at 1440 px and 390 px, plus 391 px for the row breakpoint, with synthetic content. Check shared left/right edges, note spacing, no horizontal overflow, unchanged submissions and current-value visibility. Apply these rules through the existing app-owned components and styles within the assigned scope.
+
 ## Color, surfaces, and controls
 
 Use semantic app-owned tokens. A light appearance can start with this neutral palette and one accent, then adjust for the app's content and contrast requirements:

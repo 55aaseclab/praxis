@@ -136,6 +136,14 @@ Use a 4 px base with an 8 px spacing rhythm for content: 4–8 px within a tight
 
 The hierarchy and legibility principles follow Apple's [Typography](https://developer.apple.com/design/human-interface-guidelines/typography) guidance; the CSS sizes and spacing above are local starting points.
 
+### 设置控件行与两端对齐
+
+管理表单与列表共用主内容区的对齐线：控件及对象摘要从左边缘开始，操作按钮结束于右边缘。各区块使用同一内容宽度；新空间、成员、授权、账号、密码表单不能各设窄容器，使操作按钮停在不同的横向位置。使用全宽 flex 行、`justify-content: space-between`、字段与操作底部对齐及明确的 12 px 间距；字段可伸展，操作按钮保留易读宽度。相关输入归入同一行，说明文字放在行外，不插在控件与按钮之间，也不将提交按钮单独放在脱节的底部行。
+
+设置界面的字段组之间间隔 16 px，区块之间间隔 24 px。每条区块说明保留上方 12 px、下方 20 px 间距。视口不超过 390 CSS px 时，控件行纵向排列，保留 12 px 间距，控件和操作均对齐内容区两端；超过该临界宽度时，控件与操作保持同行。保留可见键盘焦点、原生语义控件和已有触控尺寸；窄屏触控目标至少高 44 CSS px。
+
+保留原生下拉框。预留底部滚动空间，在桌面底部的下拉框获得焦点或展开时，为菜单腾出下方空间，使常规选择过程中当前值仍可见。原生菜单的位置由浏览器／系统控制，应实际展开菜单，检查鼠标及键盘操作，不能仅凭元素几何推断通过。以合成内容检查全部管理视图的 1440 px、390 px，以及换行临界宽度 391 px，覆盖统一左右边缘、说明间距、无横向溢出、原有提交和当前值可见性。仅在本次授权范围内，通过既有应用自有组件及样式落实规则。
+
 ## Color, surfaces, and controls
 
 Use semantic app-owned tokens. A light appearance can start with this neutral palette and one accent, then adjust for the app's content and contrast requirements:

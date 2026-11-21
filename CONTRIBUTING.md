@@ -36,7 +36,7 @@ Read the sections that govern the affected behavior. Before implementation, an a
 
 External contributors open an issue before proposing a new feature, workflow or public interface change, permission or storage change, migration, or cross-repository task. Include the user task, affected repository, concrete example and observable success conditions. A small, clearly defined bug, translation or documentation correction can go directly to a PR. Administrators and maintainers can proceed directly within their agreed scope and record acceptance criteria and results with the task or delivery.
 
-Use observable acceptance criteria tied to the relevant PRD, roadmap or guide section. An issue or PR can give them identifiers such as AC1 and AC2. Update the owning PRD and roadmap before implementing changed behavior. The maintainer resolves ownership and implementation questions; the administrator accepts changes to product scope or sensitive contracts.
+Use observable acceptance criteria tied to the relevant PRD, roadmap or guide section. An issue or PR can give them identifiers such as AC1 and AC2. Update the owning PRD and roadmap before implementing changed behavior. UI/UX changes must also update the corresponding sections of the owning design guide in the same change, keeping English and Simplified Chinese in sync. For platform interfaces, update the relevant [Praxis UI/UX guide](skills/praxis-operator/references/ui-style-guide.en.md) section and [workbench interactions](docs/UI-UX.md) where affected; app-specific rules belong in the app repository’s guide. Record the resulting interaction, layout and verification rules so future changes follow the accepted design. The maintainer resolves ownership and implementation questions; the administrator accepts changes to product scope or sensitive contracts.
 
 For external cross-app contributions, keep a tracking issue in Praxis and link the app issues and PRs to it. Close it after the required app revisions are integrated and the combined acceptance criteria pass. Internal maintenance can record the same dependencies in task notes without opening issues.
 
@@ -136,7 +136,7 @@ Contributions use the [Apache 2.0 license](LICENSE). Follow the [code of conduct
 
 外部贡献者提议新增功能、工作流或公共接口变化、权限或存储变更、迁移、跨仓任务时先开 issue，说明用户任务、所属仓库、具体例子及可观察的成功条件。范围明确的小缺陷、翻译和文档修正可直接 PR。管理员和 maintainer 可在约定范围直接执行，在任务或交付说明中记录验收条件与结果。
 
-采用可观察的验收条件，关联对应 PRD、路线图或 guide 章节。Issue 或 PR 中可用 AC1、AC2 编号。行为变更先更新所属 PRD 和路线图，再实现。Maintainer 确认归属和实现问题；产品范围或敏感合同的变化由管理员验收。
+采用可观察的验收条件，关联对应 PRD、路线图或 guide 章节。Issue 或 PR 中可用 AC1、AC2 编号。行为变更先更新所属 PRD 和路线图，再实现。 UI/UX 修改还必须在同一变更中同步更新所属设计指南的对应章节，并保持英文与简体中文一致。平台界面更新 [Praxis UI/UX 指南](skills/praxis-operator/references/ui-style-guide.md)相关章节及受影响的[工作台交互](docs/UI-UX.md)；应用专属规则写入所属应用仓库的指南。记录最终交互、布局和验证规则，让后续修改遵循已确认的设计。Maintainer 确认归属和实现问题；产品范围或敏感合同的变化由管理员验收。
 
 外部跨应用贡献在 Praxis 保留总 issue，关联各应用 issue 和 PR；应用版本全部集成、组合验收通过后关闭总 issue。内部维护可直接在任务说明中记录依赖，无需创建 issue。
 

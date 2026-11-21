@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.140 · [简体中文](PRD.md)
+Version: 0.1.141 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -56,6 +56,10 @@ Persist a basic abuse limit of five registration attempts per transport peer and
 ### OAuth consent selection and callback redirects
 
 Keep external-agent permission checkboxes unchecked until the user selects them. Submitting a valid consent form with no permissions selected returns HTTP 400 with an explicit, localized instruction to select at least one permission, on the same consent page with its selectable actions and retry button. Issue no authorization code or delegation and do not redirect. Preserve session, Origin, CSRF, signed-consent and requested-scope checks. Selecting a permission and retrying continues the existing authorization-code/S256 PKCE flow. On the verified, authenticated consent document and its empty-selection retry, allow only the exact registered callback origin alongside `'self'` in CSP `form-action`, so a real browser can follow the POST’s 303 cross-origin callback and complete PKCE. Serialize the callback as a safe HTTP(S) CSP origin; never interpolate its path/query or permit policy injection or wildcard sources. All other pages retain their existing CSP restrictions. Verify the actual browser callback hit and token exchange, not only a server-side HTTP redirect.
+
+## Consistent Settings control rows
+
+All management views align controls to the main content’s left edge and actions to its right edge, including new-space, member, permission, user and password forms; forms must not introduce narrower competing right edges. Use one control-row pattern: related fields and their primary action share a horizontal row with a 12 px gap, stacking only at viewport widths of 390 px or less. Section notes have uniform 12 px spacing above and 20 px below, outside the control/action row. Use consistent field and section spacing, preserve native selects, visible focus, accessible names and touch targets, and reserve bottom clearance for controls and native select menus during desktop use. Do not change management operations, API payloads or authorization. Verify General, Spaces, App access, Agent delegations, Users, Data and MCP at 1440 px and 390 px with isolated synthetic fixtures, including space creation, enrollment, member and resource-permission forms, native select interaction and absence of horizontal overflow. Browser viewport checks and independent business acceptance remain separate.
 
 ## Self-service business spaces and app enrollment
 
@@ -288,6 +292,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.138 | 2026-11-21 | Add public self-service account registration with bounded abuse protection |
 | v0.1.139 | 2026-11-21 | Enable self-service spaces with owner-controlled app enrollment and consistent authorization |
 | v0.1.140 | 2026-11-21 | Allow verified OAuth callback redirects in consent CSP and show actionable empty-selection retries |
+| v0.1.141 | 2026-11-21 | Unify Settings control rows, note spacing and native select clearance across management views |
 
 ### Letters and Profiles
 
