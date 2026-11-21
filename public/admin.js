@@ -504,12 +504,16 @@ async function mutateSpace(path, options, text, after) {
 async function renderSpaces(current, preserve) {
   if (session.platformAdmin && !selectedSpaceUserId) selectedSpaceUserId = session.user.id;
   const contextUserId = selectedSpaceUserId;
-  const contextPicker = () => picker(pickerUsers(), selectedSpaceUserId, id => { selectedSpaceUserId = id; void render(); });
+  const contextPicker = () => picker(pickerUsers(), selectedSpaceUserId, id => {
+    selectedSpaceUserId = id; selectedSpaceId = null; selectedAppId = null;
+    history.replaceState(null, '', spaceHref()); void render();
+  });
+  const displayQuery = session.platformAdmin ? `?contextUserId=${encodeURIComponent(contextUserId)}` : '';
   if (!preserve) {
     if (session.platformAdmin) content.append(contextPicker());
     content.append(el('p', 'loading', t('Loading spaces…', '正在读取空间…')));
   }
-  const value = await api(`${accountBase}/spaces`);
+  const value = await api(`${accountBase}/spaces${displayQuery}`);
   if (ended || current !== epoch || view !== 'spaces') return;
   const spaces = value.spaces;
   if (!spaces.some(space => space.id === selectedSpaceId)) {
@@ -547,7 +551,7 @@ async function renderSpaces(current, preserve) {
     picker.input.addEventListener('change', () => { selectedSpaceId = picker.input.value; selectedAppId = null; history.pushState(null, '', spaceHref()); void render(); });
     const selection = controlRow(picker.root);
     if (capabilities.canDelete) selection.append(button(t('Delete space', '删除空间'), 'danger-button space-delete', () => confirmSpaceDeletion(context, space)));
-    context.append(selection, el('p', 'section-note', capabilities.canManage ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : capabilities.displayContext ? t('App enrollment and resource permissions are separate.', '应用启用状态与资源权限分开展示。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
+    context.append(selection);
     if (space.deletionProtected) context.append(el('p', 'section-note', t('Automatically created personal spaces cannot be deleted.', '自动创建的个人空间不能删除。')));
     panel.append(context);
     const memberSection = el('section', 'space-section'); memberSection.append(el('h2', '', t('Members', '成员')));

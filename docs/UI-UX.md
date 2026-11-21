@@ -35,7 +35,7 @@ The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.m
 
 - MCP Settings keeps protocol endpoints and capability schemas; omit the app configuration/seven-day calls block, registry disclaimer and updated timestamp. Verify both languages at 1440/390 px.
 
-- Spaces owner self-management hints and onboarding use the acting session’s ownership. A non-owner administrator viewing another user sees neutral overview/app explanations alongside the existing viewing-context notice and that user’s app/permission projection; retain existing Manage links, actor-authorized Delete and automatic-personal protection. Owner/member sessions keep their copy and controls. Verify synthetic personal/family/team contexts in both languages at 1440/390 px, including stable settled refresh geometry and no horizontal overflow.
+- Spaces lists follow the administrator’s selected Current user through the read-only `contextUserId` list query, using that user’s membership, ownership and platform visibility. Changing users clears the space/app selection even when a shared space occurs in both lists; select a current-user space or show the existing empty state, ignoring delayed old responses. Remove the owner, non-owner and neutral overview hints about app enrollment/resource permissions without replacement. Keep the existing viewing-context notice, app-specific guidance, Manage links, actor-authorized Delete and automatic-personal protection. Verify distinct personal IDs, family/team memberships, shared-space overlap, empty states, native-session parity and absence of all three hints for owner/member/admin in both languages at 1440/390 px, with stable settled refresh geometry and no horizontal overflow.
 
 ## 简体中文
 
@@ -72,4 +72,4 @@ The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.m
 
 - MCP 设置保留协议入口与能力清单，移除应用配置／近七天调用区块、注册清单免责声明及更新时间。在 1440/390 px 验证两种语言。
 
-- 空间所有者自主管理提示和引导按实际登录会话的所有权判断。非所有者管理员查看其他用户时，概览及应用页使用中性说明，保留既有查看上下文提示及该用户的应用／权限投影；保留既有「管理」链接、操作人获准的删除入口及自动个人空间保护。所有者／成员会话文案和控件保持不变。使用合成个人／家庭／团队上下文，在双语 1440/390 px 检查稳定刷新后几何不变及无横向溢出。
+- 空间列表通过只读 `contextUserId` 查询跟随管理员所选「当前用户」，按该用户的成员关系、所有权及平台可见性返回。切换用户时清空空间／应用选择，即使两列表包含同一共享空间；选择新用户的可用空间或显示既有空态，忽略旧请求的延迟响应。删除关于应用启用／资源授权的所有者、非所有者及中性概览提示，不添加替代文案。保留既有查看上下文提示、逐应用说明、「管理」链接、操作人获准的删除入口及自动个人空间保护。双语 Chromium 1440/390 px 验证不同个人空间 ID、家庭／团队成员关系、共享空间重叠、空态、原生会话一致性及所有者／成员／管理员均无三条提示，稳定刷新后几何不变且无横向溢出。

@@ -1,8 +1,20 @@
 # Praxis product requirements
 
-Version: 0.1.153 · [简体中文](PRD.md)
+Version: 0.1.154 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
+
+## Spaces list display context and concise guidance
+
+For platform administrators, `GET /api/business/account/spaces?contextUserId=<registered-user-id>` returns the displayed user's memberships and owned spaces, applying platform-wide visibility only if that displayed user is a platform administrator. Omitted context and non-administrator native lists retain their established behavior; non-administrators cannot supply a display context. Keep the existing `{spaces,catalog}` shape and detail projection, acting-session write authority, Origin and CSRF rules. In Spaces, send the selected context on list reads, reset space/app selection when changing users (including shared-space overlaps), and discard older responses. Select an available space of the new user or show the existing empty state; never retain another user's personal-space selection.
+
+Remove the owner, non-owner and neutral overview hint lines about separate app enrollment/resource permissions entirely, without replacement. Keep the existing neutral viewing-context notice, data, protection notices and actor-authorized controls.
+
+| ID | Observable acceptance |
+| --- | --- |
+| SLC01 | Isolated synthetic API checks compare contextual lists with each displayed user's native list, including distinct personal IDs, owned and joined family/team spaces, empty accounts and administrator visibility. Non-admin/context-forgery, native-session, Origin, write and CSRF refusals remain intact. |
+| SLC02 | Real Chromium at 1440/390 px in both languages verifies picker IDs, context-switch selection reset, shared-space overlap, empty/return/refresh and delayed reads with no cross-user bleed. All three filler hints are absent for owner/member/admin and every space type; read-only projections and actor controls remain intact. |
+| SLC03 | Both workbench PRD readers and the full version-gated suite pass with one aligned PATCH. Commit before building/deploying only the affected web/core pair to the authorized managed test environment; report technical running version/public readback separately from independent business acceptance. |
 
 ## Delegation management and reactive Spaces context
 
@@ -138,23 +150,23 @@ Across every management view, adjacent sections have one separator, with nested 
 
 ## Administrator display context in Settings
 
-Owner self-management hints and onboarding instructions use only the acting signed-in session’s ownership. When a non-owner administrator views another user’s personal, family or team space, keep the existing viewing-context notice and accurate app/permission read-model, use neutral explanatory copy, and expose no owner-only member/enrollment/permission controls. Preserve the actor’s existing Delete capability and automatic-personal protection. Ordinary owner and member sessions keep their existing copy and controls.
+Spaces omits the owner, non-owner and neutral overview hints about app enrollment/resource permissions for every account and space type. Retain the existing viewing-context notice, app-specific guidance and accurate app/permission read-model. Owner-only member/enrollment/permission controls use acting-session ownership; preserve actor-authorized Delete and automatic-personal protection.
 
 | ID | Observable acceptance |
 | --- | --- |
-| BUC06 | Isolated synthetic Chromium at 1440/390 px in both languages verifies neutral non-owner administrator display contexts for personal/family/team spaces, actor-only owner hints and onboarding, unchanged owner/member sessions and administrator Delete rules, accurate app/permission projections, stable settled refresh geometry and no horizontal overflow. |
+| BUC06 | Isolated synthetic Chromium at 1440/390 px in both languages verifies absence of the three overview hints for personal/family/team owner/member/administrator views, unchanged actor-authorized controls and administrator Delete rules, accurate app/permission projections, stable settled refresh geometry and no horizontal overflow. |
 
-Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer all registered users in a plain native dropdown, with pagination as needed and no search input or search interaction, retaining the signed-in administrator and selected account across pages. Selecting an account renders that user’s space read-model: enabled apps and resource permissions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Management affordances use the signed-in administrator’s capabilities, independently of the selected user’s projection. Delete remains available for every otherwise deletable space under any display context; owner-only enrollment, member and resource-permission controls remain available only when the signed-in administrator owns the space. Selecting another owner never lends that user’s authority. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
+Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer all registered users in a plain native dropdown, with pagination as needed and no search input or search interaction, retaining the signed-in administrator and selected account across pages. Selecting an account renders that user’s space read-model: enabled apps and resource permissions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Management affordances use the signed-in administrator’s capabilities, independently of the selected user’s projection. Delete remains available for every otherwise deletable space in the displayed user’s list; owner-only enrollment, member and resource-permission controls remain available only when the signed-in administrator owns the space. Selecting another owner never lends that user’s authority. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
 
 Both Spaces and Agent delegations use plain native user dropdowns without search, retaining pagination as needed. Agent delegations’ **Current user** must name the actual user whose delegations are rendered, including after selection, pagination and refresh; its initial selection is the signed-in administrator. Ordinary users receive no switcher and see only their own context in both views. Ignore obsolete responses after a context change so the label and displayed data remain aligned.
 
 | ID | Observable acceptance |
 | --- | --- |
-| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can select any registered user through a plain native dropdown with pagination as needed and no search interaction to render that user’s enabled apps and resource permissions, including a nonmember’s empty permission state; management controls retain the signed-in administrator’s capabilities. |
+| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can select any registered user through a plain native dropdown with pagination as needed and no search interaction to render that user’s enabled apps and resource permissions, including the existing empty state for an account without spaces; management controls retain the signed-in administrator’s capabilities. |
 | BUC02 | Switching display context leaves native session identity and server-side authorization unchanged; synthetic permitted and denied action requests retain the administrator’s own grants. |
 | BUC03 | Agent delegations initially shows the signed-in administrator and keeps Current user aligned with the actual displayed delegations across user changes, refresh and pagination. |
 | BUC04 | Ordinary users have no user-context switcher and cannot select another user’s read-model. Synthetic API and Chromium checks at 1440/390 px cover these boundaries, existing flows, keyboard/native-select operation and zero horizontal overflow. |
-| BUC05 | At 1440/390 px, selecting a non-creator member or nonmember preserves the administrator’s Delete action and existing exact-ID confirmed cascade in their own session. Their own owner controls also survive the switch; selecting a foreign owner exposes no owner-only controls and grants no authority. Automatic personal-space protection, ordinary-user capabilities, APIs and confirmation flows remain unchanged. |
+| BUC05 | At 1440/390 px, selecting another user resets the space/app selection to that user’s list or the empty state. On accessible displayed spaces, the administrator retains actor-authorized Delete and the existing exact-ID confirmed cascade in their own session. Their own owner controls remain available on spaces they own; selecting a foreign owner exposes no owner-only controls and grants no authority. Automatic personal-space protection, ordinary-user capabilities, APIs and confirmation flows remain unchanged. |
 
 ## Self-service business spaces and app enrollment
 
@@ -417,6 +429,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.151 | 2026-11-21 | Audit MCP space discovery and simplify consent and Settings error surfaces. |
 | v0.1.152 | 2026-11-21 | Manage delegations across Settings surfaces and refresh Spaces user-context permissions. |
 | v0.1.153 | 2026-11-21 | Use acting-session ownership for Spaces guidance in administrator display contexts |
+| v0.1.154 | 2026-11-21 | Make Spaces lists follow administrator display context and remove filler hints |
 
 ### Letters and Profiles
 

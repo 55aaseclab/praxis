@@ -982,7 +982,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
       if (/^\/api\/business\/account\/spaces(?:\/|$)/.test(path)) {
         if (request.headers.authorization !== undefined) fail('Native browser login is required.', 401, 'UNAUTHENTICATED');
         if (request.headers.origin && request.headers.origin !== store.issuer || request.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(request.headers['sec-fetch-site'])) fail('The browser request origin is not allowed.', 403, 'ORIGIN_REJECTED');
-        const displayQuery = request.method === 'GET' && /^\/api\/business\/account\/spaces\/[^/]+$/.test(path) && [...url.searchParams.keys()].every(key => key === 'contextUserId') && url.searchParams.getAll('contextUserId').length === 1;
+        const displayQuery = request.method === 'GET' && /^\/api\/business\/account\/spaces(?:\/[^/]+)?$/.test(path) && [...url.searchParams.keys()].every(key => key === 'contextUserId') && url.searchParams.getAll('contextUserId').length === 1;
         if (url.search && !displayQuery || /%(?:2f|5c|25)/i.test(request.url) || /[\\\x00-\x20\x7f]/.test(request.url)) fail('Space route is invalid.');
         const token = parseCookie(request);
         store.requireNativeSession(token);
@@ -1002,10 +1002,17 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         const result = store.controlTransaction(() => {
           const session = store.requireNativeSession(token), userId = session.user.id, platformAdmin = store.isPlatformAdmin(userId);
           if (writing) store.requireRequestCsrf(request);
+          const displayUser = () => {
+            if (!platformAdmin) fail('Platform administrator display context is required.', 403, 'FORBIDDEN');
+            const user = store.db.prepare('SELECT id,username FROM auth_users WHERE id=?').get(url.searchParams.get('contextUserId'));
+            if (!user) fail('User not found.', 404, 'NOT_FOUND');
+            return user;
+          };
           if (path === '/api/business/account/spaces') {
             if (request.method === 'GET') {
-              const spaces = store.db.prepare('SELECT s.id,s.type,s.owner_id AS ownerId,m.role FROM auth_spaces s LEFT JOIN auth_members m ON m.space_id=s.id AND m.user_id=? WHERE m.user_id IS NOT NULL OR s.owner_id=? OR ?=1 ORDER BY s.id').all(userId, userId, Number(platformAdmin));
-              return { status: 200, value: { spaces: spaces.map(space => ({ ...space, deletionProtected: store.spaceDeletionProtected(space.id), canDelete: store.canDeleteSpace(userId, space) })), catalog } };
+              const subjectId = url.searchParams.has('contextUserId') ? displayUser().id : userId;
+              const spaces = store.db.prepare('SELECT s.id,s.type,s.owner_id AS ownerId,m.role FROM auth_spaces s LEFT JOIN auth_members m ON m.space_id=s.id AND m.user_id=? WHERE m.user_id IS NOT NULL OR s.owner_id=? OR ?=1 ORDER BY s.id').all(subjectId, subjectId, Number(store.isPlatformAdmin(subjectId)));
+              return { status: 200, value: { spaces: spaces.map(space => ({ ...space, deletionProtected: store.spaceDeletionProtected(space.id), canDelete: store.canDeleteSpace(subjectId, space) })), catalog } };
             }
             if (request.method === 'POST') { fields(['type']); return { status: 201, value: store.createSelfServiceSpace({ type: input.type, ownerId: userId }) }; }
             fail('Space method is not supported.', 405, 'METHOD_NOT_ALLOWED');
@@ -1053,10 +1060,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
             if (platformAdmin) value.userContexts = [session.user, ...members.filter(member => member.userId !== userId).map(member => ({ id: member.userId, username: member.username }))]
               .map(user => ({ user: { id: user.id, username: user.username }, ...projection(user.id) }));
             if (url.searchParams.has('contextUserId')) {
-              const subjectId = url.searchParams.get('contextUserId');
-              if (!platformAdmin) fail('Platform administrator display context is required.', 403, 'FORBIDDEN');
-              const user = store.db.prepare('SELECT id,username FROM auth_users WHERE id=?').get(subjectId);
-              if (!user) fail('User not found.', 404, 'NOT_FOUND');
+              const user = displayUser();
               value.userContext = { user, ...projection(user.id) };
             }
             return { status: 200, value };

@@ -817,6 +817,7 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
   const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
   if (artifacts) mkdirSync(artifacts, { recursive: true });
   for (const [width, language] of [[1440, 'en'], [390, 'zh']]) {
+    auth.setMembership({ spaceId: 'synthetic-family', userId: 'b-context-50', role: null });
     const text = (en, zh) => language === 'en' ? en : zh;
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     const memberContext = await browser.newContext({ viewport: { width, height: 900 } });
@@ -839,12 +840,13 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     await page.getByRole('button', { name: text('Load more users', '加载更多用户'), exact: true }).click(); await ready(page);
     assert.equal(await page.locator('#selected-user option[value="b-context-50"]').count(), 1, 'pagination includes registered nonmembers');
     await switchUser('b-context-50');
-    assert.equal(await page.locator('input[name=username]').count(), 1, 'nonmember display context preserves the acting owner controls');
-    assert.equal(await page.locator('.space-delete').count(), 1, 'nonmember display context preserves administrator deletion');
+    assert.equal(await page.locator('select[name=space], input[name=username], .space-delete').count(), 0, 'nonmember without spaces sees no actor spaces or controls');
+    assert.match(await page.locator('#content').innerText(), /No spaces yet|暂无空间/);
     assert.equal(await sessionId(), 'z-owner');
     await page.locator('#refresh').click(); await ready(page);
     assert.equal(await page.locator('#selected-user').inputValue(), 'b-context-50', 'refresh retains selected users outside the first catalog page');
     await switchUser('z-owner');
+    await page.locator('select[name=space]').selectOption('synthetic-family'); await ready(page);
     assert.equal(await page.getByRole('searchbox').count(), 0, 'Spaces current user is a plain dropdown without search');
     assert.equal(await page.locator('.user-context form').count(), 0, 'Spaces has no search interaction');
     assert.equal(await page.locator('input[name=username]').count(), 1, 'administrator owner sees member actions in own context');
@@ -852,6 +854,7 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     // Exercise the actual native select with the keyboard.
     await page.locator('#selected-user').focus(); await page.locator('#selected-user').press('ArrowDown'); await page.locator('#selected-user').press('Enter'); await ready(page);
     assert.equal(await page.locator('#selected-user').inputValue(), 'a-member');
+    await page.locator('select[name=space]').selectOption('synthetic-family'); await ready(page);
     assert.equal(await page.locator('input[name=username]').count(), 1, 'member display context preserves the acting owner controls');
     assert.equal(await page.locator('.space-delete').count(), 1, 'member display context preserves administrator deletion');
     assert.equal(await sessionId(), 'z-owner', 'the acting session remains the administrator');
@@ -893,6 +896,7 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     await page.locator('.confirm-dialog').getByRole('button', { name: text('Confirm', '确认'), exact: true }).click(); await ready(page);
     assert.equal(auth.membershipRole('b-context-50', 'synthetic-family'), null, 'owner member add/remove succeeds while displaying a member');
     await page.getByRole('button', { name: text('Load more users', '加载更多用户'), exact: true }).click(); await ready(page);
+    auth.setMembership({ spaceId: 'synthetic-family', userId: 'b-context-50', role: 'member' });
     await switchUser('b-context-50');
     await page.locator('.space-app-row[data-app=calendar] a').click(); await ready(page);
     await page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click(); await ready(page);
@@ -906,7 +910,8 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     // Displaying a foreign owner must not lend that owner's write authority.
     const foreign = auth.createSelfServiceSpace({ type: 'family', ownerId: 'a-member' });
     auth.setMembership({ spaceId: foreign.id, userId: 'b-context-50', role: 'member' });
-    await open(page, `view=spaces&space=${foreign.id}`); await switchUser('a-member'); await manage(page);
+    await open(page, `view=spaces&space=${foreign.id}`); await switchUser('a-member');
+    await page.locator('select[name=space]').selectOption(foreign.id); await ready(page); await manage(page);
     assert.equal(await page.getByRole('button', { name: text('Enable', '启用'), exact: true }).count(), 0, 'foreign-owner display context cannot expose owner-only actions');
     const access = await (await context.request.get(`${origin}/api/business/web-access`)).json();
     assert.equal((await context.request.put(`${origin}/api/business/account/spaces/${foreign.id}/apps/reminder`, { headers: { Origin: origin, 'X-CSRF-Token': access.csrfToken }, data: { enabled: true } })).status(), 403, 'the unchanged server refuses a non-owner administrator write');
@@ -915,6 +920,7 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     assert.equal(await page.locator('.space-delete').count(), 1, 'administrator retains foreign-space deletion while displaying its creator');
     await page.getByRole('button', { name: text('Load more users', '加载更多用户'), exact: true }).click(); await ready(page);
     await switchUser('b-context-50');
+    await page.locator('select[name=space]').selectOption(foreign.id); await ready(page);
     assert.equal(await page.locator('.space-delete').count(), 1, 'non-creator member projection does not mask administrator deletion');
     evidence.push({ width, ...await inspectConfirmation(page, page.locator('.space-delete'), 'administrator deletion in non-creator member context') });
     const deleted = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/spaces/${foreign.id}`));
@@ -934,6 +940,7 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     assert.equal(await page.locator('#selected-user').inputValue(), 'b-context-50', 'deletion retains display context');
     const protectedSpace = auth.ensurePersonalSpace('a-member');
     await open(page, `view=spaces&space=${protectedSpace.id}`); await switchUser('z-owner');
+    await page.locator('select[name=space]').selectOption(protectedSpace.id); await ready(page);
     assert.equal(await page.locator('.space-delete').count(), 0, 'actor capability retains automatic-personal protection even when the display user is an administrator');
     await page.locator('#refresh').click(); await ready(page);
     await page.locator('#navigation [data-view=access]').click(); await ready(page);
@@ -1172,7 +1179,16 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
     const page = await context.newPage(), memberPage = await memberContext.newPage(), errors = [];
     for (const target of [page, memberPage]) { target.setDefaultTimeout(10000); target.on('pageerror', error => errors.push(error.message)); target.on('dialog', dialog => dialog.accept()); }
     const open = async (target, app = '') => { await target.goto(`${origin}/admin/?view=spaces&space=${space.id}${app ? `&app=${app}` : ''}`); await ready(target); };
-    const switchUser = async id => { await page.locator('#selected-user').selectOption(id); await ready(page); assert.equal(await page.locator('#selected-user').inputValue(), id); };
+    const switchUser = async id => {
+      const wasApp = new URL(page.url()).searchParams.get('app');
+      await page.locator('#selected-user').selectOption(id); await ready(page);
+      assert.equal(await page.locator('#selected-user').inputValue(), id);
+      if (new URL(page.url()).searchParams.get('view') === 'spaces') {
+        assert.equal(new URL(page.url()).searchParams.has('app'), false, 'user switch resets the app selection');
+        await page.locator('select[name=space]').selectOption(space.id); await ready(page);
+        if (wasApp) { await page.locator(`.space-app-row[data-app="${wasApp}"] a`).click(); await ready(page); }
+      }
+    };
     await open(page); await open(memberPage);
     const summary = '.space-app-row[data-app=reminder] .app-user-access';
     const ownerSummary = await page.locator(summary).innerText();
@@ -1193,7 +1209,7 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
     await switchUser('z-owner');
     let release, seen, finish;
     const held = new Promise(resolve => { release = resolve; }), requested = new Promise(resolve => { seen = resolve; }), finished = new Promise(resolve => { finish = resolve; });
-    const contextUrl = `${origin}/api/business/account/spaces/${space.id}?contextUserId=a-member`;
+    const contextUrl = `${origin}/api/business/account/spaces?contextUserId=a-member`;
     const delayed = async route => { const response = await route.fetch(); seen(); await held; await route.fulfill({ response }); finish(); };
     await page.route(contextUrl, delayed);
     await page.locator('#selected-user').selectOption('a-member'); await requested;
@@ -1201,7 +1217,9 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
     await page.locator('#selected-user').selectOption('z-owner'); await ready(page);
     release(); await finished; await page.unroute(contextUrl, delayed);
     assert.equal(await page.locator('#selected-user').inputValue(), 'z-owner');
-    assert.match(await page.locator('.app-user-access').innerText(), /synthetic-owner-resource/, 'delayed member response cannot replace current context');
+    await page.locator('select[name=space]').selectOption(space.id); await ready(page);
+    assert.match(await page.locator('.space-app-row[data-app=reminder] .app-user-access').innerText(), /synthetic-owner-resource/, 'delayed member response cannot replace current context');
+    await page.locator('.space-app-row[data-app=reminder] a').click(); await ready(page);
     await switchUser('a-member');
 
     const rule = { appId: 'reminder', spaceId: space.id, actions: ['read'], resources: ['synthetic-member-resource'] };
@@ -1248,7 +1266,7 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic HTTP AuthStore', browser: browser.version(), evidence }));
 });
 
-test('Chromium Spaces owner guidance follows the acting owner, with neutral foreign display contexts', { skip: !browserEnabled, timeout: 90000 }, async t => {
+test('Chromium Spaces removes filler hints for owners and members across all space types', { skip: !browserEnabled, timeout: 90000 }, async t => {
   const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
   t.after(() => browser.close());
@@ -1263,7 +1281,7 @@ test('Chromium Spaces owner guidance follows the acting owner, with neutral fore
     auth.setSpaceAppEnrollment({ spaceId: space.id, appId: 'reminder', enabled: true });
     auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: space.id, actions: ['read'], resources: ['synthetic-owner-framing-resource'] });
   }
-  const ownerHint = /You own this space|你是此空间的所有者/;
+  const ownerHint = /You own this space|你是此空间的所有者|Ask the space owner to enable apps|需要启用应用或变更资源权限时|^App enrollment and resource permissions are separate\.$|^应用启用状态与资源权限分开展示。$/m;
   const overviewInstruction = /Manage each app’s enrollment|分别设置应用的启用状态与权限/;
   const appInstruction = /grant only the required actions below|请在下方仅授予所需操作/;
   const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
@@ -1298,13 +1316,14 @@ test('Chromium Spaces owner guidance follows the acting owner, with neutral fore
     for (const space of spaces) {
       await open(page, space);
       await page.locator('#selected-user').selectOption('a-member'); await ready(page);
+      await page.locator('select[name=space]').selectOption(space.id); await ready(page);
       assert.match(await page.locator('#content>.section-note').innerText(), /Viewing synthetic-member|正在查看 synthetic-member/);
       assert.doesNotMatch(await page.locator('#content').innerText(), ownerHint);
       assert.doesNotMatch(await page.locator('#content').innerText(), overviewInstruction);
       assert.equal(await page.locator('input[name=username], .user-row button').count(), 0, 'foreign owner context has no member-management affordance');
       assert.equal(await page.locator('.space-delete').count(), space.deletionProtected ? 0 : 1, 'actor Delete is independent of displayed ownership and respects automatic protection');
       await open(ownerPage, space);
-      assert.match(await ownerPage.locator('#content').innerText(), ownerHint, 'ordinary owner keeps self-management hint');
+      assert.doesNotMatch(await ownerPage.locator('#content').innerText(), ownerHint, 'ordinary owner has no filler hints');
       assert.match(await ownerPage.locator('#content').innerText(), overviewInstruction, 'ordinary owner keeps onboarding');
       assert.equal(await ownerPage.locator('input[name=username]').count(), space.type === 'personal' ? 0 : 1);
       assert.equal(await ownerPage.locator('#selected-user').count(), 0, 'ordinary owner has no context switcher');
@@ -1322,24 +1341,114 @@ test('Chromium Spaces owner guidance follows the acting owner, with neutral fore
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       if (space.type !== 'personal') {
         await page.locator('#selected-user').selectOption('synthetic-view-member'); await ready(page);
+        await page.locator('select[name=space]').selectOption(space.id); await ready(page); await manage(page);
         await open(memberPage, space); await manage(memberPage);
         assert.equal(await memberPage.locator('#selected-user, input[name=resources], [data-permission] button, .account-setting button').count(), 0);
         assert.match(await memberPage.locator('#content').innerText(), appInstruction, 'existing ordinary-member app copy is unchanged');
         for (const selector of ['.app-user-access', '[data-permission] .control-summary']) assert.deepEqual(await page.locator(selector).allTextContents(), await memberPage.locator(selector).allTextContents(), 'member projection matches native session');
         await memberPage.locator('.space-back').click(); await ready(memberPage);
         assert.doesNotMatch(await memberPage.locator('#content').innerText(), ownerHint);
-        assert.match(await memberPage.locator('#content').innerText(), /Ask the space owner|请联系空间所有者/, 'member overview copy unchanged');
+        assert.doesNotMatch(await memberPage.locator('#content').innerText(), ownerHint, 'member overview has no filler hints');
       }
-      evidence.push({ width, language, type: space.type, automaticPersonal: Boolean(space.deletionProtected), ownerHint: 'acting owner only', foreignContext: 'neutral overview/app; no owner controls', projection: 'equals native owner/member session', delete: space.deletionProtected ? 'protected' : 'actor retained', refreshLayoutShift: 0, overflow: 0, result: 'Pass' });
+      evidence.push({ width, language, type: space.type, automaticPersonal: Boolean(space.deletionProtected), fillerHints: 'absent for owner/member/administrator', foreignContext: 'neutral overview/app; no owner controls', projection: 'equals native owner/member session', delete: space.deletionProtected ? 'protected' : 'actor retained', refreshLayoutShift: 0, overflow: 0, result: 'Pass' });
     }
-    // An acting owner retains their hint even when the display user is not an owner.
+    // Acting ownership controls remain when the display user is a member.
     await open(page, { id: 'synthetic-family' });
     await page.locator('#selected-user').selectOption('a-member'); await ready(page);
-    assert.match(await page.locator('#content').innerText(), ownerHint);
+    await page.locator('select[name=space]').selectOption('synthetic-family'); await ready(page);
+    assert.doesNotMatch(await page.locator('#content').innerText(), ownerHint);
     assert.equal(await page.locator('input[name=username]').count(), 1);
     assert.equal((await (await admin.request.get(`${origin}/api/business/account/session`)).json()).user.id, 'z-owner');
     assert.deepEqual(writes, [], 'all context/read-model checks are mutation-free');
     assert.deepEqual(errors, []);
+    for (const context of contexts) await context.close();
+  }
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers; no business service contacted', browser: browser.version(), evidence }));
+});
+
+test('Chromium Spaces picker follows the displayed user with distinct personal IDs, reset and stale-read isolation', { skip: !browserEnabled, timeout: 120000 }, async t => {
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const { origin, auth } = await fixture(t), evidence = [];
+  auth.createUser({ id: 'b-second', username: 'synthetic-second', password });
+  auth.createUser({ id: 'c-empty', username: 'synthetic-empty', password });
+  const memberPersonal = auth.createSpace({ id: 'a-context-member-personal', type: 'personal', ownerId: 'a-member' });
+  const secondPersonal = auth.createSpace({ id: 'a-context-second-personal', type: 'personal', ownerId: 'b-second' });
+  const shared = auth.createSpace({ id: 'b-context-shared-family', type: 'family', ownerId: 'z-owner' });
+  const company = auth.createSpace({ id: 'c-context-member-company', type: 'company', ownerId: 'a-member' });
+  const adminPersonal = auth.createSpace({ id: 'z-context-admin-personal', type: 'personal', ownerId: 'z-owner' });
+  for (const userId of ['a-member', 'b-second']) auth.setMembership({ spaceId: shared.id, userId, role: 'member' });
+  const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
+  if (artifacts) mkdirSync(artifacts, { recursive: true });
+  const filler = /You own this space|你是此空间的所有者|Ask the space owner to enable apps|需要启用应用或变更资源权限时|^App enrollment and resource permissions are separate\.$|^应用启用状态与资源权限分开展示。$/m;
+  for (const width of [1440, 390]) for (const language of ['en', 'zh']) {
+    const contexts = await Promise.all([0, 1, 2].map(() => browser.newContext({ viewport: { width, height: 900 } })));
+    const [admin, member, second] = contexts;
+    for (const [index, context] of contexts.entries()) {
+      t.after(() => context.close());
+      await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+      assert.equal((await context.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: ['synthetic-owner', 'synthetic-member', 'synthetic-second'][index], password } })).status(), 200);
+    }
+    const nativeIds = async context => (await (await context.request.get(`${origin}/api/business/account/spaces`)).json()).spaces.map(space => space.id);
+    const memberIds = await nativeIds(member), secondIds = await nativeIds(second);
+    const page = await admin.newPage(), errors = [], writes = [];
+    page.setDefaultTimeout(10000);
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => { if (!['GET', 'HEAD'].includes(request.method())) writes.push(request.method()); });
+    const ids = () => page.locator('select[name=space] option').evaluateAll(nodes => nodes.map(node => node.value));
+    const switchUser = async id => { await page.locator('#selected-user').selectOption(id); await ready(page); };
+    const selectSpace = async id => { await page.locator('select[name=space]').selectOption(id); await ready(page); };
+    const check = async expected => {
+      assert.deepEqual(await ids(), expected, 'picker IDs equal the displayed user native API list');
+      assert.doesNotMatch(await page.locator('#content').innerText(), filler);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    };
+    await page.goto(`${origin}/admin/?view=spaces&space=${adminPersonal.id}`); await ready(page);
+    assert.equal(await page.locator('select[name=space]').inputValue(), adminPersonal.id);
+    assert.doesNotMatch(await page.locator('#content').innerText(), filler, 'acting administrator owner has no filler hint');
+    await switchUser('a-member'); await check(memberIds);
+    assert.equal(await page.locator('select[name=space]').inputValue(), memberPersonal.id, 'member actual personal ID replaces the administrator personal ID');
+    assert.equal(await page.locator(`select[name=space] option[value="${adminPersonal.id}"]`).count(), 0, 'administrator personal space never bleeds into member context');
+    assert.ok(memberIds.includes(shared.id) && memberIds.includes(company.id), 'owned company and joined family both appear');
+    await selectSpace(shared.id);
+    await page.locator('.space-app-row[data-app=reminder] a').click(); await ready(page);
+    await switchUser('b-second'); await check(secondIds);
+    assert.equal(await page.locator('select[name=space]').inputValue(), secondPersonal.id, 'shared-space overlap does not preserve the old selected space');
+    assert.equal(new URL(page.url()).searchParams.has('app'), false, 'context switch clears app selection');
+    assert.equal(await page.locator('.space-back').count(), 0, 'new context returns to overview');
+    await switchUser('c-empty');
+    assert.equal(await page.locator('select[name=space], .space-app-row, .space-delete, .space-back').count(), 0, 'empty displayed account has no former context controls');
+    assert.match(await page.locator('#content').innerText(), /No spaces yet|暂无空间/);
+    assert.equal(new URL(page.url()).searchParams.has('space'), false, 'empty context clears the space URL');
+    await switchUser('a-member'); await check(memberIds);
+    await selectSpace(company.id);
+    await page.locator('#refresh').click(); await ready(page);
+    assert.equal(await page.locator('select[name=space]').inputValue(), company.id, 'refresh preserves a valid current-user selection');
+    await page.locator('.space-app-row[data-app=reminder] a').click(); await ready(page);
+    assert.equal(await page.locator('.account-setting button, input[name=resources]').count(), 0, 'viewing another owner lends no owner write controls');
+    await page.locator('.space-back').click(); await ready(page);
+    assert.equal(await page.locator('select[name=space]').inputValue(), company.id, 'Manage/Back preserves the selected current-user space');
+    let release, seen, finished;
+    const hold = new Promise(resolve => { release = resolve; });
+    const requested = new Promise(resolve => { seen = resolve; });
+    const completed = new Promise(resolve => { finished = resolve; });
+    const contextUrl = `${origin}/api/business/account/spaces?contextUserId=b-second`;
+    const delayed = async route => { const response = await route.fetch(); seen(); await hold; await route.fulfill({ response }); finished(); };
+    await page.route(contextUrl, delayed);
+    await page.locator('#selected-user').selectOption('b-second'); await requested;
+    assert.equal(await page.locator('select[name=space], .space-app-row').count(), 0, 'old spaces disappear while the next list is loading');
+    await switchUser('a-member'); await check(memberIds);
+    release(); await completed; await page.unroute(contextUrl, delayed);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await check(memberIds);
+    assert.equal(await page.locator('#selected-user').inputValue(), 'a-member', 'delayed collection cannot restore the prior context');
+    assert.equal(await page.locator('select[name=space]').inputValue(), memberPersonal.id);
+    assert.equal((await (await admin.request.get(`${origin}/api/business/account/session`)).json()).user.id, 'z-owner', 'display projection never changes the acting session');
+    assert.deepEqual(writes, [], 'context and picker verification makes no mutation requests');
+    assert.deepEqual(errors, []);
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-${language}-spaces-displayed-user-list.png`), fullPage: true });
+    evidence.push({ width, language, personalIds: 'distinct; displayed native list equality', types: 'personal, owned company, joined family', selection: 'reset across shared overlap and empty account; refresh/Back retain current', delayedCollection: 'discarded', mutations: 0, overflow: 0, status: 'Pass' });
     for (const context of contexts) await context.close();
   }
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers; no business service contacted', browser: browser.version(), evidence }));

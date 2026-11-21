@@ -785,6 +785,78 @@ test('public space lifecycle refuses personal membership, elevation, cross-space
   assert.equal((await call(owner, path + '/members/alice', undefined, 'DELETE')).status, 409);
 });
 
+test('administrator space lists reproduce the displayed user native spaces and platform visibility without changing the actor', async t => {
+  const f = await httpFixture(t, { gateway: true });
+  f.store.setPlatformAdmin({ userId: 'guest', enabled: true });
+  f.store.createUser({ id: 'empty', username: 'synthetic-empty', password });
+  f.store.createUser({ id: 'peer-admin', username: 'synthetic-peer-admin', password });
+  f.store.setPlatformAdmin({ userId: 'peer-admin', enabled: true });
+  f.store.createSpace({ id: 'personal-admin', type: 'personal', ownerId: 'guest' });
+  f.store.createSpace({ id: 'family-b', type: 'family', ownerId: 'bob' });
+  f.store.createSpace({ id: 'company-b', type: 'company', ownerId: 'bob' });
+  // Synthetic compatibility fixture: ownership must remain visible even if its
+  // separate membership row is absent.
+  f.store.db.prepare("DELETE FROM auth_members WHERE space_id='company-b' AND user_id='bob'").run();
+  const actors = Object.fromEntries(await Promise.all(['alice', 'bob', 'guest', 'synthetic-empty', 'synthetic-peer-admin'].map(async username => [username, await f.login(username)])));
+  const prefix = '/api/business/account/spaces';
+  const read = async (actor, subjectId) => {
+    const response = await f.request(prefix + (subjectId === undefined ? '' : `?contextUserId=${encodeURIComponent(subjectId)}`), { headers: { Cookie: actor.cookie } });
+    assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+    return response.json();
+  };
+  const admin = actors.guest, original = await read(admin), version = f.store.policyVersion;
+  const nativeSession = f.store.requireNativeSession(admin.cookie.split('=')[1]);
+  const snapshot = () => Object.fromEntries(['auth_spaces', 'auth_members', 'auth_resources', 'auth_space_apps', 'auth_grants', 'auth_tokens'].map(table => [table, f.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]));
+  const before = snapshot();
+  for (const [subjectId, username] of [['bob', 'bob'], ['empty', 'synthetic-empty'], ['alice', 'alice'], ['peer-admin', 'synthetic-peer-admin'], ['guest', 'guest'], ['bob', 'bob']]) {
+    const projected = await read(admin, subjectId);
+    assert.deepEqual(projected, await read(actors[username]), 'projection equals the displayed account actual native list, including role and deletion metadata');
+    assert.deepEqual(projected.catalog, original.catalog, 'display selection retains the complete app catalog');
+  }
+  const bob = await read(admin, 'bob');
+  assert.deepEqual(bob.spaces.map(space => space.id), ['company-b', 'family-a', 'family-b', 'personal-b']);
+  assert.equal(bob.spaces.find(space => space.id === 'family-a').role, 'member');
+  assert.equal(bob.spaces.find(space => space.id === 'family-a').canDelete, false);
+  assert.equal(bob.spaces.find(space => space.id === 'company-b').role, null);
+  assert.equal(bob.spaces.find(space => space.id === 'company-b').canDelete, true);
+  assert.ok(!bob.spaces.some(space => ['personal-a', 'personal-admin'].includes(space.id)), 'other users personal IDs never bleed into the displayed user list');
+  assert.deepEqual((await read(admin, 'empty')).spaces, []);
+  assert.deepEqual(await read(admin), original, 'omitting context keeps the administrator own all-space list');
+  assert.deepEqual(snapshot(), before); assert.equal(f.store.policyVersion, version);
+  assert.deepEqual(f.store.requireNativeSession(admin.cookie.split('=')[1]), nativeSession, 'projection changes neither native actor nor CSRF credential');
+});
+
+test('space list display context preserves strict query, native origin, authorization and write refusal paths', async t => {
+  const f = await httpFixture(t, { gateway: true, apps: { reminder: { spaces: ['family-a'] } } });
+  f.store.setPlatformAdmin({ userId: 'guest', enabled: true });
+  const admin = await f.login('guest'), owner = await f.login('alice'), member = await f.login('bob');
+  const prefix = '/api/business/account/spaces';
+  const read = (actor, suffix = '', headers = {}) => f.request(prefix + suffix, { headers: { ...(actor ? { Cookie: actor.cookie } : {}), ...headers } });
+  const snapshot = () => Object.fromEntries(['auth_spaces', 'auth_members', 'auth_resources', 'auth_space_apps', 'auth_grants', 'auth_tokens'].map(table => [table, f.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]));
+  const before = snapshot(), version = f.store.policyVersion;
+  const baseline = await (await read(member)).json();
+  for (const actor of [owner, member]) {
+    for (const subjectId of ['alice', 'bob', 'guest', 'missing']) assert.equal((await read(actor, `?contextUserId=${subjectId}`)).status, 403, 'nonadministrators cannot choose even their own display context');
+  }
+  for (const suffix of ['?userId=alice', '?contextUserId=alice&contextUserId=bob', '?contextUserId=alice&extra=1', '?contextUserId=%2Falice', '/family-a/apps/reminder?contextUserId=alice']) {
+    assert.equal((await read(admin, suffix)).status, 400, 'only one context field on the collection or detail GET is accepted');
+  }
+  for (const subjectId of ['', 'missing']) assert.equal((await read(admin, `?contextUserId=${subjectId}`)).status, 404, 'display subjects must exist');
+  assert.equal((await read(null, '?contextUserId=alice')).status, 401);
+  assert.equal((await read(admin, '?contextUserId=alice', { Authorization: `Bearer pxa_${'a'.repeat(43)}` })).status, 401);
+  assert.equal((await read(admin, '?contextUserId=alice', { Origin: 'https://attacker.example' })).status, 403);
+  assert.equal((await read(admin, '?contextUserId=alice', { 'Sec-Fetch-Site': 'cross-site' })).status, 403);
+  assert.equal((await read(admin, '?contextUserId=alice')).status, 200);
+  const write = (path, input, method = 'POST', headers = {}) => f.json(prefix + path, input, { method, headers: { Cookie: admin.cookie, 'X-CSRF-Token': admin.body.csrfToken, ...headers } });
+  assert.equal((await write('?contextUserId=alice', { type: 'personal' })).status, 400, 'display context cannot assign ownership on creation');
+  assert.equal((await write('', { type: 'personal', contextUserId: 'alice' })).status, 400, 'write payload allowlists stay unchanged');
+  assert.equal((await write('', { type: 'personal' }, 'POST', { 'X-CSRF-Token': 'forged' })).status, 403);
+  assert.equal((await write('/family-a/apps/reminder?contextUserId=alice', { enabled: false }, 'PUT')).status, 400);
+  assert.equal((await write('/family-a/apps/reminder', { enabled: false }, 'PUT')).status, 403, 'viewing the owner never confers owner mutation rights');
+  assert.deepEqual(await (await read(member)).json(), baseline, 'ordinary native lists remain unchanged after accepted and refused administrator reads');
+  assert.deepEqual(snapshot(), before); assert.equal(f.store.policyVersion, version, 'display and rejection paths leave authorization policy untouched');
+});
+
 test('administrator space contexts reproduce member read models without changing the native actor', async t => {
   const f = await httpFixture(t, { apps: { reminder: { spaces: ['family-a'] } } });
   f.store.setPlatformAdmin({ userId: 'alice', enabled: true });
