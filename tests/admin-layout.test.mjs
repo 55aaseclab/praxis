@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AuthStore, createAuthHandler } from '../src/business/auth.mjs';
 import { createAccountHandler, createAdminHandler } from '../src/business/admin.mjs';
+import { DEFAULT_APP_REGISTRY as registry } from '../src/default-app-registry.mjs';
 
 // Use a separately provisioned browser dependency, as in business-auth.test.mjs:
 // PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node --test tests/admin-layout.test.mjs
@@ -14,7 +15,7 @@ import { createAccountHandler, createAdminHandler } from '../src/business/admin.
 const browserEnabled = Boolean(process.env.PLAYWRIGHT_MODULE);
 const password = 'Synthetic-layout-password-2026';
 const publicRoot = new URL('../public/', import.meta.url);
-const apps = [{ id: 'reminder', name: 'Reminder', entry: { policy: 'grant', nativePath: '/apps/reminder/' } }];
+const apps = registry.publicFacts();
 
 async function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), 'praxis-admin-layout-'));
@@ -50,15 +51,48 @@ async function fixture(t) {
   auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] });
   auth.createClient({ id: 'synthetic-client', name: 'Synthetic agent', redirectUris: ['https://synthetic.example/callback'] });
   auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [{ appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] }] });
-  handleAuth = createAuthHandler({ store: auth, apps: { reminder: { spaces: ['synthetic-family'] } }, webGateway: { enabled: true } });
+  handleAuth = createAuthHandler({ store: auth, apps: Object.fromEntries(Object.keys(registry.businessActions).map(id => [id, { spaces: ['synthetic-family'] }])), webGateway: { enabled: true } });
   handleAccount = createAccountHandler({ auth }); handleAdmin = createAdminHandler({ auth });
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); auth.close(); rmSync(directory, { recursive: true, force: true }); });
   return { origin, auth };
 }
 
-async function ready(page) {
+async function ready(page, { allowError = false } = {}) {
   await page.waitForFunction(() => document.querySelector('#content')?.getAttribute('aria-busy') === 'false');
-  assert.equal(await page.locator('#notice.error').count(), 0, await page.locator('#notice').textContent());
+  if (!allowError) assert.equal(await page.locator('#notice.error').count(), 0, await page.locator('#notice').textContent());
+}
+
+async function layoutGeometry(page) {
+  return page.evaluate(() => ({
+    scroll: [scrollX, scrollY],
+    rects: [...document.querySelectorAll('main, #heading, main form')].map(node => {
+      const rect = node.getBoundingClientRect(); return [rect.x, rect.y, rect.width, rect.height];
+    }),
+  }));
+}
+
+async function inspectSeparators(page, width, view) {
+  const result = await page.evaluate(() => {
+    const visible = node => node.getClientRects().length > 0;
+    const borders = node => ({ top: parseFloat(getComputedStyle(node).borderTopWidth), bottom: parseFloat(getComputedStyle(node).borderBottomWidth) });
+    const rows = [...document.querySelectorAll('main .account-setting, main .user-row, main .grant-row')].filter(visible).map(node => ({
+      ...borders(node), adjacent: node.previousElementSibling?.matches('.account-setting, .user-row, .grant-row') || false,
+    }));
+    const sections = [...document.querySelectorAll('#content > .editor, .space-section, .editor > .editor')].filter(visible).map(node => ({
+      ...borders(node), first: !node.previousElementSibling,
+    }));
+    return { rows, sections };
+  });
+  for (const row of result.rows) {
+    assert.equal(row.bottom, 0, `${width}/${view}: rows do not add a second trailing separator`);
+    assert.equal(row.top, row.adjacent ? 1 : 0, `${width}/${view}: one separator between adjacent rows`);
+  }
+  for (const section of result.sections) {
+    assert.equal(section.bottom, 0, `${width}/${view}: sections own no trailing separator`);
+    if (section.first) assert.equal(section.top, 0, `${width}/${view}: first section does not repeat its parent's separator`);
+    else assert.equal(section.top, 1, `${width}/${view}: one leading section separator`);
+  }
+  return { width, view, rows: result.rows.length, sections: result.sections.length, status: 'Pass' };
 }
 
 async function inspectLayout(page, width, view) {
@@ -72,7 +106,7 @@ async function inspectLayout(page, width, view) {
       notes: [...document.querySelectorAll('.section-note')].filter(visible).map(node => ({ top: parseFloat(getComputedStyle(node).marginTop), bottom: parseFloat(getComputedStyle(node).marginBottom) })),
       rows: [...document.querySelectorAll('.control-row')].filter(visible).map(node => ({ rect: rect(node), display: getComputedStyle(node).display, gap: parseFloat(getComputedStyle(node).gap), children: [...node.children].filter(visible).map(rect) })),
       accountRows: [...document.querySelectorAll('main .account-setting, main .user-row')].filter(visible).map(node => ({ rect: rect(node), children: [...node.children].filter(visible).map(rect) })),
-      controls: [...document.querySelectorAll('main input:not([type=checkbox]),main select,main button.primary,main button.quiet-button')].filter(visible).map(node => ({ tag: node.tagName, rect: rect(node) })),
+      controls: [...document.querySelectorAll('main input:not([type=checkbox]),main select,main button.primary,main button.quiet-button,main a.quiet-button')].filter(visible).map(node => ({ tag: node.tagName, rect: rect(node) })),
     };
   });
   assert.ok(result.overflow <= 1, `${width}/${view}: horizontal overflow ${result.overflow}`);
@@ -180,61 +214,228 @@ async function inspectSelectStability(page, width, view, artifacts) {
     ...(await selects.count() === 0 ? { status: 'N/A', reason: 'No native selects in this view' } : { status: 'Pass' }) };
 }
 
-test('Chromium admin control rows and space actions remain usable at desktop and phone widths', { skip: !browserEnabled, timeout: 120000 }, async t => {
+test('Chromium admin control rows and space actions remain usable at desktop and phone widths', { skip: !browserEnabled, timeout: 240000 }, async t => {
   const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
   // Native popups use the underlying screen, not Playwright's page viewport.
   // Chromium's default 800px headless screen otherwise clips wide menus.
   const browser = await chromium.launch({ headless: !process.env.ADMIN_LAYOUT_HEADED, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox', '--ozone-override-screen-size=1440,1000'] });
   t.after(() => browser.close());
-  const { origin, auth } = await fixture(t), evidence = [], selectEvidence = [];
+  const { origin, auth } = await fixture(t), evidence = [], selectEvidence = [], separatorEvidence = [], lifecycleEvidence = [];
   const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
   if (artifacts) mkdirSync(artifacts, { recursive: true });
   for (const [width, language] of [[1440, 'en'], [391, 'en'], [390, 'zh']]) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
-    const page = await context.newPage(), errors = [];
+    const page = await context.newPage(), errors = [], dialogs = [];
     page.on('pageerror', error => errors.push(error.message));
+    page.on('dialog', async dialog => { dialogs.push({ type: dialog.type(), message: dialog.message() }); await dialog.accept(); });
     await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
     const login = await context.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: 'synthetic-owner', password } });
     assert.equal(login.status(), 200);
     await page.goto(`${origin}/admin/`); await ready(page);
     for (const view of ['general', 'spaces', 'access', 'grants', 'users', 'data', 'mcp', 'overview']) {
       await page.locator(`#navigation [data-view=${view}]`).click(); await ready(page);
+      await page.reload(); await ready(page);
+      assert.equal(await page.locator(`#navigation [data-view=${view}]`).getAttribute('aria-current'), 'page', `${view} sidebar route survives reload`);
       if (view === 'data') await page.locator('.data-table').waitFor();
       if (view === 'mcp') await page.locator('.mcp-table').first().waitFor();
       if (view === 'overview') { await page.locator('#platform-traces [data-scope=mcp-summary]').waitFor(); await page.locator('#platform-observations [data-scope=methodology]').waitFor(); }
       if (view === 'users') { await page.locator('[data-user="a-member"] button').click(); await page.locator('#create-user').click(); }
       evidence.push(await inspectLayout(page, width, view));
+      separatorEvidence.push(await inspectSeparators(page, width, view));
       selectEvidence.push(await inspectSelectStability(page, width, view, artifacts));
       if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-${view}.png`), fullPage: true });
       if (view === 'access') {
         const save = page.locator('form button[type=submit]');
         await Promise.all([page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/web-access')), save.click()]); await ready(page);
+        assert.equal(await page.locator('#notice').textContent(), '', 'saving app access shows no success notice');
       }
     }
     await page.locator('#navigation [data-view=spaces]').click(); await ready(page);
     const create = page.locator('form').filter({ has: page.locator('select[name=type]') });
+    assert.equal(await create.evaluate(node => Boolean(node.compareDocumentPosition(document.querySelector('.space-overview')) & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'New space remains above the space overview');
     await create.locator('select').selectOption('company');
     await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/account/spaces')), create.locator('button[type=submit]').click()]); await ready(page);
+    assert.equal(await page.locator('#notice').textContent(), '', 'space creation shows no success notice');
+    assert.equal(dialogs.at(-1)?.type, 'alert', 'success appears in a browser alert');
+    assert.match(dialogs.at(-1)?.message || '', /Space created|空间已创建/, 'success alert names the completed operation');
     await page.waitForFunction(() => Boolean(document.querySelector('input[name=username]')));
     const spaceId = await page.locator('select[name=space]').inputValue();
     assert.equal(auth.db.prepare('SELECT type FROM auth_spaces WHERE id=?').get(spaceId).type, 'company');
-    const enable = page.locator('.account-setting').filter({ hasText: 'Reminder' }).locator('button');
-    await Promise.all([page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/apps/reminder')), enable.click()]); await ready(page);
+    const text = (english, chinese) => language === 'en' ? english : chinese;
+    const manage = async id => {
+      await page.locator(`.space-app-row[data-app="${id}"]`).getByRole('link', { name: language === 'en' ? /^Manage / : /^管理 / }).click();
+      await ready(page);
+      assert.equal(new URL(page.url()).searchParams.get('app'), id);
+      assert.equal(await page.locator('select[name=appId]').count(), 0, 'grant form is scoped to the current app');
+      assert.equal(await page.locator('.space-app-row').count(), 0, 'app management is a separate screen');
+    };
+    const back = async () => { await page.locator('.space-back').click(); await ready(page); };
+    const write = async (method, suffix, action) => {
+      await Promise.all([page.waitForResponse(r => r.request().method() === method && r.url().endsWith(suffix)), action()]);
+      await ready(page);
+      assert.equal(await page.locator('#notice.success').count(), 0, 'successful operations show no success notice');
+      assert.equal(await page.locator('#notice').textContent(), '', 'successful operations leave the notice empty');
+    };
+    const confirm = () => page.locator('.confirm-box').getByRole('button', { name: text('Confirm', '确认'), exact: true }).click();
+    assert.equal(await page.locator('.space-app-row').count(), 14, 'overview lists every installed app');
+    assert.equal(await page.locator('input[name=resources]').count(), 0, 'overview has no resource grant controls');
+    assert.equal(await page.locator('select[name=appId]').count(), 0, 'overview has no app grant selector');
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-spaces-overview.png`), fullPage: true });
+    for (const app of apps) {
+      const id = app.entry.adapterId || app.id;
+      const row = page.locator(`.space-app-row[data-app="${id}"]`);
+      assert.equal(await row.count(), 1, `${app.name} is listed once`);
+      assert.match(await row.innerText(), app.entry.adapterId ? /Agent business actions supported|支持智能体业务操作/ : /No agent business actions|不支持智能体业务操作/);
+      assert.equal(await row.getByRole('link', { name: language === 'en' ? /^Manage / : /^管理 / }).count(), 1);
+      await manage(id);
+      assert.match(await page.locator('main').innerText(), new RegExp(app.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.equal(await page.locator('input[name=resources]').count(), 0, 'disabled or non-business apps have no grant form');
+      separatorEvidence.push(await inspectSeparators(page, width, `space-app-${id}`));
+      await back();
+    }
     const member = page.locator('form').filter({ has: page.locator('input[name=username]') });
     await member.locator('input').fill('synthetic-member');
-    await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/members')), member.locator('button[type=submit]').click()]); await ready(page);
-    const permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
+    await write('POST', '/members', () => member.locator('button[type=submit]').click());
+    // Navigation preserves the selected space without introducing a success notice.
+    assert.equal(await page.locator('#notice').textContent(), '');
+    await manage('reminder');
+    assert.equal(await page.locator('#notice').textContent(), '');
+    await write('PUT', '/apps/reminder', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
+    let permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
     await permission.locator('select[name=userId]').selectOption('a-member');
     await permission.locator('input[name=resources]').fill('synthetic-layout-record');
     await permission.locator('input[type=checkbox][name=read]').check();
-    evidence.push(await inspectLayout(page, width, 'spaces-populated'));
-    selectEvidence.push(await inspectSelectStability(page, width, 'spaces-populated', artifacts));
-    await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/permissions')), permission.locator('button[type=submit]').click()]); await ready(page);
-    const saved = auth.db.prepare('SELECT actions,resources FROM auth_resources WHERE space_id=? AND user_id=?').get(spaceId, 'a-member');
+    evidence.push(await inspectLayout(page, width, 'space-reminder-enabled'));
+    separatorEvidence.push(await inspectSeparators(page, width, 'space-reminder-enabled'));
+    // Re-enter the app to measure native popup stability without edited form state.
+    await back(); await manage('reminder');
+    permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
+    selectEvidence.push(await inspectSelectStability(page, width, 'space-reminder-enabled', artifacts));
+    await permission.locator('select[name=userId]').selectOption('a-member');
+    await permission.locator('input[name=resources]').fill('synthetic-layout-record');
+    if (width === 1440) {
+      const grant = permission.locator('button[type=submit]');
+      await grant.scrollIntoViewIfNeeded();
+      const beforeError = await layoutGeometry(page);
+      await permission.locator('button[type=submit]').click();
+      assert.match(await page.locator('#notice.error').textContent(), /Choose at least one action/);
+      assert.equal(await page.locator('#notice').evaluate(node => getComputedStyle(node).position), 'fixed', 'errors do not insert a text row');
+      assert.deepEqual(await layoutGeometry(page), beforeError, 'showing an error preserves main, heading, form and scroll geometry');
+      await page.waitForTimeout(5200);
+      assert.equal(await page.locator('#notice.error').count(), 1, 'errors persist until addressed');
+      await page.locator('#navigation [data-view=general]').click(); await ready(page, { allowError: true });
+      assert.equal(await page.locator('#notice.error').count(), 1, 'view changes preserve unresolved errors');
+      await page.locator('#navigation [data-view=spaces]').click(); await ready(page, { allowError: true });
+      await page.locator('.space-app-row[data-app="reminder"]').getByRole('link', { name: /^Manage / }).click(); await ready(page, { allowError: true });
+      permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
+      await permission.locator('select[name=userId]').selectOption('a-member');
+      await permission.locator('input[name=resources]').fill('synthetic-layout-record');
+    }
+    await permission.locator('input[type=checkbox][name=read]').check();
+    if (width === 1440) {
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      const beforeSave = await layoutGeometry(page), originalForm = await permission.elementHandle();
+      const detailUrl = `${origin}/api/business/account/spaces/${spaceId}`;
+      let releaseRead, sawRefresh, finishedRead;
+      const blocked = new Promise(resolve => { releaseRead = resolve; });
+      const refreshing = new Promise(resolve => { sawRefresh = resolve; });
+      const handled = new Promise(resolve => { finishedRead = resolve; });
+      const delayedRead = async route => { sawRefresh(); await blocked; try { await route.continue(); } finally { finishedRead(); } };
+      await page.route(detailUrl, delayedRead);
+      try {
+        await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/permissions')), permission.locator('button[type=submit]').click()]);
+        await refreshing;
+        assert.equal(await originalForm.evaluate(node => node.isConnected && node.getClientRects().length > 0), true, 'pending refresh retains the actual form');
+        for (let frame = 0; frame < 3; frame++) {
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+          assert.deepEqual(await layoutGeometry(page), beforeSave, 'pending save refresh preserves content and bottom scroll position');
+        }
+      } finally { releaseRead(); await handled; await page.unroute(detailUrl, delayedRead); }
+      await ready(page);
+      assert.equal(await page.locator('#notice').textContent(), '', 'completed save shows no success notice');
+    } else await write('POST', '/permissions', () => permission.locator('button[type=submit]').click());
+    let saved = auth.db.prepare('SELECT id,app_id,actions,resources FROM auth_resources WHERE space_id=? AND user_id=?').get(spaceId, 'a-member');
+    assert.equal(saved.app_id, 'reminder');
     assert.deepEqual(JSON.parse(saved.actions), ['read']); assert.deepEqual(JSON.parse(saved.resources), ['synthetic-layout-record']);
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-space-reminder-permissions.png`), fullPage: true });
+    // Reload keeps the route scoped to the app, and a different app cannot show its grants.
+    await page.reload(); await ready(page);
+    assert.equal(new URL(page.url()).searchParams.get('app'), 'reminder');
+    assert.equal(await page.locator('input[name=resources]').count(), 1);
+    await back(); await manage('knowledge');
+    assert.doesNotMatch(await page.locator('#content').innerText(), /synthetic-layout-record/);
+    await page.goBack(); await ready(page);
+    assert.equal(await page.locator('.space-app-row').count(), 14, 'browser Back returns to overview');
+    await manage('reminder');
+    await page.getByRole('button', { name: text('Revoke permission', '撤销权限'), exact: true }).click();
+    await write('DELETE', `/permissions/${saved.id}`, confirm);
+    assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE space_id=? AND app_id=?').get(spaceId, 'reminder').n, 0);
+    permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
+    await permission.locator('select[name=userId]').selectOption('a-member');
+    await permission.locator('input[name=resources]').fill('synthetic-layout-record');
+    await permission.locator('input[type=checkbox][name=read]').check();
+    await write('POST', '/permissions', () => permission.locator('button[type=submit]').click());
+    await page.getByRole('button', { name: text('Disable', '停用'), exact: true }).click();
+    assert.equal(await page.locator('.confirm-box').count(), 1, 'disable retains explicit confirmation');
+    await write('PUT', '/apps/reminder', confirm);
+    assert.equal(await page.locator('input[name=resources]').count(), 0);
+    assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE space_id=? AND app_id=?').get(spaceId, 'reminder').n, 0, 'disable deletes resource grants');
+    await write('PUT', '/apps/reminder', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
+    assert.equal(await page.getByRole('button', { name: text('Revoke permission', '撤销权限'), exact: true }).count(), 0, 'reenabling does not revive grants');
+    await back(); await manage('finance');
+    assert.match(await page.locator('#content').innerText(), /web entry|网页入口/i);
+    assert.equal(await page.locator('input[name=resources]').count(), 0, 'web-only app has no business-grant controls');
+    await write('PUT', '/apps/finance', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-space-finance-enabled.png`), fullPage: true });
+    const memberContext = await browser.newContext();
+    assert.equal((await memberContext.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: 'synthetic-member', password } })).status(), 200);
+    let memberAccess = await (await memberContext.request.get(`${origin}/api/business/web-access`)).json();
+    assert.ok(memberAccess.apps.includes('finance'), 'non-business enrollment gives members web entry');
+    assert.equal(auth.availableRules('a-member').filter(rule => rule.appId === 'finance').length, 0, 'web entry grants no agent actions');
+    await page.getByRole('button', { name: text('Disable', '停用'), exact: true }).click();
+    await write('PUT', '/apps/finance', confirm);
+    memberAccess = await (await memberContext.request.get(`${origin}/api/business/web-access`)).json();
+    assert.ok(!memberAccess.apps.includes('finance'), 'disabling non-business enrollment withdraws web entry');
+    await write('PUT', '/apps/finance', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
+    await back();
+    const memberRow = page.locator('.user-row').filter({ hasText: 'synthetic-member' });
+    await memberRow.getByRole('button', { name: text('Remove', '移除'), exact: true }).click();
+    await write('DELETE', '/members/a-member', confirm);
+    memberAccess = await (await memberContext.request.get(`${origin}/api/business/web-access`)).json();
+    assert.ok(!memberAccess.apps.includes('finance'), 'membership removal withdraws enrolled web entry');
+    await memberContext.close();
+    assert.ok(dialogs.length >= 10, 'successful operations display browser alerts');
+    assert.ok(dialogs.every(dialog => dialog.type === 'alert' && dialog.message.length > 0), 'success alerts have explicit messages');
+    lifecycleEvidence.push({ width, language, installedApps: 14, appScopedPages: 14, members: 'add/remove', businessPermissions: 'grant/revoke/disable/reenable', nonBusinessEntry: 'enabled/withdrawn', notices: width === 1440 ? 'success alerts, no inline success notices, unresolved error persistence' : 'success alerts, no inline success notices', alertCount: dialogs.length, history: 'reload and browser Back', status: 'Pass' });
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     const clearance = await page.evaluate(() => innerHeight - Math.max(...[...document.querySelectorAll('main button, main select, main input')].filter(node => node.getClientRects().length).map(node => node.getBoundingClientRect().bottom)));
     assert.ok(clearance >= 64, `bottom control clearance: ${clearance}`);
+    if (width === 1440) {
+      await manage('reminder');
+      const detailUrl = `${origin}/api/business/account/spaces/${spaceId}`;
+      const unavailable = route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'UNAVAILABLE' }) });
+      await page.route(detailUrl, unavailable);
+      const dialogsBeforeFailure = dialogs.length;
+      await page.getByRole('button', { name: 'Disable', exact: true }).click();
+      await Promise.all([page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/apps/reminder')), confirm()]);
+      await ready(page, { allowError: true });
+      assert.equal(await page.locator('#notice.error').count(), 1, 'successful write followed by failed read preserves its error');
+      assert.equal(await page.locator('#notice.success').count(), 0, 'failed refresh is not reported as success');
+      assert.equal(dialogs.length, dialogsBeforeFailure, 'failed refresh never opens a success alert');
+      await page.unroute(detailUrl, unavailable);
+      await page.locator('#refresh').click(); await ready(page);
+      const expired = route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ code: 'UNAUTHENTICATED' }) });
+      await page.route(detailUrl, expired);
+      await Promise.all([page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/apps/reminder')), page.getByRole('button', { name: 'Enable', exact: true }).click()]);
+      await ready(page, { allowError: true });
+      assert.equal(await page.locator('#notice.error').count(), 1);
+      assert.equal(await page.locator('#notice.success').count(), 0, 'terminal rejection is never overwritten by success');
+      assert.equal(dialogs.length, dialogsBeforeFailure, 'terminal rejection never opens a success alert');
+      assert.equal(await page.locator('#notice').getByRole('link', { name: 'Sign in', exact: true }).count(), 1);
+      assert.equal(await page.locator('#content').innerText(), '', 'terminal rejection clears protected content');
+      await page.unroute(detailUrl, expired);
+      lifecycleEvidence.push({ width, writeRefreshErrors: '503 error and terminal 401 survive successful writes', status: 'Pass' });
+    }
     assert.deepEqual(errors, []);
     await context.close();
   }
@@ -255,5 +456,5 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     if (artifacts) await readerPage.screenshot({ path: join(artifacts, `prd-${language}.png`) });
   }
   await readerContext.close();
-  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic auth HTTP; synthetic read-only data/MCP projections', browser: browser.version(), evidence, selectEvidence }));
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic auth HTTP; synthetic read-only data/MCP projections', browser: browser.version(), evidence, selectEvidence, separatorEvidence, lifecycleEvidence }));
 });

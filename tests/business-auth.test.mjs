@@ -679,7 +679,8 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   assert.equal(f.store.isPlatformAdmin(owner.user.id), false);
   assert.equal(f.store.getWebEntryPolicy(owner.user.id), null);
   const details = await (await read(owner, path)).json();
-  assert.deepEqual(details.apps.map(app => app.enabled), [false, false]);
+  assert.equal(details.apps.length, 14);
+  assert.ok(details.apps.every(app => app.enabled === false));
   assert.equal((await call(owner, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 200);
   assert.deepEqual(f.store.userPermissions(owner.user.id, space.id, 'reminder', 'read'), [], 'owner enrollment is not a resource grant');
   assert.equal((await call(owner, path + '/members', { username: member.user.username, role: 'member' })).status, 201);
@@ -764,6 +765,83 @@ test('public space lifecycle refuses personal membership, elevation, cross-space
   assert.equal((await call(member, `/${family.id}/apps/reminder`, { enabled: true }, 'PUT')).status, 403);
   assert.equal((await call(member, `/${family.id}/permissions`, { userId: 'bob', appId: 'reminder', resources: ['*'], actions: ['read'] })).status, 403);
   assert.equal((await call(owner, path + '/members/alice', undefined, 'DELETE')).status, 409);
+});
+
+test('space catalog includes every installed app and retains business adapter IDs and operation ceilings', async t => {
+  const f = await httpFixture(t, { apps: { reminder: { spaces: [] }, slides: { spaces: [] } }, gateway: true });
+  const owner = await f.login('alice'), prefix = '/api/business/account/spaces';
+  const read = path => f.request(prefix + path, { headers: { Cookie: owner.cookie } });
+  const call = (path, input, method = 'POST') => f.json(prefix + path, input, { method, headers: { Cookie: owner.cookie, 'X-CSRF-Token': owner.body.csrfToken } });
+  const { catalog } = await (await read('')).json();
+  assert.equal(catalog.length, 14);
+  assert.deepEqual(catalog.map(app => app.webAppId), f.store.registry.apps.map(app => app.id));
+  assert.equal(new Set(catalog.map(app => app.id)).size, 14);
+  for (const app of catalog) {
+    const declared = f.store.registry.getApp(app.webAppId), business = declared.integration.business;
+    assert.equal(app.id, business?.adapterId || declared.id);
+    assert.equal(app.name, declared.name);
+    assert.equal(app.supportsBusinessActions, Boolean(business));
+    assert.deepEqual(app.actions, business?.actions || []);
+    assert.equal(app.entryPolicy, declared.integration.web.policy);
+  }
+  assert.deepEqual(catalog.filter(app => app.businessAvailable).map(app => app.id).sort(), ['reminder', 'slides']);
+  const slide = catalog.find(app => app.id === 'slides');
+  assert.equal(slide.webAppId, 'lattice-slides'); assert.equal(slide.enrollmentAllowed, true);
+  assert.equal(catalog.find(app => app.id === 'knowledge').enrollmentAllowed, false, 'unconfigured business backend remains unavailable');
+  for (const id of ['finance', 'intelligence', 'calendar', 'matrix-reader']) assert.equal(catalog.find(app => app.id === id).enrollmentAllowed, true);
+  for (const id of ['polaris', 'letters', 'profiles']) assert.equal(catalog.find(app => app.id === id).enrollmentAllowed, false);
+  const space = await (await call('', { type: 'family' })).json(), path = `/${space.id}`;
+  const details = await (await read(path)).json();
+  assert.deepEqual(details.apps.map(({ enabled, ...app }) => app), catalog);
+  assert.ok(details.apps.every(app => app.enabled === false));
+  for (const id of ['knowledge', 'polaris', 'letters', 'profiles', 'unknown', 'lattice-slides', '__proto__']) {
+    assert.equal((await call(path + `/apps/${id}`, { enabled: true }, 'PUT')).status, 403);
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_space_apps WHERE space_id=?').get(space.id).n, 0, 'rejected enrollment has no side effect');
+  }
+});
+
+test('non-business space enrollment grants current members web entry without resource or agent authority', async t => {
+  const apps = { reminder: { spaces: [] } }, f = await httpFixture(t, { apps, gateway: true });
+  const owner = await f.login('alice'), member = await f.login('bob'), outsider = await f.login('guest');
+  const prefix = '/api/business/account/spaces';
+  const call = (actor, path, input, method = 'POST') => f.json(prefix + path, input, { method, headers: { Cookie: actor.cookie, 'X-CSRF-Token': actor.body.csrfToken } });
+  const web = async actor => {
+    const response = await f.request('/api/business/web-access', { headers: { Cookie: actor.cookie } });
+    assert.equal(response.status, 200); return response.json();
+  };
+  const space = await (await call(owner, '', { type: 'family' })).json(), path = `/${space.id}`;
+  assert.deepEqual((await web(owner)).apps, []); assert.deepEqual((await web(member)).apps, []);
+  for (const appId of ['finance', 'intelligence', 'calendar', 'matrix-reader']) {
+    assert.equal((await call(owner, path + `/apps/${appId}`, { enabled: true }, 'PUT')).status, 200);
+  }
+  const entries = ['calendar', 'finance', 'intelligence', 'matrix-reader'];
+  assert.deepEqual((await web(owner)).apps, entries);
+  assert.deepEqual((await web(member)).apps, [], 'a non-member receives no entry');
+  assert.equal((await call(owner, path + '/members', { username: 'bob', role: 'member' })).status, 201);
+  assert.deepEqual((await web(member)).apps, entries); assert.deepEqual((await web(outsider)).apps, []);
+  assert.equal((await call(member, path + '/apps/finance', { enabled: false }, 'PUT')).status, 403);
+  const restored = new AuthStore({ file: f.file, issuer });
+  try {
+    restored.configureWebAccessBoundary({ enabled: true, apps });
+    assert.equal(restored.appSpaceEnabled('finance', space.id), true);
+    assert.deepEqual(restored.currentWebApps('bob'), entries, 'member entries survive policy restart');
+  } finally { restored.close(); }
+  const before = f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_resources').get().n;
+  assert.equal((await call(owner, path + '/permissions', { userId: 'bob', appId: 'finance', actions: ['read'], resources: ['*'] })).status, 400);
+  assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_resources').get().n, before);
+  assert.deepEqual(f.store.userPermissions('bob', space.id, 'finance', 'read'), []);
+  assert.ok(f.store.availableRules('bob').every(rule => rule.appId !== 'finance'));
+  assert.throws(() => f.store.createGrant({ userId: 'bob', clientId: 'agent-a', rules: [rule(space.id, ['read'], ['*'], 'finance')] }), { status: 400 });
+  assert.equal((await call(owner, path + '/apps/finance', { enabled: false }, 'PUT')).status, 200);
+  assert.deepEqual((await web(member)).apps, entries.filter(id => id !== 'finance'));
+  assert.equal((await call(owner, path + '/members/bob', undefined, 'DELETE')).status, 200);
+  assert.deepEqual((await web(member)).apps, [], 'membership removal withdraws all membership-derived entries');
+  assert.deepEqual((await web(owner)).apps, entries.filter(id => id !== 'finance'));
+  f.store.setWebAccess({ userId: 'bob', apps: ['finance'], prds: false });
+  assert.deepEqual((await web(member)).apps, ['finance'], 'administrator entry policy remains independent and backward compatible');
+  const personal = await (await call(owner, '', { type: 'personal' })).json();
+  assert.equal((await call(owner, `/${personal.id}/apps/calendar`, { enabled: true }, 'PUT')).status, 200);
+  assert.equal((await call(owner, `/${personal.id}/members`, { username: 'bob', role: 'member' })).status, 403);
 });
 
 test('explicit self-service owner permissions constrain dispatch and subject expiry', t => {

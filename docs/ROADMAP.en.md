@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.142
+Version: 0.1.143
 
 [简体中文](ROADMAP.md)
 
@@ -26,6 +26,10 @@ Handle a verified empty selection on the existing external-agent consent page wi
 ## Consistent Settings control rows
 
 Define a shared field/action row and uniform note/section rhythm before implementation. Align all form and list actions to the same main-content right edge, with controls on the left; remove competing form width limits. Apply it across every management view, retaining native controls and static bottom clearance. Remove select-triggered page scrolling and oversized focus scroll allowances; assert zero scroll delta and zero layout shift before/after pointer focus, keyboard opening and dismissal of every select, including low visible controls, and inspect the real popup; stack rows only at 390 px and below. Verify all eight management views in Chromium at 1440/390 px, keyboard focus and touch targets, original space/member/enrollment/grant submissions and both workbench PRD languages using synthetic fixtures. Run the platform suite, align one PATCH and bilingual release rows, commit checked source, then build and release the existing web/core pair through the authorized test blue/green controller. Read back public settings entry behavior and actual runtime version; business acceptance belongs to the independent client.
+
+## Spaces overview and per-app management
+
+Define BSP05–BSP08 before implementation. Separate the space overview (members and the complete installed app catalog, with agent-business capability marks) from Manage pages containing only one app's enrollment and member permissions/grant form. Keep the New space form at its existing top position. Keep existing IDs, labels, confirmations and authorization; add catalog capability metadata and member web entry for non-business apps without granting agent actions or bypassing app-owned checks. Use single separators throughout management. Present success in a separate browser `window.alert` dialog, closed by user acknowledgment, without a page notice/text row, copy/layout change or auto-dismiss timer. Keep errors until addressed, retried or explicitly refreshed, including follow-up read failures after successful operations, which must not produce a success alert. Verify isolated synthetic API plus real Chromium 1440/390 px flows for Manage/return, enable/disable, member add/remove, grant/revoke, acknowledged browser success alerts without inserted page rows, persistent read/write errors and no horizontal overflow; read both PRDs through the workbench. Run the platform suite and aligned one-PATCH version gate, commit checked source, then build and deploy the affected web/core pair through the authorized test blue/green environment. Report actual runtime version and public readback separately from independent business acceptance.
 
 ## Self-service business spaces
 
@@ -280,6 +284,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.140 | 2026-11-21 | Allow verified OAuth callback redirects in consent CSP and show actionable empty-selection retries |
 | v0.1.141 | 2026-11-21 | Unify Settings control rows, note spacing and native select clearance across management views |
 | v0.1.142 | 2026-11-21 | Keep native Settings selects stationary on focus, opening and dismissal |
+| v0.1.143 | 2026-11-21 | Separate Spaces overview and per-app management with complete app catalog, bounded web enrollment, single separators and browser success alerts |
 
 ### Public applications with private collections
 

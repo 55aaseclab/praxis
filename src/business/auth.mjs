@@ -332,8 +332,13 @@ export class AuthStore {
     if (typeof enabled !== 'boolean' || !apps || typeof apps !== 'object' || Array.isArray(apps)) fail('Web access boundary configuration is invalid.');
     this.webAccessBoundary = { enabled, apps: Object.fromEntries(Object.entries(apps).filter(([id]) => Boolean(this.registry.getBusiness(id))).map(([id, app]) => [id, new Set(app?.spaces || [])])) };
   }
+  spaceAppEnrollmentAllowed(appId, installedApps = this.webAccessBoundary.apps) {
+    if (this.registry.getBusiness(appId)) return Object.hasOwn(installedApps, appId);
+    const app = this.registry.getApp(appId);
+    return Boolean(app && !app.integration.business && app.integration.web.policy === 'grant');
+  }
   appSpaceEnabled(appId, spaceId, installedApps = this.webAccessBoundary.apps) {
-    if (!this.registry.getBusiness(appId) || !Object.hasOwn(installedApps, appId)) return false;
+    if (!this.spaceAppEnrollmentAllowed(appId, installedApps)) return false;
     const enrollment = this.db.prepare('SELECT enabled FROM auth_space_apps WHERE space_id=? AND app_id=?').get(spaceId, appId);
     if (enrollment) return enrollment.enabled === 1;
     const settings = installedApps[appId], spaces = settings instanceof Set ? settings : settings?.spaces;
@@ -345,7 +350,9 @@ export class AuthStore {
     const policy = this.getWebEntryPolicy(userId);
     const legacy = policy && (policy.expiresAt === null || policy.expiresAt > this.clock()) ? policy.apps : [];
     const enrolled = this.db.prepare('SELECT space_id,app_id FROM auth_space_apps WHERE enabled=1').all()
-      .filter(row => this.appSpaceEnabled(row.app_id, row.space_id) && this.appActions[row.app_id]?.some(action => this.userPermissions(userId, row.space_id, row.app_id, action).length))
+      .filter(row => this.appSpaceEnabled(row.app_id, row.space_id) && (this.registry.getBusiness(row.app_id)
+        ? this.appActions[row.app_id].some(action => this.userPermissions(userId, row.space_id, row.app_id, action).length)
+        : Boolean(this.membershipRole(userId, row.space_id))))
       .map(row => this.registry.webId(row.app_id));
     return unique([...legacy, ...enrolled]);
   }
@@ -373,7 +380,7 @@ export class AuthStore {
     });
   }
   setSpaceAppEnrollment({ spaceId, appId, enabled }, installedApps = this.webAccessBoundary.apps) {
-    if (typeof enabled !== 'boolean' || !this.registry.getBusiness(appId) || !Object.hasOwn(installedApps, appId)) fail('Application is not installed.', 403, 'FORBIDDEN');
+    if (typeof enabled !== 'boolean' || !this.spaceAppEnrollmentAllowed(appId, installedApps)) fail('Application is not installed.', 403, 'FORBIDDEN');
     if (!this.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(spaceId)) fail('Space not found.', 404, 'NOT_FOUND');
     return this.controlTransaction(() => {
       this.db.prepare('INSERT INTO auth_space_apps VALUES(?,?,?) ON CONFLICT(space_id,app_id) DO UPDATE SET enabled=excluded.enabled').run(spaceId, appId, Number(enabled));
@@ -866,7 +873,12 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         const fields = (allowed, required = allowed) => {
           if (Object.keys(input).some(key => !allowed.includes(key)) || required.some(key => !Object.hasOwn(input, key))) fail('Space request contains unknown or missing fields.');
         };
-        const catalog = Object.keys(apps).filter(id => store.registry.getBusiness(id)).map(id => ({ id, name: store.registry.getApp(store.registry.webId(id))?.name || id, actions: store.appActions[id] }));
+        const catalog = store.registry.apps.map(app => {
+          const business = app.integration.business, id = business?.adapterId || app.id;
+          return { id, name: app.name, actions: store.appActions[id] || [], webAppId: app.id,
+            supportsBusinessActions: Boolean(business), businessAvailable: Boolean(business && Object.hasOwn(apps, id)),
+            entryPolicy: app.integration.web.policy, enrollmentAllowed: store.spaceAppEnrollmentAllowed(id, apps) };
+        });
         const result = store.controlTransaction(() => {
           const session = store.requireNativeSession(token), userId = session.user.id;
           if (writing) store.requireRequestCsrf(request);

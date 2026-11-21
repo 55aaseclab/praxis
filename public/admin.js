@@ -6,14 +6,16 @@ const actionNames = { read: t("Read", "读取"), create: t("Create", "新增"), 
 const titles = { spaces: t('Spaces', '空间'), general: t('General', '通用'), overview: t("Overview", "状态概览"), data: t("Data management", "数据管理"), mcp: 'MCP', users: t("Users", "用户"), access: t("App access", "入口权限"), grants: t("Agent delegations", "智能体委托") };
 const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入内容。"), READ_TIMEOUT: t("Read timed out. Try again.", "读取超时，请重试。"), WRITE_TIMEOUT: t("Request timed out. Refresh to check whether it was saved.", "请求超时，尚未确认是否保存。请先刷新核对结果。"), INVALID_REQUEST: t("Check the form fields.", "请检查输入内容。"), NOT_FOUND: t("This record no longer exists. Refresh to continue.", "这条记录已不存在，请刷新。"), FORBIDDEN: t("This action is no longer permitted. Refresh to check your space access.", "当前无权执行此操作，请刷新核对空间权限。"), CONFLICT: t("Account already exists or its state changed. Check and try again.", "账号已存在或状态已变化，请检查后重试。"), LAST_ADMIN_REQUIRED: t("Keep at least one active platform administrator.", "至少需要保留一名启用的平台管理员。"), POLICY_BUSY: t("Authorization is being updated. Try again shortly.", "授权正在更新，请稍后重试。"), CSRF_REJECTED: t("Session changed. Sign in again.", "登录状态已变化，请重新登录。"), UNAVAILABLE: t("Service unavailable. Try again later.", "服务暂时不可用，请稍后重试。"), DATA_INVENTORY_UNAVAILABLE: t("Could not load data locations. Refresh to retry.", "暂时无法读取数据位置，请稍后刷新。"), ADMIN_DEFAULT_ACCESS: t("Platform administrators have access to all app entries.", "平台管理员默认拥有全部入口，无需单独授权。") };
 const content = document.querySelector('#content'), notice = document.querySelector('#notice');
-let session = null, users = [], nextCursor = null, selectedId = null, view = new URLSearchParams(location.search).get('view') === 'spaces' ? 'spaces' : null, epoch = 0, ended = false, writing = false, createOpen = false;
-let selectedSpaceId = null;
+let session = null, users = [], nextCursor = null, selectedId = null, view = Object.hasOwn(titles, new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : null, epoch = 0, ended = false, writing = false, createOpen = false;
+const initialRoute = new URLSearchParams(location.search);
+let selectedSpaceId = initialRoute.get('space'), selectedAppId = initialRoute.get('app');
 const spacesNavigation = document.createElement('button');
 spacesNavigation.type = 'button'; spacesNavigation.className = 'nav-entry'; spacesNavigation.dataset.view = 'spaces'; spacesNavigation.dataset.sharedView = ''; spacesNavigation.hidden = true;
 spacesNavigation.append(document.querySelector('[data-view="access"] .nav-icon').cloneNode(true), document.createTextNode(t('Spaces', '空间')));
 document.querySelector('#navigation').append(spacesNavigation);
 let expiryTimer, accessTimer, overview, overviewLoading, mcpView, mcpLoading, dataView, dataLoading, dataController, booting = false, bootRevision = 0, usersLoaded = false;
 const controllers = new Set();
+let writeFocus;
 const selected = () => users.find(user => user.id === selectedId);
 function loadOverviewAsset(path, kind) {
   return new Promise(resolve => {
@@ -63,7 +65,7 @@ function setSession(value) {
     clearAppFacts();
     if (session.user.id !== value.user.id) view = null;
     epoch++; for (const controller of controllers) controller.abort(); overview?.clear();
-    users = []; nextCursor = null; selectedId = null; selectedSpaceId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
+    users = []; nextCursor = null; selectedId = null; selectedSpaceId = null; selectedAppId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
   }
   session = value; clearTimeout(expiryTimer); clearTimeout(accessTimer);
   if (!view || !value.platformAdmin && !['general', 'spaces', 'access', 'grants'].includes(view)) view = 'general';
@@ -79,7 +81,28 @@ function setSession(value) {
 function el(tag, className = '', text) { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; }
 function controlRow(...controls) { const row = el('div', 'control-row'); row.append(...controls); return row; }
 function button(text, className, handler) { const node = el('button', className, text); node.type = 'button'; node.addEventListener('click', handler); return node; }
-function message(text = '', kind = '') { notice.replaceChildren(document.createTextNode(text)); notice.className = `notice ${kind}`; }
+function message(text = '', kind = '') {
+  if (kind === 'success') {
+    if (!ended && !notice.classList.contains('error')) window.alert(text);
+    return;
+  }
+  notice.replaceChildren(document.createTextNode(text)); notice.className = `notice ${kind}`;
+}
+function spaceHref(appId = null) {
+  const query = new URLSearchParams({ view: 'spaces', space: selectedSpaceId });
+  if (appId) query.set('app', appId);
+  return `/admin/?${query}`;
+}
+function spaceLink(label, appId, className = 'quiet-button') {
+  const link = el('a', className, label); link.href = spaceHref(appId);
+  link.addEventListener('click', event => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (booting || writing || ended) return;
+    selectedAppId = appId; history.pushState(null, '', link.href); void render().then(() => document.querySelector('#heading').focus());
+  });
+  return link;
+}
 function time(value) { if (value === null || value === undefined) return t("No expiry", "未设置期限"); const date = new Date(value); return Number.isNaN(date.valueOf()) ? t("Time unconfirmed", "时间待确认") : date.toLocaleString(language, { hour12: false }); }
 function terminal(status, text) {
   if (ended) return;
@@ -112,9 +135,22 @@ async function api(path, { method = 'GET', body } = {}) {
   } finally { clearTimeout(timeout); controllers.delete(controller); }
 }
 function report(error) { if (!ended && !error.stale && error.name !== 'AbortError') message(errorNames[error.code] || t("Could not complete this operation. Try again.", "暂时无法完成操作，请稍后重试。"), 'error'); }
-function setBusy(value) { writing = value; for (const node of content.querySelectorAll('button, input, select')) node.disabled = value; document.querySelector('#create-user').disabled = value; document.querySelector('#refresh').disabled = value; }
+function setBusy(value) {
+  if (value) {
+    const active = document.activeElement;
+    writeFocus = content.contains(active) ? { node: active, tag: active.tagName, name: active.name, text: active.textContent, scope: [view, selectedSpaceId, selectedAppId, selectedId].join('/') } : null;
+  }
+  writing = value; for (const node of content.querySelectorAll('button, input, select')) node.disabled = value; document.querySelector('#create-user').disabled = value; document.querySelector('#refresh').disabled = value;
+  if (!value && writeFocus) {
+    if (writeFocus.scope === [view, selectedSpaceId, selectedAppId, selectedId].join('/')) {
+      const target = writeFocus.node.isConnected ? writeFocus.node : [...content.querySelectorAll('button,input,select,a')].find(node => node.tagName === writeFocus.tag && (writeFocus.name ? node.name === writeFocus.name : node.textContent === writeFocus.text));
+      target?.focus({ preventScroll: true });
+    }
+    writeFocus = null;
+  }
+}
 async function mutate(path, options, success) {
-  if (writing || ended || !session?.platformAdmin) return;
+  if (booting || writing || ended || !session?.platformAdmin) return;
   const current = epoch;
   setBusy(true); message();
   try {
@@ -280,94 +316,120 @@ function selectField(label, name, choices) {
   root.append(el('span', '', label), input); return { root, input };
 }
 async function mutateSpace(path, options, text, after) {
-  if (writing || ended || !session || view !== 'spaces') return;
+  if (booting || writing || ended || !session || view !== 'spaces') return;
   const current = epoch; setBusy(true); message();
   try {
     const value = await api(path, options);
     if (ended || current !== epoch) return;
-    after?.(value); await render(); message(text, 'success');
+    after?.(value); const rendered = epoch + 1; await render();
+    if (!ended && epoch === rendered && !notice.classList.contains('error')) message(text, 'success');
   } catch (error) { report(error); }
   finally { if (!ended) setBusy(false); }
 }
-async function renderSpaces(current) {
-  content.append(el('p', 'loading', t('Loading spaces…', '正在读取空间…')));
+async function renderSpaces(current, preserve) {
+  if (!preserve) content.append(el('p', 'loading', t('Loading spaces…', '正在读取空间…')));
   const value = await api(`${accountBase}/spaces`);
   if (ended || current !== epoch || view !== 'spaces') return;
   const spaces = value.spaces;
-  if (!spaces.some(space => space.id === selectedSpaceId)) selectedSpaceId = spaces[0]?.id || null;
+  if (!spaces.some(space => space.id === selectedSpaceId)) { selectedSpaceId = spaces[0]?.id || null; selectedAppId = null; }
   const detail = selectedSpaceId ? await api(spacePath('')) : null;
   if (ended || current !== epoch || view !== 'spaces') return;
   content.replaceChildren();
-  const create = el('form', 'form-panel'), type = selectField(t('Space type', '空间类型'), 'type', ['personal', 'family', 'company'].map(value => ({ value, label: spaceTypeName(value) })));
+  if (detail && selectedAppId) { renderSpaceApp(detail); return; }
+  const create = el('form', 'editor form-panel'), type = selectField(t('Space type', '空间类型'), 'type', ['personal', 'family', 'company'].map(value => ({ value, label: spaceTypeName(value) })));
   const submit = el('button', 'primary', t('Create space', '创建空间')); submit.type = 'submit';
   create.append(el('h2', '', t('New space', '新空间')), el('p', 'section-note', t('Enable apps and grant resource permissions after creating a space. Personal spaces have no other members.', '创建后再启用应用并授予资源权限。个人空间不能添加其他成员。')), controlRow(type.root, submit));
   create.addEventListener('submit', event => {
     event.preventDefault();
-    void mutateSpace(`${accountBase}/spaces`, { method: 'POST', body: { type: type.input.value } }, t('Space created. Enable apps to continue.', '空间已创建，请按需启用应用。'), result => { selectedSpaceId = result.id; });
+    void mutateSpace(`${accountBase}/spaces`, { method: 'POST', body: { type: type.input.value } }, t('Space created. Enable apps to continue.', '空间已创建，请按需启用应用。'), result => { selectedSpaceId = result.id; selectedAppId = null; history.replaceState(null, '', spaceHref()); });
   });
   content.append(create);
-  if (!detail) { content.append(el('p', 'empty', t('No spaces yet.', '暂无空间。'))); return; }
-  const panel = el('section', 'editor'), picker = selectField(t('Current space', '当前空间'), 'space', spaces.map(space => ({ value: space.id, label: spaceLabel(space) })));
-  picker.input.value = selectedSpaceId; picker.input.addEventListener('change', () => { selectedSpaceId = picker.input.value; void render(); });
-  panel.append(picker.root); content.append(panel);
-  const { space, apps, members, permissions } = detail, owner = space.ownerId === session.user.id;
-  const memberName = userId => members.find(member => member.userId === userId)?.username || userId;
-  panel.append(el('p', 'section-note', owner ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
-  const appSection = el('section', 'editor'); appSection.append(el('h2', '', t('Space apps', '空间应用')));
-  for (const app of apps) {
-    const row = el('div', 'account-setting'), description = el('div'); description.append(el('strong', '', app.name || app.id), el('span', 'meta', app.enabled ? t('Enabled', '已启用') : t('Disabled', '未启用'))); row.append(description);
-    if (owner) {
-      const change = () => void mutateSpace(spacePath(`/apps/${encodeURIComponent(app.id)}`), { method: 'PUT', body: { enabled: !app.enabled } }, app.enabled ? t('App disabled for this space.', '已停用此空间的应用。') : t('App enabled. Grant resource permissions as needed.', '应用已启用，请按需授予资源权限。'));
-      row.append(button(app.enabled ? t('Disable', '停用') : t('Enable', '启用'), app.enabled ? 'danger-button' : 'quiet-button', () => app.enabled ? confirmAction(row, t('Disable this app for the space? Its current access and delegations will stop.', '停用此空间的应用？当前访问和委托将停止。'), change) : change()));
+  if (detail) {
+    const { space, apps, members } = detail, owner = space.ownerId === session.user.id;
+    const panel = el('section', 'space-overview'), context = el('div', 'space-section');
+    const picker = selectField(t('Current space', '当前空间'), 'space', spaces.map(space => ({ value: space.id, label: spaceLabel(space) })));
+    picker.input.value = selectedSpaceId;
+    picker.input.addEventListener('change', () => { selectedSpaceId = picker.input.value; selectedAppId = null; history.pushState(null, '', spaceHref()); void render(); });
+    context.append(picker.root, el('p', 'section-note', owner ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
+    panel.append(context);
+    const memberSection = el('section', 'space-section'); memberSection.append(el('h2', '', t('Members', '成员')));
+    const memberList = el('ul', 'user-list');
+    for (const member of members) {
+      const row = el('li', 'user-row'), description = el('div', 'user-summary'); row.dataset.member = member.userId;
+      description.append(el('strong', 'user-name', member.username || member.userId), el('span', 'meta', member.userId === space.ownerId ? t('Owner', '所有者') : t('Member', '成员'))); row.append(description);
+      if (owner && member.userId !== space.ownerId) row.append(button(t('Remove', '移除'), 'danger-button', () => confirmAction(row, t('Remove this member and their access to this space?', '移除此成员及其空间权限？'), () => void mutateSpace(spacePath(`/members/${encodeURIComponent(member.userId)}`), { method: 'DELETE' }, t('Member removed.', '成员已移除。')))));
+      memberList.append(row);
     }
-    appSection.append(row);
+    memberSection.append(memberList);
+    if (owner && space.type !== 'personal') {
+      const form = el('form', 'form-panel'), username = field(t('Registered username', '已注册的用户名'), 'username'); username.input.required = true; username.input.maxLength = 64; username.input.autocomplete = 'off';
+      const add = el('button', 'quiet-button', t('Add member', '添加成员')); add.type = 'submit';
+      form.append(controlRow(username.root, add), el('p', 'section-note', t('Adding a member grants no resource permissions. Enabled web-entry-only apps are available to space members.', '添加成员不会自动授予资源权限。成员可打开已启用的仅网页入口应用。')));
+      form.addEventListener('submit', event => { event.preventDefault(); void mutateSpace(spacePath('/members'), { method: 'POST', body: { username: username.input.value.trim(), role: 'member' } }, t('Member added. Grant permissions as needed.', '成员已添加，请按需授予权限。')); }); memberSection.append(form);
+    }
+    panel.append(memberSection);
+    const appSection = el('section', 'space-section'); appSection.append(el('h2', '', t('Space apps', '空间应用')));
+    appSection.append(el('p', 'section-note', t('All installed apps are listed. Manage each app’s enrollment and permissions separately.', '这里列出全部已安装应用。进入管理页，分别设置应用的启用状态与权限。')));
+    for (const app of apps) {
+      const row = el('div', 'account-setting space-app-row'), description = el('div'); row.dataset.app = app.id;
+      description.append(el('strong', '', app.name || app.id), el('span', 'meta', app.enabled ? t('Enabled', '已启用') : t('Disabled', '未启用')), el('span', 'meta app-capability', app.supportsBusinessActions ? t('Agent business actions supported', '支持智能体业务操作') : t('Web entry only · No agent business actions', '仅网页入口 · 不支持智能体业务操作')));
+      const manage = spaceLink(t('Manage', '管理'), app.id); manage.setAttribute('aria-label', t('Manage {0}', '管理 {0}', app.name || app.id));
+      row.append(description, manage); appSection.append(row);
+    }
+    if (!apps.length) appSection.append(el('p', 'empty', t('No installed apps available.', '暂无可启用的已安装应用。')));
+    panel.append(appSection); content.append(panel);
   }
-  if (!apps.length) appSection.append(el('p', 'empty', t('No installed apps available.', '暂无可启用的已安装应用。')));
-  panel.append(appSection);
-  const memberSection = el('section', 'editor'); memberSection.append(el('h2', '', t('Members', '成员')));
-  const memberList = el('ul', 'user-list');
-  for (const member of members) {
-    const row = el('li', 'user-row'), description = el('div', 'user-summary'); description.append(el('strong', 'user-name', member.username || member.userId), el('span', 'meta', member.userId === space.ownerId ? t('Owner', '所有者') : t('Member', '成员'))); row.append(description);
-    if (owner && member.userId !== space.ownerId) row.append(button(t('Remove', '移除'), 'danger-button', () => confirmAction(row, t('Remove this member and their access to this space?', '移除此成员及其空间权限？'), () => void mutateSpace(spacePath(`/members/${encodeURIComponent(member.userId)}`), { method: 'DELETE' }, t('Member removed.', '成员已移除。')))));
-    memberList.append(row);
-  }
-  memberSection.append(memberList);
-  if (owner && space.type !== 'personal') {
-    const form = el('form', 'form-panel'), username = field(t('Registered username', '已注册的用户名'), 'username'); username.input.required = true; username.input.maxLength = 64; username.input.autocomplete = 'off';
-    const add = el('button', 'quiet-button', t('Add member', '添加成员')); add.type = 'submit';
-    form.append(controlRow(username.root, add), el('p', 'section-note', t('Adding a member grants no app or resource permissions.', '添加成员不会自动授予应用或资源权限。')));
-    form.addEventListener('submit', event => { event.preventDefault(); void mutateSpace(spacePath('/members'), { method: 'POST', body: { username: username.input.value.trim(), role: 'member' } }, t('Member added. Grant permissions as needed.', '成员已添加，请按需授予权限。')); }); memberSection.append(form);
-  }
-  panel.append(memberSection);
-  const permissionSection = el('section', 'editor'); permissionSection.append(el('h2', '', t('Resource permissions', '资源权限')));
-  const permissionList = el('ul', 'grant-list');
-  for (const permission of permissions) {
-    const row = el('li', 'grant-row'), summary = el('div', 'control-summary'), controls = controlRow(summary); row.append(controls); summary.append(el('strong', '', memberName(permission.userId)), el('span', 'meta', `${apps.find(app => app.id === permission.appId)?.name || permission.appId} · ${permission.actions.map(action => actionNames[action] || action).join(', ')}`), el('span', 'meta', permission.resources.includes('*') ? t('All resources in this app and space', '此应用在本空间内的所有资源') : t('Resources: {0}', '资源：{0}', permission.resources.join(', '))));
-    if (owner) controls.append(button(t('Revoke permission', '撤销权限'), 'danger-button', () => confirmAction(row, t('Revoke this resource permission?', '撤销此资源权限？'), () => void mutateSpace(spacePath(`/permissions/${encodeURIComponent(permission.id)}`), { method: 'DELETE' }, t('Permission revoked.', '权限已撤销。')))));
-    permissionList.append(row);
-  }
-  permissionSection.append(permissions.length ? permissionList : el('p', 'empty', t('No resource permissions granted.', '尚未授予资源权限。')));
-  const enabledApps = apps.filter(app => app.enabled);
-  if (owner && enabledApps.length) {
-    const form = el('form', 'form-panel'), grid = el('div', 'form-grid');
-    const person = selectField(t('Member', '成员'), 'userId', members.map(member => ({ value: member.userId, label: member.username || member.userId })));
-    const app = selectField(t('App', '应用'), 'appId', enabledApps.map(app => ({ value: app.id, label: app.name || app.id })));
-    grid.append(person.root, app.root);
-    const resources = field(t('Resource IDs (comma-separated, or * for all)', '资源 ID（逗号分隔，* 表示全部）'), 'resources'); resources.input.required = true; resources.input.maxLength = 8000;
-    const actions = el('fieldset', 'access-group'); actions.append(el('legend', '', t('Allowed actions', '允许的操作'))); const checks = el('div', 'checkbox-grid'); actions.append(checks);
-    function drawActions() { checks.replaceChildren(); for (const action of enabledApps.find(value => value.id === app.input.value)?.actions || []) checks.append(check(actionNames[action] || action, action, false).root); }
-    app.input.addEventListener('change', drawActions); drawActions();
-    const grant = el('button', 'primary', t('Grant resource permission', '授予资源权限')); grant.type = 'submit';
-    form.append(el('h3', '', t('Grant permission', '授予权限')), grid, actions, controlRow(resources.root, grant));
-    form.addEventListener('submit', event => {
-      event.preventDefault(); const selectedActions = [...checks.querySelectorAll('input:checked')].map(input => input.name), selectedResources = [...new Set(resources.input.value.split(',').map(value => value.trim()).filter(Boolean))];
-      if (!selectedActions.length || !selectedResources.length) { message(t('Choose at least one action and resource.', '请至少选择一项操作并填写资源。'), 'error'); return; }
-      void mutateSpace(spacePath('/permissions'), { method: 'POST', body: { userId: person.input.value, appId: app.input.value, resources: selectedResources, actions: selectedActions } }, t('Resource permission granted.', '资源权限已授予。'));
-    }); permissionSection.append(form);
-  }
-  panel.append(permissionSection);
+  if (!detail) content.append(el('p', 'empty', t('No spaces yet.', '暂无空间。')));
 }
-async function render() {
+function renderSpaceApp({ space, apps, members, permissions }) {
+  const app = apps.find(app => app.id === selectedAppId), owner = space.ownerId === session.user.id;
+  const context = el('div', 'space-app-context'); context.append(spaceLink(t('Back to Spaces', '返回空间'), null, 'link-button space-back'), el('p', 'meta', spaceLabel(space))); content.append(context);
+  if (!app) { content.append(el('p', 'empty', t('This app is no longer installed. Return to Spaces to choose another app.', '此应用已不再安装，请返回空间选择其他应用。'))); return; }
+  document.querySelector('#heading').textContent = app.name || app.id;
+  const enrollment = el('section', 'editor'); enrollment.dataset.app = app.id;
+  enrollment.append(el('h2', '', t('App enrollment', '应用启用状态')));
+  const row = el('div', 'account-setting'), description = el('div');
+  description.append(el('strong', '', app.name || app.id), el('span', 'meta', app.enabled ? t('Enabled', '已启用') : t('Disabled', '未启用'))); row.append(description);
+  if (owner && app.enrollmentAllowed !== false) {
+    const change = () => void mutateSpace(spacePath(`/apps/${encodeURIComponent(app.id)}`), { method: 'PUT', body: { enabled: !app.enabled } }, app.enabled ? t('App disabled for this space.', '已停用此空间的应用。') : app.supportsBusinessActions ? t('App enabled. Grant resource permissions as needed.', '应用已启用，请按需授予资源权限。') : t('App enabled. Space members can open its web entry.', '应用已启用，空间成员可打开网页入口。'));
+    row.append(button(app.enabled ? t('Disable', '停用') : t('Enable', '启用'), app.enabled ? 'danger-button' : 'quiet-button', () => app.enabled ? confirmAction(row, t('Disable this app for the space? Its current access and delegations will stop.', '停用此空间的应用？当前访问和委托将停止。'), change) : change()));
+  }
+  enrollment.append(row);
+  let note = app.supportsBusinessActions ? t('Agent business actions supported. Enrollment and resource permissions are separate; grant only the required actions below.', '支持智能体业务操作。启用应用与资源授权分开进行，请在下方仅授予所需操作。') : t('Web entry only. Enabling this app lets space members open it; it grants no agent business actions.', '仅网页入口。启用后空间成员可打开此应用，不授予智能体业务操作。');
+  if (app.enrollmentAllowed === false) note = app.entryPolicy === 'document-owner' ? t('Web entry only. This app is restricted to its configured document owner; space enrollment cannot grant entry.', '仅网页入口。此应用仅限配置的文档所有者，空间启用不能授予入口。') : app.entryPolicy === 'platform-admin' ? t('Web entry only. This app requires a platform administrator; space enrollment cannot grant entry.', '仅网页入口。此应用需要平台管理员身份，空间启用不能授予入口。') : t('Agent business actions are declared, but this installation has no configured business adapter. Enrollment is unavailable.', '应用声明支持智能体业务操作，但当前安装尚未配置业务适配，暂不能启用。');
+  enrollment.append(el('p', 'section-note', note)); content.append(enrollment);
+  if (!app.supportsBusinessActions) return;
+  const permissionSection = el('section', 'editor'); permissionSection.append(el('h2', '', t('Resource permissions', '资源权限')));
+  const scopedPermissions = permissions.filter(permission => permission.appId === app.id), permissionList = el('ul', 'grant-list');
+  for (const permission of scopedPermissions) {
+    const memberName = members.find(member => member.userId === permission.userId)?.username || permission.userId;
+    const item = el('li', 'grant-row'), summary = el('div', 'control-summary'), controls = controlRow(summary); item.append(controls); item.dataset.permission = permission.id;
+    summary.append(el('strong', '', memberName), el('span', 'meta', permission.actions.map(action => actionNames[action] || action).join(', ')), el('span', 'meta', permission.resources.includes('*') ? t('All resources in this app and space', '此应用在本空间内的所有资源') : t('Resources: {0}', '资源：{0}', permission.resources.join(', '))));
+    if (owner) controls.append(button(t('Revoke permission', '撤销权限'), 'danger-button', () => confirmAction(item, t('Revoke this resource permission?', '撤销此资源权限？'), () => void mutateSpace(spacePath(`/permissions/${encodeURIComponent(permission.id)}`), { method: 'DELETE' }, t('Permission revoked.', '权限已撤销。')))));
+    permissionList.append(item);
+  }
+  permissionSection.append(scopedPermissions.length ? permissionList : el('p', 'empty', t('No resource permissions granted.', '尚未授予资源权限。'))); content.append(permissionSection);
+  if (!owner || !app.enabled || app.businessAvailable === false) return;
+  const grantSection = el('section', 'editor'); grantSection.append(el('h2', '', t('Grant permission', '授予权限')));
+  const form = el('form', 'form-panel'), person = selectField(t('Member', '成员'), 'userId', members.map(member => ({ value: member.userId, label: member.username || member.userId })));
+  const resources = field(t('Resource IDs (comma-separated, or * for all)', '资源 ID（逗号分隔，* 表示全部）'), 'resources'); resources.input.required = true; resources.input.maxLength = 8000;
+  const actions = el('fieldset', 'access-group'); actions.append(el('legend', '', t('Allowed actions', '允许的操作'))); const checks = el('div', 'checkbox-grid'); actions.append(checks);
+  for (const action of app.actions) checks.append(check(actionNames[action] || action, action, false).root);
+  const grant = el('button', 'primary', t('Grant resource permission', '授予资源权限')); grant.type = 'submit';
+  form.append(person.root, actions, controlRow(resources.root, grant));
+  form.addEventListener('submit', event => {
+    event.preventDefault(); const selectedActions = [...checks.querySelectorAll('input:checked')].map(input => input.name), selectedResources = [...new Set(resources.input.value.split(',').map(value => value.trim()).filter(Boolean))];
+    if (!selectedActions.length || !selectedResources.length) { message(t('Choose at least one action and resource.', '请至少选择一项操作并填写资源。'), 'error'); return; }
+    void mutateSpace(spacePath('/permissions'), { method: 'POST', body: { userId: person.input.value, appId: app.id, resources: selectedResources, actions: selectedActions } }, t('Resource permission granted.', '资源权限已授予。'));
+  });
+  grantSection.append(form); content.append(grantSection);
+}
+async function render({ preserve = writing && content.childElementCount > 0 } = {}) {
+  const position = preserve ? { x: scrollX, y: scrollY } : null;
+  try { await renderView(preserve); }
+  finally { if (position && !ended) scrollTo(position.x, position.y); }
+}
+async function renderView(preserve) {
   if (ended || !session) return;
   if (!session.platformAdmin && !['general', 'spaces', 'access', 'grants'].includes(view)) view = 'general';
   overview?.clear(); dataController?.destroy(); dataController = null;
@@ -375,8 +437,8 @@ async function render() {
   document.querySelector('#refresh').hidden = view === 'overview' || view === 'general';
   document.querySelector('#general-view').hidden = view !== 'general';
   content.hidden = view === 'overview' || view === 'general';
-  const current = ++epoch; content.replaceChildren(); content.setAttribute('aria-busy', 'true');
-  document.querySelector('#heading').textContent = titles[view]; document.querySelector('#create-user').hidden = view !== 'users' || ended || !session.platformAdmin;
+  const current = ++epoch; if (!preserve) content.replaceChildren(); content.setAttribute('aria-busy', 'true');
+  if (!preserve || view !== 'spaces' || !selectedAppId) document.querySelector('#heading').textContent = titles[view]; document.querySelector('#heading').tabIndex = -1; document.querySelector('#create-user').hidden = view !== 'users' || ended || !session.platformAdmin;
   for (const node of document.querySelectorAll('[data-view]')) { if (node.dataset.view === view) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current'); }
   if (view === 'general') { content.setAttribute('aria-busy', 'false'); return; }
   if (view === 'overview') {
@@ -386,21 +448,21 @@ async function render() {
     return;
   }
   if (view === 'spaces') {
-    try { await renderSpaces(current); }
+    try { await renderSpaces(current, preserve); }
     catch (error) { if (current === epoch && !ended) { content.querySelector('.loading')?.remove(); report(error); } }
     finally { if (current === epoch) content.setAttribute('aria-busy', 'false'); }
     return;
   }
   if (!session.platformAdmin) {
     if (view === 'access') { renderOwnAccess(); content.setAttribute('aria-busy', 'false'); return; }
-    content.append(el('p', 'loading', t("Loading…", "正在读取…")));
+    if (!preserve) content.append(el('p', 'loading', t("Loading…", "正在读取…")));
     try { const value = await api(`${accountBase}/grants?limit=50`); if (ended || current !== epoch || session.platformAdmin) return; content.replaceChildren(); renderGrants(session.user, value, true); }
     catch (error) { if (current === epoch && !ended) { content.querySelector('.loading')?.remove(); report(error); } }
     finally { if (current === epoch) content.setAttribute('aria-busy', 'false'); }
     return;
   }
   if (view === 'data') {
-    content.append(el('p', 'loading', t("Loading…", "正在读取…")));
+    if (!preserve) content.append(el('p', 'loading', t("Loading…", "正在读取…")));
     try {
       const [module, value] = await Promise.all([ensureData(), api('/api/business/console/data')]);
       if (ended || current !== epoch || !session?.platformAdmin || view !== 'data') return;
@@ -410,7 +472,7 @@ async function render() {
     return;
   }
   if (view === 'mcp') {
-    content.append(el('p', 'loading', t("Loading…", "正在读取…")));
+    if (!preserve) content.append(el('p', 'loading', t("Loading…", "正在读取…")));
     try {
       const [module, value] = await Promise.all([ensureMcp(), api('/mcp')]);
       if (ended || current !== epoch || !session?.platformAdmin || view !== 'mcp') return;
@@ -423,7 +485,7 @@ async function render() {
   if (!selected()) selectedId = users[0]?.id || null;
   const user = selected();
   if (!user) { content.append(el('p', 'empty', t("Create a user first.", "请先新增用户。"))); content.setAttribute('aria-busy', 'false'); return; }
-  content.append(picker(), el('p', 'loading', t("Loading…", "正在读取…")));
+  if (!preserve) content.append(picker(), el('p', 'loading', t("Loading…", "正在读取…")));
   try {
     const value = await api(userPath(user, view === 'access' ? '/web-access' : '/grants?limit=50'));
     if (ended || current !== epoch || !session.platformAdmin) return;
@@ -436,7 +498,7 @@ async function boot() {
   const loading = ++bootRevision; booting = true;
   for (const node of document.querySelectorAll('#navigation button, #create-user, #refresh')) node.disabled = true;
   overview?.clear();
-  let current = ++epoch; content.replaceChildren(); content.setAttribute('aria-busy', 'true'); message(t("Loading…", "正在读取…"));
+  let current = ++epoch; if (!session) content.replaceChildren(); content.setAttribute('aria-busy', 'true'); if (!content.childElementCount && !notice.classList.contains('error')) message(t("Loading…", "正在读取…"));
   try {
     const metadata = await api(`${accountBase}/session`); if (ended || current !== epoch) return;
     if (!setSession(metadata)) return; current = epoch;
@@ -446,7 +508,7 @@ async function boot() {
       const result = await api('/users?limit=50'); if (ended || current !== epoch) return;
       users = result.users; nextCursor = result.nextCursor; usersLoaded = true; if (!selected()) selectedId = null;
     }
-    message(); await render();
+    if (!notice.classList.contains('error')) message(); await render({ preserve: content.childElementCount > 0 });
   } catch (error) { if ([401, 403].includes(error.status)) terminal(error.status); else report(error); if (!ended) content.setAttribute('aria-busy', 'false'); }
   finally {
     if (loading === bootRevision) {
@@ -455,9 +517,16 @@ async function boot() {
     }
   }
 }
-for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => { if (booting || writing || ended || !session || ['overview', 'users', 'mcp', 'data'].includes(node.dataset.view) && !session.platformAdmin) return; view = node.dataset.view; createOpen = false; message(); if (session.platformAdmin && ['users', 'access', 'grants'].includes(view) && !usersLoaded) void boot(); else void render(); });
+for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => { if (booting || writing || ended || !session || ['overview', 'users', 'mcp', 'data'].includes(node.dataset.view) && !session.platformAdmin) return; view = node.dataset.view; createOpen = false; selectedAppId = null; history.pushState(null, '', `/admin/?view=${view}`); if (session.platformAdmin && ['users', 'access', 'grants'].includes(view) && !usersLoaded) void boot(); else void render(); });
 document.querySelector('#create-user').addEventListener('click', () => { if (booting || writing || ended || !session?.platformAdmin) return; createOpen = !createOpen; renderUsers(); content.querySelector('input')?.focus(); });
-document.querySelector('#refresh').addEventListener('click', () => void boot());
+document.querySelector('#refresh').addEventListener('click', () => { message(); void boot(); });
+addEventListener('popstate', () => {
+  if (writing || ended || !session) return;
+  const route = new URLSearchParams(location.search);
+  view = Object.hasOwn(titles, route.get('view')) ? route.get('view') : 'general';
+  selectedSpaceId = route.get('space'); selectedAppId = route.get('app'); createOpen = false;
+  if (session.platformAdmin && ['users', 'access', 'grants'].includes(view) && !usersLoaded) void boot(); else void render();
+});
 content.addEventListener('input', event => {
   if (event.target.form) event.target.form.dataset.edited = 'true';
 });
