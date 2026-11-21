@@ -21,7 +21,7 @@ export function createAppJobAuthorizationHandler({auth,config,registry}) {
     if(!job||Object.keys(job).some(key=>!['spaceId','resourceId','userId','clientId','grantId','actions','expiresAt','firstPartyNative'].includes(key))||job.firstPartyNative!==undefined&&job.firstPartyNative!==true||!['spaceId','resourceId','userId','clientId','grantId'].every(key=>typeof job[key]==='string'&&identifier.test(job[key]))||!Array.isArray(job.actions)||!job.actions.length||job.actions.length>Math.min(endpoint.maximumActions||8,32)||job.actions.some(action=>typeof action!=='string'||!identifier.test(action))||!Number.isSafeInteger(job.expiresAt))throw businessError(400,'INVALID_INPUT');
     let authorized=false;
     try{
-      if(!settings.spaces.includes(job.spaceId)||job.expiresAt<=now)throw businessError(403,'FORBIDDEN');
+      if(!auth.appSpaceEnabled(appId,job.spaceId,config.apps)||job.expiresAt<=now)throw businessError(403,'FORBIDDEN');
       const native=job.firstPartyNative===true&&job.clientId==='praxis-browser'&&job.grantId.startsWith('first-party-');
       const grant=native?null:auth.getGrant(job.grantId);
       if(grant&&(grant.userId!==job.userId||grant.clientId!==job.clientId||grant.expiresAt<job.expiresAt))throw businessError(403,'FORBIDDEN');

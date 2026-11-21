@@ -36,10 +36,10 @@ function fixture(t) {
   };
 }
 
-async function httpFixture(t, { core = false, gateway = false } = {}) {
+async function httpFixture(t, { core = false, gateway = false, apps = {} } = {}) {
   const f = fixture(t);
-  let handler = createAuthHandler({ store: f.store });
-  const config = { issuer, database: f.file, eventsDatabase: join(dirname(f.file), 'events.db'), observationsFile: join(dirname(f.file), 'observations.db'), allowedHosts: [], apps: {}, ...(gateway ? { webGateway: { enabled: true } } : {}) };
+  let handler = createAuthHandler({ store: f.store, apps, webGateway: { enabled: gateway } });
+  const config = { issuer, database: f.file, eventsDatabase: join(dirname(f.file), 'events.db'), observationsFile: join(dirname(f.file), 'observations.db'), allowedHosts: [], apps, ...(gateway ? { webGateway: { enabled: true } } : {}) };
   const server = core ? (await import('../src/business/server.mjs')).createBusinessServer({ config, auth: f.store, pollMs: 60000 }) : createServer(async (request, response) => {
     if (!(await handler(request, response))) { response.writeHead(404); response.end(); }
   });
@@ -476,4 +476,127 @@ test('global registration limit bounds distinct transport peers and malformed bo
   assert.equal(rejected.status, 429);
   assert.equal(rejected.headers.get('retry-after'), '3600');
   assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_users').get().n, before);
+});
+
+// All lifecycle setup below goes through the public product API. Installation
+// and identity-store restart are maintenance fixtures, never live app data.
+test('self-service spaces enable public member PKCE consent and exactly scoped MCP discovery with durable revocation', async t => {
+  const apps = Object.fromEntries(['reminder', 'tingproof'].map(id => [id, { spaces: [], url: 'http://127.0.0.1:1/api/business' }]));
+  const f = await httpFixture(t, { core: true, gateway: true, apps });
+  async function register(username) {
+    const response = await f.json('/auth/register', { username, password });
+    assert.equal(response.status, 201); const { user } = await response.json();
+    return { ...await f.login(username), user };
+  }
+  const owner = await register('synthetic-space-owner'), member = await register('synthetic-space-member'), outsider = await register('synthetic-space-outsider');
+  const prefix = '/api/business/account/spaces';
+  const call = (actor, path, data, method = 'POST') => f.json(prefix + path, data, { method, headers: { Cookie: actor.cookie, 'X-CSRF-Token': actor.body.csrfToken } });
+  const read = (actor, path = '') => f.request(prefix + path, { headers: { Cookie: actor.cookie } });
+  const created = await call(owner, '', { type: 'family' }); assert.equal(created.status, 201);
+  const space = await created.json(), path = `/${space.id}`;
+  assert.deepEqual(f.store.availableRules(member.user.id), []);
+  assert.equal(f.store.isPlatformAdmin(owner.user.id), false);
+  assert.equal(f.store.getWebEntryPolicy(owner.user.id), null);
+  const details = await (await read(owner, path)).json();
+  assert.deepEqual(details.apps.map(app => app.enabled), [false, false]);
+  assert.equal((await call(owner, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 200);
+  assert.deepEqual(f.store.userPermissions(owner.user.id, space.id, 'reminder', 'read'), [], 'owner enrollment is not a resource grant');
+  assert.equal((await call(owner, path + '/members', { username: member.user.username, role: 'member' })).status, 201);
+  assert.deepEqual(f.store.availableRules(member.user.id), [], 'membership alone grants nothing');
+  const granted = { userId: member.user.id, appId: 'reminder', actions: ['read'], resources: ['synthetic-space-record'] };
+  assert.equal((await call(owner, path + '/permissions', granted)).status, 201);
+  assert.deepEqual(f.store.getWebAccess(member.cookie.split('=')[1]).apps, ['reminder']);
+  assert.deepEqual(f.store.getWebAccess(owner.cookie.split('=')[1]).apps, []);
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+  const { BUSINESS_TOOLS, MCP_CONTROL_TOOLS } = await import('../src/business/mcp.mjs');
+  async function consent() {
+    const verifier = 'synthetic-space-member-pkce-'.repeat(3);
+    const oauthPath = '/oauth/authorize?' + new URLSearchParams({ client_id: 'agent-a', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read tingproof:read', state: 'space-lifecycle' });
+    const html = await (await f.request(oauthPath, { headers: { Cookie: member.cookie } })).text();
+    assert.match(html, /Authorize external agent/); assert.doesNotMatch(html, /TingProof/);
+    const snapshot = html.match(/name="consent" value="([^"]+)"/)[1];
+    const allowed = await f.json(oauthPath, { csrf: member.body.csrfToken, consent: snapshot, rule_0: '1' }, { headers: { Cookie: member.cookie } });
+    assert.equal(allowed.status, 303);
+    const destination = new URL(allowed.headers.get('location'));
+    assert.equal(destination.searchParams.get('state'), 'space-lifecycle');
+    const exchange = { grant_type: 'authorization_code', code: destination.searchParams.get('code'), client_id: 'agent-a', redirect_uri: 'https://client.example/callback', code_verifier: verifier, resource: `${issuer}/mcp` };
+    assert.equal((await f.json('/oauth/token', { ...exchange, code_verifier: 'wrong'.repeat(12) })).status, 400);
+    const token = await (await f.json('/oauth/token', exchange)).json();
+    assert.ok(token.access_token);
+    const client = new Client({ name: 'synthetic-space-client', version: '1.0.0' });
+    t.after(() => client.close());
+    await client.connect(new StreamableHTTPClientTransport(new URL('/mcp', f.base), { fetch: (url, options) => f.request(new URL(url).pathname, options), requestInit: { headers: { Authorization: `Bearer ${token.access_token}` } } }));
+    const actual = (await client.listTools()).tools.map(tool => tool.name).sort();
+    const expected = [...MCP_CONTROL_TOOLS, ...BUSINESS_TOOLS.filter(tool => tool.appId === 'reminder' && tool.action === 'read' && !(tool.requiredActions || []).some(action => action !== 'read'))].map(tool => tool.name).sort();
+    assert.deepEqual(actual, expected); assert.ok(actual.length > MCP_CONTROL_TOOLS.length);
+    return { token, oauthPath };
+  }
+  const first = await consent();
+  // Second connection proves runtime policy survives SQLite restart; no running
+  // server store or business database is replaced or modified by this check.
+  const restored = new AuthStore({ file: f.file, issuer });
+  try { restored.configureWebAccessBoundary({ enabled: true, apps }); assert.equal(restored.appSpaceEnabled('reminder', space.id), true); assert.deepEqual(restored.userPermissions(member.user.id, space.id, 'reminder', 'read'), granted.resources); }
+  finally { restored.close(); }
+  assert.equal((await call(owner, path + '/apps/reminder', { enabled: false }, 'PUT')).status, 200);
+  assert.match(await (await f.request(first.oauthPath, { headers: { Cookie: member.cookie } })).text(), /No actions available/);
+  assert.throws(() => f.store.authenticate(first.token.access_token), { status: 401 });
+  assert.equal((await f.request('/mcp', { method: 'POST', headers: { Authorization: `Bearer ${first.token.access_token}`, 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
+  assert.equal((await call(owner, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 200);
+  assert.deepEqual(f.store.availableRules(member.user.id), [], 'reenrollment cannot revive permissions or delegation');
+  assert.equal((await call(owner, path + '/permissions', granted)).status, 201);
+  const second = await consent();
+  assert.equal((await call(owner, path + `/members/${member.user.id}`, undefined, 'DELETE')).status, 200);
+  assert.throws(() => f.store.authenticate(second.token.access_token), { status: 401 });
+  assert.match(await (await f.request(second.oauthPath, { headers: { Cookie: member.cookie } })).text(), /No actions available/);
+  assert.equal((await call(owner, path + '/members', { username: member.user.username, role: 'member' })).status, 201);
+  assert.deepEqual(f.store.availableRules(member.user.id), [], 'rejoining cannot revive permissions');
+  assert.equal((await read(outsider, path)).status, 404);
+  assert.equal((await f.request('/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
+});
+
+test('public space lifecycle refuses personal membership, elevation, cross-space edits and non-native or forged requests', async t => {
+  const apps = { reminder: { spaces: [] } };
+  const f = await httpFixture(t, { apps, gateway: true });
+  const owner = await f.login('alice'), member = await f.login('bob');
+  const prefix = '/api/business/account/spaces';
+  const call = (actor, path, input, method = 'POST', extra = {}) => f.json(prefix + path, input, { method, headers: { Cookie: actor.cookie, 'X-CSRF-Token': actor.body.csrfToken, ...extra } });
+  assert.equal((await call(owner, '', { type: 'family', ownerId: 'bob' })).status, 400);
+  assert.equal((await call(owner, '', { type: 'platform' })).status, 400);
+  assert.equal((await call(owner, '', { type: 'family' }, 'POST', { 'X-CSRF-Token': 'forged' })).status, 403);
+  assert.equal((await call(owner, '', { type: 'family' }, 'POST', { Origin: 'https://attacker.example' })).status, 403);
+  assert.equal((await f.json(prefix, { type: 'personal' })).status, 401);
+  assert.equal((await call(owner, '', { type: 'family' }, 'POST', { Authorization: `Bearer pxa_${'a'.repeat(43)}` })).status, 401);
+  const space = await (await call(owner, '', { type: 'personal' })).json(), path = `/${space.id}`;
+  assert.equal((await call(owner, path + '/members', { username: 'bob', role: 'member' })).status, 403);
+  assert.equal((await call(owner, path + '/members', { username: 'bob', role: 'admin' })).status, 400);
+  for (const appId of ['unknown', '__proto__', 'tingproof', 'spaces']) assert.equal((await call(owner, path + `/apps/${appId}`, { enabled: true }, 'PUT')).status, 403);
+  assert.equal((await call(owner, path + '/apps/reminder', { enabled: 'true' }, 'PUT')).status, 403);
+  assert.equal((await call(member, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 404);
+  assert.equal((await call(owner, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 200);
+  assert.equal((await call(owner, path + '/permissions', { userId: 'bob', appId: 'reminder', resources: ['*'], actions: ['read'] })).status, 403);
+  assert.equal((await call(owner, path + '/permissions', { userId: 'alice', appId: 'spaces', resources: ['*'], actions: ['manage_members'] })).status, 403);
+  assert.equal((await call(owner, path + '/permissions', { userId: 'alice', appId: 'reminder', resources: ['*'], actions: ['platform_admin'] })).status, 400);
+  assert.equal(f.store.isPlatformAdmin('alice'), false);
+  const family = await (await call(owner, '', { type: 'family' })).json();
+  assert.equal((await call(owner, `/${family.id}/members`, { username: 'bob', role: 'member' })).status, 201);
+  assert.equal((await call(member, `/${family.id}/apps/reminder`, { enabled: true }, 'PUT')).status, 403);
+  assert.equal((await call(member, `/${family.id}/permissions`, { userId: 'bob', appId: 'reminder', resources: ['*'], actions: ['read'] })).status, 403);
+  assert.equal((await call(owner, path + '/members/alice', undefined, 'DELETE')).status, 409);
+});
+
+test('explicit self-service owner permissions constrain dispatch and subject expiry', t => {
+  const f = fixture(t), apps = { reminder: { spaces: [] } };
+  f.store.configureWebAccessBoundary({ enabled: true, apps });
+  const space = f.store.createSelfServiceSpace({ type: 'personal', ownerId: 'alice' });
+  f.store.setSpaceAppEnrollment({ spaceId: space.id, appId: 'reminder', enabled: true });
+  const expiresAt = f.clock.now + 5000;
+  f.store.grantResource({ userId: 'alice', spaceId: space.id, appId: 'reminder', resources: ['synthetic-expiring'], actions: ['read'], expiresAt });
+  const login = f.store.login({ username: 'alice', password });
+  const query = { appId: 'reminder', spaceId: space.id, resourceId: 'synthetic-expiring', action: 'read' };
+  assert.equal(f.store.authorize(login.sessionToken, query).expiresAt, expiresAt);
+  assert.equal(f.store.subjectReadScope('alice', query).expiresAt, expiresAt);
+  f.clock.now = expiresAt;
+  assert.throws(() => f.store.authorize(login.sessionToken, query), { status: 403 });
+  assert.equal(f.store.subjectReadScope('alice', query), null);
 });

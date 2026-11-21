@@ -12,12 +12,12 @@ The MCP resource identifier is `${issuer}/mcp`. The proxy routes sign-in and pro
 
 ## 2. Effective authority
 
-Each request takes the intersection of current user permissions, the client's current delegation, and the requested space, resource, action and expiration. In gateway mode intersect these with the administrator-approved apps and configured adapter/space coverage. App withdrawal, expiry or a narrower adapter limit applies to existing grants, authorization codes and refresh operations. An app entry alone gives no business-resource grant.
+Each request takes the intersection of current user permissions, the client's current delegation, and the requested space, resource, action and expiration. In gateway mode also intersect with the installed reviewed catalog, implemented adapter operations and current space app enrollment. Spaces without an explicit runtime enrollment policy retain the administrator-approved per-user entries and static app/space coverage. An explicit owner-controlled enrollment policy replaces that space's static coverage and does not require a separate per-user entry policy; resource/action authorization remains mandatory. App withdrawal, expiry or a narrower adapter limit applies to existing grants, authorization codes and refresh operations. An app entry alone gives no business-resource grant.
 
-- Personal, family and company spaces are separate. Family membership has no implied access to a member's personal records.
+- Personal, family and company (team) spaces are separate. Family membership has no implied access to a member's personal records.
 - Owners and admins can delegate permitted operations inside their space. Platform-code and host permissions are separate.
 - Members need resource permission. A guest can be granted particular resources without membership. Its scope cannot be a space-wide wildcard.
-- A personal space may explicitly share selected resources; group membership does not share it wholesale.
+- A personal space admits no other members. It may explicitly share selected resources with bounded guest grants; group membership does not share it wholesale.
 - Removing a member removes membership-dependent permissions and that space's rules from existing delegations. Rejoining does not revive them. Other spaces in the same grant retain their rules.
 - On later requests, event deliveries and background operations, recheck withdrawal, account disablement and expiration.
 - General creation requires a matching create rule. Possession of a grant to an existing item does not imply permission to create unrelated items. Where a separately implemented bounded create operation exists, its contract limits the new resource explicitly.
@@ -74,9 +74,30 @@ All paths below begin with `/api/business/management/spaces/:spaceId`.
 
 Membership management, sharing and delegated management are individually authorized. Each requires both the role and its delegation. These interfaces cannot create platform administrators or issue tokens for other users. The user establishes external delegation via their own sign-in and explicit consent. Cookie writes keep same-origin and CSRF checks. Audit management changes with redacted metadata.
 
+### Public self-service space lifecycle
+
+Settings → Spaces and the workbench space entry are available to every signed-in native user. Creation assigns ownership from the session, accepts a personal/family/team type (`company` is the stored team type), and establishes no resource permission or delegation. The owner alone edits enrollment, members and permissions through these account endpoints. Members can read their own space details without receiving unrelated accounts or permissions. No endpoint grants platform administration or issues credentials for another user.
+
+Paths below are relative to `/api/business/account/spaces`:
+
+| Request | Body or result |
+| --- | --- |
+| `GET /` | Own spaces and the deployment's reviewed installed app catalog: `{spaces,catalog}`. |
+| `POST /` | `{type}`; create a space owned by the current native session. |
+| `GET /:spaceId` | Scoped `{space,apps,members,permissions}`; members receive only their permitted details. |
+| `PUT /:spaceId/apps/:appId` | `{enabled}`; owner enables/disables a catalog app for this space. |
+| `POST /:spaceId/members` | `{username,role:'member'}`; owner adds an existing account. Personal spaces reject other members. |
+| `DELETE /:spaceId/members/:userId` | Owner removes membership and its dependent permissions/delegation slice, preserving the owner. |
+| `POST /:spaceId/permissions` | `{userId,appId,resources,actions,expiresAt?}`; explicit grant within this space and the installed operation ceiling. |
+| `DELETE /:spaceId/permissions/:permissionId` | Owner revokes a permission belonging to this space. |
+
+These first-party endpoints require the native browser cookie, reject Authorization headers and require same-origin CSRF on writes. Unknown fields, foreign-space targets and elevation attempts are refused. Existing delegated space-management endpoints above retain their separate role/delegation contract.
+
+Enrollment is durable identity-store policy, initialized with no apps for a newly created space. It can select only installed reviewed apps; enrollment is neither backend installation nor a resource grant. A space with no explicit runtime policy continues to use static app space lists. Once an owner sets an explicit policy, web authorization, bridge execution/discovery, app HTTP and app jobs consult that same current boundary. Self-service owners retain space-management authority even with no enrolled apps, but app resources require explicit grants, including for the owner. Existing administrator-managed space role behavior remains compatible. Disabling an app deletes its resource grants and stored delegation rules for this space and withdraws subsequent consent, discovery and access with existing credentials; re-enabling never revives them. Membership removal does not revive old permissions if the account rejoins. Other spaces remain unchanged.
+
 ## 5. Workbench sign-in and delegation
 
-A website login starts an eight-hour native session. The browser uses the person's current app and resource permissions. `authorizationMode` is `native` for ordinary users and `administrator` for platform administrators. The account menu contains account information and sign-out. All signed-in users can open Settings at `/admin/`. Ordinary accounts see their own access and agent delegations. Administrators also see global status, user management and entry policies.
+A website login starts an eight-hour native session. The browser uses the person's current app and resource permissions. `authorizationMode` is `native` for ordinary users and `administrator` for platform administrators. The account menu contains account information and sign-out. All signed-in users can open Settings at `/admin/`. Ordinary accounts see their own access and agent delegations and can create or manage their own business spaces. Administrators also see global status, user management and entry policies.
 
 An external client starts the OAuth grant. Consent identifies the client and offers only currently permitted, implemented operations. The existence of a grant does not establish that the client connected or used a tool. In standalone mode, `/auth/delegate` still offers explicit first-party delegation when applicable. An empty capability set yields an empty state rather than a submittable empty scope.
 
@@ -84,9 +105,9 @@ An external client starts the OAuth grant. Consent identifies the client and off
 
 ### Website entry and single sign-on
 
-With `webGateway.enabled`, the workbench and managed apps use the same Praxis website identity. Sign-in, approved app entries, business permission and external delegation are different checks. Being a space owner, family administrator or Bearer client does not grant every website entry.
+With `webGateway.enabled`, the workbench and managed apps use the same Praxis website identity. Sign-in, effective app entries, business permission and external delegation are different checks. Effective entries include resource-authorized apps in explicitly enrolled spaces, independently of administrator per-user entry policy. Being a space owner, family administrator or Bearer client does not grant every website entry.
 
-`AuthStore.setWebAccess({userId,apps,prds,expiresAt,workbench})` stores administrator-controlled metadata in `auth_web_access`. Select app IDs from the supported allowlist in the current build. `prds` is Boolean. Since v0.1.24 all valid accounts have a workbench; the legacy Boolean `workbench` is accepted for compatibility. `expiresAt` is a future Unix millisecond timestamp or null for until revoked. The native browser session still expires after eight hours. An empty entry policy leaves the workbench available with no apps or PRDs. It revokes future access but cannot retrieve data already downloaded.
+`AuthStore.setWebAccess({userId,apps,prds,expiresAt,workbench})` stores administrator-controlled metadata in `auth_web_access`. Select app IDs from the supported allowlist in the current build. `prds` is Boolean. Since v0.1.24 all valid accounts have a workbench; the legacy Boolean `workbench` is accepted for compatibility. `expiresAt` is a future Unix millisecond timestamp or null for until revoked. The native browser session still expires after eight hours. An empty administrator entry policy leaves the workbench available, with any resource-authorized apps from explicitly enrolled spaces; it grants no PRD entry. It revokes future access but cannot retrieve data already downloaded.
 
 ```sh
 npm run business:admin -- web-access \
@@ -96,13 +117,13 @@ npm run business:admin -- web-access \
 
 Use a mode-600 regular spec file, for example `{"userId":"existing-user-id","apps":["tingproof"],"prds":false,"expiresAt":null}`. This maintenance interface changes entry policy without reading app data or creating a business delegation. Use the website for routine administration. A TingProof-only workbench establishes the app boundary. Separate checks control project and task access.
 
-`GET /api/business/web-access` is available when the gateway feature is enabled. It requires an active native `praxis-browser` session, rejects Authorization headers and does not fall back from Bearer to cookie. The response includes `username`, `apps`, `workbench:true`, `prds`, `expiresAt`, `permissionsExpireAt`, `csrfToken`, `platformAdmin` and `canViewPlatform`. Keep identity expiration and entry-permission expiration distinct. Missing/expired policy gives an empty workbench. Corrupt policy fails closed with 503. `canViewPlatform` reflects the explicit platform administrator role. A 401 includes the canonical `loginUrl`. The administrator response also includes the native `userId` for the configured document-owner check. The response omits business records and access tokens. The gateway rechecks access and closes app HTTP/WebSocket connections at permission expiry.
+`GET /api/business/web-access` is available when the gateway feature is enabled. It requires an active native `praxis-browser` session, rejects Authorization headers and does not fall back from Bearer to cookie. The response includes `username`, `apps`, `workbench:true`, `prds`, `expiresAt`, `permissionsExpireAt`, `csrfToken`, `platformAdmin` and `canViewPlatform`. Keep identity expiration and entry-permission expiration distinct. Missing/expired administrator policy supplies no legacy entries or PRDs; currently authorized enrolled-space entries remain available. Corrupt policy fails closed with 503. `canViewPlatform` reflects the explicit platform administrator role. A 401 includes the canonical `loginUrl`. The administrator response also includes the native `userId` for the configured document-owner check. The response omits business records and access tokens. The gateway rechecks access and closes app HTTP/WebSocket connections at permission expiry.
 
 ### Management APIs
 
-The first-party administrator endpoints at `/api/business/admin/*` require a native administrator session and reject Authorization headers. Writes additionally require same-origin CSRF. Ordinary users can use `/api/business/account/*` for their own session, read-only permissions, delegations and revocation. Identity comes from the session. They receive no other-user picker, global chart data or app access controls.
+The first-party administrator endpoints at `/api/business/admin/*` require a native administrator session and reject Authorization headers. Writes additionally require same-origin CSRF. Ordinary users can use `/api/business/account/*` for their own session, permission summary, delegations and revocation, plus the scoped space lifecycle described above. Identity comes from the session. They receive no global user picker, chart data or installation/administrator entry-policy controls.
 
-Enabled platform administrators receive default entries. The managed gateway restricts Letters and Profiles to the configured document owner with an active administrator session. An attempt to save an ineffective entry policy for an administrator returns 409 `ADMIN_DEFAULT_ACCESS`. Removing the role restores ordinary explicit entry rules. Administrators still use their own existing space/resource/action grants for business operations. External tokens are separate from browser sessions. Standalone session modes can also be `delegated` and `none`.
+Enabled platform administrators receive default entries. The managed gateway restricts Letters and Profiles to the configured document owner with an active administrator session. An attempt to save an ineffective entry policy for an administrator returns 409 `ADMIN_DEFAULT_ACCESS`. Removing the role restores ordinary explicit entry and enrolled-space rules. Administrators still use their own existing space/resource/action grants for business operations. External tokens are separate from browser sessions. Standalone session modes can also be `delegated` and `none`.
 
 Login defaults to the workbench root. A validated `return_to` preserves an app destination, while OAuth preserves its exact registered callback. Legacy `/business`, `/business/` and `/business.html` lead to the same workbench in gateway mode. Focused Reminder and TingProof pages and the space management API remain distinct. Standalone development uses its own business entry.
 
@@ -135,6 +156,7 @@ Public protocol discovery accepts credential-free cross-origin requests. Login, 
 ## 7. Verification and deployment
 
 - `node --test tests/business-auth.test.mjs` covers synthetic permission intersections, guest limits, personal isolation, revocation and restart, credential digests, CSRF, single-use code binding and refresh-token rotation.
+- `node --test tests/app-transport.test.mjs` checks the shared enrollment boundary in execution, discovery, app HTTP and job authorization. The business authorization suite additionally covers self-service creation, member grants, code/PKCE consent, revocation, restart and elevation refusals.
 - The pre-migration authorization suite also checked login rate limiting, space management and cross-process policy leases.
 - The earlier web-access and administration suites exercised entry grants, persistence, withdrawal, cookie/client boundaries and configuration validation. In this checkout run `node --test tests/private-document-access.test.mjs tests/app-launcher.test.mjs` for owner access, revocation during a read and grant-filtered launchers.
 - The historical browser smoke exercised Chromium against a temporary service with isolated credentials. It selected the browser via `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. Check login and return, scope selection, mobile-width consent, code exchange, revocation and cross-space/action rejection.

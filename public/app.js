@@ -57,6 +57,11 @@ function renderGroup(selector, entries) {
 }
 function renderRegistry() {
   const identity = getIdentity();
+  const empty = document.querySelector('#desktop-empty');
+  if (empty && identity) {
+    const hint = document.createElement('span'); hint.textContent = t('No apps yet. Create a space and enable an installed app, then grant resource permissions.', '暂无应用。请创建空间、启用已安装的应用，再授予资源权限。');
+    const link = document.createElement('a'); link.href = '/admin/?view=spaces'; link.textContent = t(' Manage spaces', ' 管理空间'); empty.replaceChildren(hint, link);
+  }
   const apps = (registry || []).filter(app => app.kind === 'app' && app.launcher !== false && (app.entry?.policy ? true : app.adminOnly ? identity?.platformAdmin === true : !identity || identity.apps.includes(app.id)));
   const collections = directoryApps(identity);
   const projects = collections.flatMap(app => collectionSources.get(app.id)?.entries || []);

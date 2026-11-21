@@ -110,7 +110,7 @@ export class BusinessBridge {
     try {
       actor = this.auth.authenticate(token); traceSource = mcpTraceId ? 'mcp' : source || (actor.firstPartyNative ? 'web' : 'http');
       if (!projection && !traceId && (definition.mutation || traceSource !== 'web') && this.events?.beginTrace) traceId = this.events.beginTrace({ requestId, appId: request.appId, operation: request.operation, action, userId: actor.userId, clientId: actor.clientId, grantId: actor.grantId, source: traceSource });
-      if (!this.apps[request.appId]?.spaces?.includes(request.spaceId)) throw businessError(403, 'FORBIDDEN');
+      if (!this.auth.appSpaceEnabled(request.appId, request.spaceId, this.apps)) throw businessError(403, 'FORBIDDEN');
       scope = authorize({ appId: request.appId, spaceId: request.spaceId, action, resourceId: request.resourceId }); authorized = true;
       if (traceId) this.events.linkTrace(traceId, { appId: request.appId, spaceId: request.spaceId, ...(request.resourceId !== undefined && { resourceId: request.resourceId }), operation: request.operation, action });
       traceStep({ stage: 'authorization', status: 'allowed' });
@@ -121,7 +121,7 @@ export class BusinessBridge {
       const sourceQueries = business.sourceAuthorizations?.(request) || [];
       if (!Array.isArray(sourceQueries) || sourceQueries.length > 32) throw businessError(500, 'INVALID_APP_INTEGRATION');
       for (const query of sourceQueries) {
-        if (!object(query) || query.action !== 'read' || !identifier(query.spaceId) || !identifier(query.resourceId) || !this.apps[query.appId]?.spaces?.includes(query.spaceId) || query.operation !== undefined && (this.registry.operations[query.appId]?.[query.operation] !== 'read' || this.registry.operationDefinitions[query.appId][query.operation].mutation)) throw businessError(403, 'FORBIDDEN');
+        if (!object(query) || query.action !== 'read' || !identifier(query.spaceId) || !identifier(query.resourceId) || !this.auth.appSpaceEnabled(query.appId, query.spaceId, this.apps) || query.operation !== undefined && (this.registry.operations[query.appId]?.[query.operation] !== 'read' || this.registry.operationDefinitions[query.appId][query.operation].mutation)) throw businessError(403, 'FORBIDDEN');
         sourceScopes.push({ query, scope: authorize({ appId: query.appId, spaceId: query.spaceId, resourceId: query.resourceId, action: 'read' }) });
       }
       const context = Object.freeze({
@@ -224,7 +224,7 @@ export class BusinessBridge {
   async workbenchItems(token, appId, operation) {
     const empty = { spaces: [], partial: false }, webId = this.registry.webId(appId);
     if (!this.auth.getWebAccess(token).apps.includes(webId)) return empty;
-    const { user } = this.auth.requireNativeSession(token), readableSpaces = (this.apps[appId]?.spaces || []).filter(spaceId => this.auth.userPermissions(user.id, spaceId, appId, 'read').length > 0);
+    const { user } = this.auth.requireNativeSession(token), readableSpaces = this.auth.listSpaces(token).map(space => space.id).filter(spaceId => this.auth.appSpaceEnabled(appId, spaceId, this.apps) && this.auth.userPermissions(user.id, spaceId, appId, 'read').length > 0);
     const results = await Promise.allSettled(readableSpaces.map(spaceId => this.invoke(token, { appId, spaceId, operation })));
     if (!this.auth.getWebAccess(token).apps.includes(webId)) return empty;
     const spaces = []; let partial = false;
@@ -239,7 +239,7 @@ export class BusinessBridge {
   }
   catalog(token) {
     return this.auth.listSpaces(token).map(space => ({ ...space, apps: Object.keys(this.apps).flatMap(appId => {
-      if (!this.apps[appId].spaces?.includes(space.id)) return [];
+      if (!this.auth.appSpaceEnabled(appId, space.id, this.apps)) return [];
       const actions = this.registry.getBusiness(appId).actions.filter(action => { try { this.auth.authorize(token, { appId, spaceId: space.id, action }); return true; } catch { return false; } });
       return actions.length ? [{ id: appId, actions }] : [];
     }) })).filter(space => space.apps.length);

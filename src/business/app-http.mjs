@@ -11,7 +11,7 @@ export function appHttpContext(request,{auth,bridge,config,registry,appId,fetchI
   const token=()=>credentialFromRequest(request);
   const authorize=query=>{
     native();
-    if(query.appId!==undefined&&query.appId!==adapter||!config.apps?.[adapter]?.spaces?.includes(query.spaceId))throw businessError(403,'FORBIDDEN');
+    if(query.appId!==undefined&&query.appId!==adapter||!auth.appSpaceEnabled(adapter,query.spaceId,config.apps))throw businessError(403,'FORBIDDEN');
     return auth.authorize(token(),{...query,appId:adapter},{auditDenied:false});
   };
   return Object.freeze({issuer:auth.issuer,requireNative:native,

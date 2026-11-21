@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.138 · [简体中文](PRD.md)
+Version: 0.1.139 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -52,6 +52,21 @@ The public homepage describes cards as attention management: choose what to focu
 An anonymous visitor can follow **Create an account** from the public homepage or sign-in page to `GET /auth/register`. The English/Simplified Chinese form and `POST /auth/register` (JSON or form encoding) accept only `username`, `password` and an optional validated local `return_to`. Usernames contain 3–64 ASCII letters, numbers, dots, underscores or hyphens, starting with a letter or number; passwords contain 12–1024 characters. Reject invalid/unknown fields, duplicate usernames and cross-origin requests without creating an identity. Return only the new identity and sign-in path for JSON, or redirect the form to sign-in; never return a password, session or OAuth credential from registration.
 
 Persist a basic abuse limit of five registration attempts per transport peer and 100 globally per hour, including invalid attempts. Do not trust caller-supplied forwarding headers; proxied visitors share the peer limit. Return HTTP 429 with `Retry-After` on exhaustion. Registration creates no app-entry policy, membership, space, resource permission or administrator role. After a separate sign-in, preserve the validated OAuth return path. An authorized account may consent to the existing authorization-code + S256 PKCE flow for the protected MCP resource; an account with no matching permissions sees no available actions. Verification uses isolated synthetic identities, including restart persistence, rejected elevation/origin/redirect attempts, rate-limit expiry, bounded consent and MCP token use. Live business-client acceptance remains separate.
+
+## Self-service business spaces and app enrollment
+
+After signing in, any registered user can create a personal, family or team space through the public workbench and Settings flow. The creator becomes its owner; creation grants no app, resource permission, client delegation or platform role. A personal space cannot contain another member. Existing company spaces retain their team meaning and existing administrator-managed spaces keep their configured access unless an owner explicitly changes enrollment.
+
+A space owner can enable or disable apps for that space, selecting only from the deployment's already-installed, reviewed app catalog. Persist the selection as runtime policy in the identity store. An explicit enrollment policy replaces the installation's static space list for that space, while the installed catalog and implemented operation limits remain configuration ceilings. Enrollment cannot install an app, widen its supported operations or authorize an unavailable backend. Enrolled spaces do not also require an administrator-created per-user app-entry policy: app access still requires current space membership or explicit bounded sharing and the relevant resource/action grant. Self-service space creation never auto-grants app data access to owners or new members; existing administrator-managed space role behavior remains compatible. The owner can manage their space even before enabling any app.
+
+Owners add existing accounts through the product member flow and explicitly grant app resources/actions. Members can then consent to only their current implemented permissions through authorization-code + S256 PKCE and discover only the corresponding MCP tools. The same current enrollment boundary governs web authorization, bridge execution and discovery, app HTTP and background jobs. Disabling enrollment deletes that app’s resource grants and stored delegation rules for this space, so re-enabling does not revive old access. Removing a member likewise withdraws membership-dependent permissions and delegation rules. Both changes remove subsequent consent and access, including existing credentials, without affecting other spaces.
+
+| ID | Observable acceptance |
+| --- | --- |
+| BSP01 | A self-registered signed-in user creates a space from the public UI; personal spaces reject other members and all spaces start without implicit app/resource grants. |
+| BSP02 | Only the owner changes durable app enrollment; unknown, uninstalled or unsupported apps/operations and cross-space or platform elevation are rejected. Existing static spaces remain compatible. |
+| BSP03 | An explicitly granted synthetic member completes code/PKCE authorization and MCP discovery exposes exactly the granted app tools without a separate administrator entry policy. |
+| BSP04 | Enrollment and membership revocation remove subsequent consent and tool access consistently across web, execution, discovery, app HTTP and jobs; restart retains policy and revocation. |
 
 ## External agent tools and authorization
 
@@ -267,6 +282,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.136 | 2026-11-20 | Fit the card deck to the page viewport and keep paging controls stationary |
 | v0.1.137 | 2026-11-20 | Merge persistent AI-native campaigns and document version updates for cross-branch integration |
 | v0.1.138 | 2026-11-21 | Add public self-service account registration with bounded abuse protection |
+| v0.1.139 | 2026-11-21 | Enable self-service spaces with owner-controlled app enrollment and consistent authorization |
 
 ### Letters and Profiles
 

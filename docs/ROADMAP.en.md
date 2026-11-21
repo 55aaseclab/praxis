@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.138
+Version: 0.1.139
 
 [简体中文](ROADMAP.md)
 
@@ -18,6 +18,10 @@ Define public-search intent, bilingual content, real product imagery and the try
 ## Public self-service accounts
 
 Deliver public bilingual registration from the homepage and sign-in page, with JSON/form validation, same-origin writes and persistent peer/global rate limits. Keep identity creation separate from app/resource grants and administrator roles. Verify synthetic registration → sign-in → authorization-code/S256 PKCE consent → protected MCP token use, denial cases, restart persistence and both PRD reader languages. Advance the platform patch once with aligned bilingual release records; after source/browser checks and commit, build and deploy the affected web/core pair through the assigned managed blue/green environment. Read back public registration and homepage copy without creating live accounts; the independent business actor verifies its own result separately.
+
+## Self-service business spaces
+
+Define BSP01–BSP04 before implementation. Extend the existing workbench/Settings with signed-in space creation, owner-controlled enrollment from the installed reviewed catalog, member management and explicit resource grants. Persist runtime enrollment while preserving existing static spaces, personal isolation, operation ceilings and least privilege. Use one current boundary for web, bridge execution/discovery, app HTTP and jobs. Verify synthetic public UI → member grant → code/S256 PKCE → scoped MCP discovery, restart, revocation and escalation refusals, then run the platform suite and both PRD reader languages. Commit checked source, build the affected web/core pair and deploy through the authorized test blue/green environment; read back entries and anonymous MCP rejection. Independent business-client acceptance remains separate.
 
 ## External-client acceptance correction
 
@@ -264,6 +268,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.136 | 2026-11-20 | Fit the card deck to the page viewport and keep paging controls stationary |
 | v0.1.137 | 2026-11-20 | Merge persistent AI-native campaigns and document version updates for cross-branch integration |
 | v0.1.138 | 2026-11-21 | Add public self-service account registration with bounded abuse protection |
+| v0.1.139 | 2026-11-21 | Enable self-service spaces with owner-controlled app enrollment and consistent authorization |
 
 ### Public applications with private collections
 

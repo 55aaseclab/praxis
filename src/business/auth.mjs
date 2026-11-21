@@ -109,6 +109,8 @@ export class AuthStore {
       CREATE TABLE IF NOT EXISTS auth_users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS auth_platform_admins (user_id TEXT PRIMARY KEY REFERENCES auth_users(id), granted_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS auth_spaces (id TEXT PRIMARY KEY, type TEXT NOT NULL, owner_id TEXT NOT NULL REFERENCES auth_users(id));
+      CREATE TABLE IF NOT EXISTS auth_self_service_spaces (space_id TEXT PRIMARY KEY REFERENCES auth_spaces(id));
+      CREATE TABLE IF NOT EXISTS auth_space_apps (space_id TEXT NOT NULL REFERENCES auth_spaces(id), app_id TEXT NOT NULL, enabled INTEGER NOT NULL CHECK(enabled IN (0,1)), PRIMARY KEY(space_id,app_id));
       CREATE TABLE IF NOT EXISTS auth_members (space_id TEXT NOT NULL REFERENCES auth_spaces(id), user_id TEXT NOT NULL REFERENCES auth_users(id), role TEXT NOT NULL, PRIMARY KEY(space_id,user_id));
       CREATE TABLE IF NOT EXISTS auth_resources (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES auth_users(id), space_id TEXT NOT NULL REFERENCES auth_spaces(id), app_id TEXT NOT NULL, resources TEXT NOT NULL, actions TEXT NOT NULL, expires_at INTEGER, membership_required INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS auth_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, redirect_uris TEXT NOT NULL);
@@ -323,23 +325,70 @@ export class AuthStore {
     const base = { userId: session.user.id, username: session.user.username, workbench: true, expiresAt: session.expiresAt, csrfToken: session.csrfToken };
     if (this.isPlatformAdmin(session.user.id)) return { ...base, userId: session.user.id, apps: [...this.webAppIds], prds: true, permissionsExpireAt: null, platformAdmin: true };
     const policy = this.getWebEntryPolicy(session.user.id);
-    if (!policy || policy.expiresAt !== null && policy.expiresAt <= this.clock()) return { ...base, apps: [], prds: false, permissionsExpireAt: null, platformAdmin: false };
-    return { ...base, apps: policy.apps, prds: policy.prds, permissionsExpireAt: policy.expiresAt, platformAdmin: false };
+    if (!policy || policy.expiresAt !== null && policy.expiresAt <= this.clock()) return { ...base, apps: this.currentWebApps(session.user.id), prds: false, permissionsExpireAt: null, platformAdmin: false };
+    return { ...base, apps: this.currentWebApps(session.user.id), prds: policy.prds, permissionsExpireAt: policy.expiresAt, platformAdmin: false };
   }
   configureWebAccessBoundary({ enabled = false, apps = {} } = {}) {
     if (typeof enabled !== 'boolean' || !apps || typeof apps !== 'object' || Array.isArray(apps)) fail('Web access boundary configuration is invalid.');
     this.webAccessBoundary = { enabled, apps: Object.fromEntries(Object.entries(apps).filter(([id]) => Boolean(this.registry.getBusiness(id))).map(([id, app]) => [id, new Set(app?.spaces || [])])) };
   }
+  appSpaceEnabled(appId, spaceId, installedApps = this.webAccessBoundary.apps) {
+    if (!this.registry.getBusiness(appId) || !Object.hasOwn(installedApps, appId)) return false;
+    const enrollment = this.db.prepare('SELECT enabled FROM auth_space_apps WHERE space_id=? AND app_id=?').get(spaceId, appId);
+    if (enrollment) return enrollment.enabled === 1;
+    const settings = installedApps[appId], spaces = settings instanceof Set ? settings : settings?.spaces;
+    return spaces instanceof Set ? spaces.has(spaceId) : Array.isArray(spaces) && spaces.includes(spaceId);
+  }
+  selfServiceSpace(spaceId) { return Boolean(this.db.prepare('SELECT 1 FROM auth_self_service_spaces WHERE space_id=?').get(spaceId)); }
   currentWebApps(userId) {
     if (this.isPlatformAdmin(userId)) return [...this.webAppIds];
     const policy = this.getWebEntryPolicy(userId);
-    return policy && (policy.expiresAt === null || policy.expiresAt > this.clock()) ? policy.apps : [];
+    const legacy = policy && (policy.expiresAt === null || policy.expiresAt > this.clock()) ? policy.apps : [];
+    const enrolled = this.db.prepare('SELECT space_id,app_id FROM auth_space_apps WHERE enabled=1').all()
+      .filter(row => this.appSpaceEnabled(row.app_id, row.space_id) && this.appActions[row.app_id]?.some(action => this.userPermissions(userId, row.space_id, row.app_id, action).length))
+      .map(row => this.registry.webId(row.app_id));
+    return unique([...legacy, ...enrolled]);
   }
   webBoundaryAllows(userId, spaceId, appId) {
+    if (appId === 'spaces' && this.selfServiceSpace(spaceId)) return this.membershipRole(userId, spaceId) === 'owner';
+    const override = this.db.prepare('SELECT enabled FROM auth_space_apps WHERE space_id=? AND app_id=?').get(spaceId, appId);
+    if (override) return this.appSpaceEnabled(appId, spaceId);
     if (!this.webAccessBoundary.enabled) return true;
-    const allowed = this.currentWebApps(userId), configured = this.webAccessBoundary.apps;
-    if (appId === 'spaces') return Object.entries(configured).some(([id, spaces]) => allowed.includes(this.registry.webId(id)) && spaces.has(spaceId));
-    return allowed.includes(this.registry.webId(appId)) && Boolean(configured[appId]?.has(spaceId));
+    const policy = this.getWebEntryPolicy(userId);
+    const allowed = this.isPlatformAdmin(userId) ? this.webAppIds : policy && (policy.expiresAt === null || policy.expiresAt > this.clock()) ? policy.apps : [];
+    const configured = this.webAccessBoundary.apps;
+    if (appId === 'spaces') return Object.keys(configured).some(id => allowed.includes(this.registry.webId(id)) && this.appSpaceEnabled(id, spaceId));
+    return allowed.includes(this.registry.webId(appId)) && this.appSpaceEnabled(appId, spaceId);
+  }
+  createSelfServiceSpace({ type, ownerId }) {
+    if (!['personal', 'family', 'company'].includes(type)) fail('Unknown business space type.');
+    return this.controlTransaction(() => {
+      const id = randomUUID();
+      this.db.prepare('INSERT INTO auth_spaces VALUES(?,?,?)').run(id, type, ownerId);
+      this.db.prepare('INSERT INTO auth_self_service_spaces VALUES(?)').run(id);
+      this.db.prepare('INSERT INTO auth_members VALUES(?,?,?)').run(id, ownerId, 'owner');
+      this.audit({ event: 'space.created', userId: ownerId, spaceId: id, outcome: 'allowed' });
+      this.changed({ type: 'space', spaceId: id });
+      return { id, type, ownerId };
+    });
+  }
+  setSpaceAppEnrollment({ spaceId, appId, enabled }, installedApps = this.webAccessBoundary.apps) {
+    if (typeof enabled !== 'boolean' || !this.registry.getBusiness(appId) || !Object.hasOwn(installedApps, appId)) fail('Application is not installed.', 403, 'FORBIDDEN');
+    if (!this.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(spaceId)) fail('Space not found.', 404, 'NOT_FOUND');
+    return this.controlTransaction(() => {
+      this.db.prepare('INSERT INTO auth_space_apps VALUES(?,?,?) ON CONFLICT(space_id,app_id) DO UPDATE SET enabled=excluded.enabled').run(spaceId, appId, Number(enabled));
+      if (!enabled) {
+        this.db.prepare('DELETE FROM auth_resources WHERE space_id=? AND app_id=?').run(spaceId, appId);
+        for (const grant of this.db.prepare('SELECT id,rules FROM auth_grants WHERE revoked_at IS NULL').all()) {
+          const original = JSON.parse(grant.rules), retained = original.filter(rule => rule.spaceId !== spaceId || rule.appId !== appId);
+          if (retained.length === original.length) continue;
+          if (retained.length) this.db.prepare('UPDATE auth_grants SET rules=? WHERE id=?').run(JSON.stringify(retained), grant.id);
+          else this.revokeGrant(grant.id);
+        }
+      }
+      this.changed({ type: 'space_enrollment', spaceId, appId });
+      return { spaceId, appId, enabled };
+    });
   }
   webPermissionExpiry(userId) {
     if (!this.webAccessBoundary.enabled || this.isPlatformAdmin(userId)) return Infinity;
@@ -356,7 +405,7 @@ export class AuthStore {
     const session = this.requireNativeSession(token), web = this.getWebAccess(token), rules = this.availableRules(session.user.id);
     const capabilities = web.apps.map(appId => {
       const businessAppId = this.registry.businessId(appId);
-      const matches = rules.filter(rule => rule.appId === businessAppId), supported = Boolean(this.registry.getBusiness(businessAppId)), configured = Boolean(this.webAccessBoundary.apps[businessAppId]?.size);
+      const matches = rules.filter(rule => rule.appId === businessAppId), supported = Boolean(this.registry.getBusiness(businessAppId)), configured = Object.hasOwn(this.webAccessBoundary.apps, businessAppId);
       const allResources = matches.some(rule => rule.resources.includes('*'));
       return { appId, name: this.registry.getApp(appId)?.name || appId, availability: !supported ? 'unsupported' : this.webAccessBoundary.enabled && !configured ? 'unavailable' : matches.length ? 'available' : 'no_resources', actions: unique(matches.flatMap(rule => rule.actions)), spaceCount: unique(matches.map(rule => rule.spaceId)).length, resourceCount: allResources ? null : unique(matches.flatMap(rule => rule.resources.map(id => JSON.stringify([rule.spaceId, id])))).length, allResources };
     });
@@ -377,7 +426,7 @@ export class AuthStore {
     if (!space) fail('Space not found.', 404, 'NOT_FOUND');
     if (space.owner_id === userId && role !== 'owner') fail('The space owner cannot be removed or downgraded.', 409, 'OWNER_REQUIRED');
     if (role === null || role === undefined) {
-      this.transaction(() => {
+      this.controlTransaction(() => {
         this.db.prepare('DELETE FROM auth_members WHERE space_id=? AND user_id=?').run(spaceId, userId);
         this.db.prepare('DELETE FROM auth_resources WHERE space_id=? AND user_id=? AND membership_required=1').run(spaceId, userId);
         for (const grant of this.listGrants(userId)) {
@@ -436,7 +485,7 @@ export class AuthStore {
     const resources = this.userPermissions(userId, spaceId, appId, 'read');
     if (!resources.includes('*') && !resources.includes(resourceId)) return null;
     const member = this.membershipRole(userId, spaceId);
-    const expiries = ['owner', 'admin'].includes(member) ? [] : this.db.prepare('SELECT * FROM auth_resources WHERE user_id=? AND space_id=? AND app_id=?').all(userId, spaceId, appId)
+    const expiries = ['owner', 'admin'].includes(member) && !this.selfServiceSpace(spaceId) ? [] : this.db.prepare('SELECT * FROM auth_resources WHERE user_id=? AND space_id=? AND app_id=?').all(userId, spaceId, appId)
       .filter(row => (!row.membership_required || member) && (row.expires_at === null || row.expires_at > this.clock()) && JSON.parse(row.actions).includes('read') && (JSON.parse(row.resources).includes('*') || JSON.parse(row.resources).includes(resourceId)))
       .map(row => row.expires_at ?? Infinity);
     return { expiresAt: Math.min(this.webPermissionExpiry(userId), ...expiries) };
@@ -447,7 +496,7 @@ export class AuthStore {
     const member = this.db.prepare('SELECT role FROM auth_members WHERE user_id=? AND space_id=?').get(userId, spaceId);
     const business = this.registry.getBusiness(appId), roles = business?.actionRoles?.[action] || (business?.ownerOnlyActions?.includes(action) ? ['owner'] : null);
     if (roles && !roles.includes(member?.role)) return [];
-    if (member && ['owner', 'admin'].includes(member.role)) return ['*'];
+    if (member && ['owner', 'admin'].includes(member.role) && (!this.selfServiceSpace(spaceId) || appId === 'spaces' && member.role === 'owner')) return ['*'];
     if (appId === 'spaces') return [];
     const rows = this.db.prepare('SELECT * FROM auth_resources WHERE user_id=? AND space_id=? AND app_id=?').all(userId, spaceId, appId);
     const resources = rows.filter(row => (!row.membership_required || member) && (row.expires_at === null || row.expires_at > this.clock()) && JSON.parse(row.actions).includes(action)).flatMap(row => JSON.parse(row.resources));
@@ -531,7 +580,7 @@ export class AuthStore {
       fail('The requested business operation is not permitted.', 403, 'FORBIDDEN');
     }
     const membership = this.db.prepare('SELECT role FROM auth_members WHERE user_id=? AND space_id=?').get(actor.userId, spaceId);
-    const permissionExpiries = membership && ['owner', 'admin'].includes(membership.role) ? [] : this.db.prepare('SELECT * FROM auth_resources WHERE user_id=? AND space_id=? AND app_id=?').all(actor.userId, spaceId, appId).filter(row => (!row.membership_required || membership) && (row.expires_at === null || row.expires_at > this.clock()) && JSON.parse(row.actions).includes(action) && intersect(JSON.parse(row.resources), resourceId === undefined ? resources : [resourceId]).length).map(row => row.expires_at ?? Infinity);
+    const permissionExpiries = membership && ['owner', 'admin'].includes(membership.role) && (!this.selfServiceSpace(spaceId) || appId === 'spaces') ? [] : this.db.prepare('SELECT * FROM auth_resources WHERE user_id=? AND space_id=? AND app_id=?').all(actor.userId, spaceId, appId).filter(row => (!row.membership_required || membership) && (row.expires_at === null || row.expires_at > this.clock()) && JSON.parse(row.actions).includes(action) && intersect(JSON.parse(row.resources), resourceId === undefined ? resources : [resourceId]).length).map(row => row.expires_at ?? Infinity);
     return { ...actor, appId, spaceId, resources, actions: [action], expiresAt: Math.min(actor.expiresAt, ...permissionExpiries) };
   }
   revokeGrant(id) {
@@ -800,8 +849,66 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
     const language = loginLanguage(request, url);
     const translate = (english, chinese) => language === 'zh' ? chinese : english;
     const renderPage = (english, chinese, html) => page(translate(english, chinese), html, language);
-    if (!path.startsWith('/auth/') && !path.startsWith('/oauth/') && !path.startsWith('/api/business/management/') && !path.startsWith('/api/business/web-resource-access/') && !['/api/business/web-access', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'].includes(path)) return false;
+    if (!path.startsWith('/auth/') && !path.startsWith('/oauth/') && !path.startsWith('/api/business/management/') && !/^\/api\/business\/account\/spaces(?:\/|$)/.test(path) && !path.startsWith('/api/business/web-resource-access/') && !['/api/business/web-access', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'].includes(path)) return false;
     try {
+      if (/^\/api\/business\/account\/spaces(?:\/|$)/.test(path)) {
+        if (request.headers.authorization !== undefined) fail('Native browser login is required.', 401, 'UNAUTHENTICATED');
+        if (request.headers.origin && request.headers.origin !== store.issuer || request.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(request.headers['sec-fetch-site'])) fail('The browser request origin is not allowed.', 403, 'ORIGIN_REJECTED');
+        if (url.search || /%(?:2f|5c|25)/i.test(request.url) || /[\\\x00-\x20\x7f]/.test(request.url)) fail('Space route is invalid.');
+        const token = parseCookie(request);
+        store.requireNativeSession(token);
+        const writing = !['GET', 'HEAD'].includes(request.method);
+        if (writing) store.requireRequestCsrf(request);
+        const input = ['POST', 'PUT'].includes(request.method) ? await readBody(request) : {};
+        const fields = (allowed, required = allowed) => {
+          if (Object.keys(input).some(key => !allowed.includes(key)) || required.some(key => !Object.hasOwn(input, key))) fail('Space request contains unknown or missing fields.');
+        };
+        const catalog = Object.keys(apps).filter(id => store.registry.getBusiness(id)).map(id => ({ id, name: store.registry.getApp(store.registry.webId(id))?.name || id, actions: store.appActions[id] }));
+        const result = store.controlTransaction(() => {
+          const session = store.requireNativeSession(token), userId = session.user.id;
+          if (writing) store.requireRequestCsrf(request);
+          if (path === '/api/business/account/spaces') {
+            if (request.method === 'GET') return { status: 200, value: { spaces: store.db.prepare('SELECT s.id,s.type,s.owner_id AS ownerId,m.role FROM auth_spaces s JOIN auth_members m ON m.space_id=s.id WHERE m.user_id=? ORDER BY s.id').all(userId), catalog } };
+            if (request.method === 'POST') { fields(['type']); return { status: 201, value: store.createSelfServiceSpace({ type: input.type, ownerId: userId }) }; }
+            fail('Space method is not supported.', 405, 'METHOD_NOT_ALLOWED');
+          }
+          const match = /^\/api\/business\/account\/spaces\/([^/]+)(?:\/(apps|members|permissions)(?:\/([^/]+))?)?$/.exec(path);
+          if (!match) fail('Space route was not found.', 404, 'NOT_FOUND');
+          const spaceId = decodeURIComponent(match[1]), section = match[2], targetId = match[3] ? decodeURIComponent(match[3]) : null;
+          const space = store.db.prepare('SELECT id,type,owner_id AS ownerId FROM auth_spaces WHERE id=?').get(spaceId);
+          const role = store.membershipRole(userId, spaceId);
+          if (!space || !role) fail('Space not found.', 404, 'NOT_FOUND');
+          if (writing && space.ownerId !== userId) fail('Only the space owner can change this setting.', 403, 'FORBIDDEN');
+          if (request.method === 'GET' && !section) {
+            const members = store.db.prepare('SELECT m.user_id AS userId,u.username,m.role FROM auth_members m JOIN auth_users u ON u.id=m.user_id WHERE m.space_id=? ORDER BY m.user_id').all(spaceId);
+            const permissions = store.db.prepare('SELECT id,user_id AS userId,app_id AS appId,resources,actions,expires_at AS expiresAt FROM auth_resources WHERE space_id=?').all(spaceId)
+              .filter(row => space.ownerId === userId || row.userId === userId).map(row => ({ ...row, resources: JSON.parse(row.resources), actions: JSON.parse(row.actions) }));
+            return { status: 200, value: { space: { ...space, role }, apps: catalog.map(app => ({ ...app, enabled: store.appSpaceEnabled(app.id, spaceId, apps) })), members, permissions } };
+          }
+          let value;
+          if (section === 'apps' && targetId && request.method === 'PUT') {
+            fields(['enabled']); value = store.setSpaceAppEnrollment({ spaceId, appId: targetId, enabled: input.enabled }, apps);
+          } else if (section === 'members' && !targetId && request.method === 'POST') {
+            fields(['username', 'role']);
+            if (typeof input.username !== 'string' || input.role !== 'member') fail('An existing username and member role are required.');
+            const member = store.db.prepare('SELECT id FROM auth_users WHERE username=? COLLATE NOCASE AND enabled=1').get(input.username.trim());
+            if (!member) fail('Member identity is unavailable.', 404, 'NOT_FOUND');
+            store.setMembership({ spaceId, userId: member.id, role: 'member' }); value = { userId: member.id, spaceId, role: 'member' };
+          } else if (section === 'members' && targetId && request.method === 'DELETE') {
+            store.setMembership({ spaceId, userId: targetId, role: null }); value = { removed: true };
+          } else if (section === 'permissions' && !targetId && request.method === 'POST') {
+            fields(['userId', 'appId', 'resources', 'actions', 'expiresAt'], ['userId', 'appId', 'resources', 'actions']);
+            if (!store.membershipRole(input.userId, spaceId) || !store.appSpaceEnabled(input.appId, spaceId, apps)) fail('Permissions require a current member and enabled app.', 403, 'FORBIDDEN');
+            value = store.grantResource({ ...input, spaceId });
+          } else if (section === 'permissions' && targetId && request.method === 'DELETE') {
+            if (!store.db.prepare('SELECT 1 FROM auth_resources WHERE id=? AND space_id=?').get(targetId, spaceId)) fail('Resource permission not found.', 404, 'NOT_FOUND');
+            store.revokeResource(targetId); value = { revoked: true };
+          } else fail('Space route or method was not found.', 404, 'NOT_FOUND');
+          store.audit({ event: 'space.management', userId, spaceId, outcome: 'allowed' });
+          return { status: request.method === 'POST' ? 201 : 200, value };
+        });
+        send(response, result.status, result.value); return true;
+      }
       if (path.startsWith('/api/business/web-resource-access/')) {
         const resourceRoutes = Object.fromEntries(store.registry.apps.flatMap(app => Object.entries(app.integration.web.nativePolicies || {}).map(([policyId, policy]) => [policy.legacyEndpoint || `/api/business/web-resource-access/${store.registry.businessId(app.id)}/${policyId}`, { ...policy, appId: store.registry.businessId(app.id), webAppId: app.id, resourceId: policy.resource }])));
         const target = resourceRoutes[path];
@@ -831,7 +938,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
             }
           }
         } else {
-          for (const spaceId of apps[target.appId]?.spaces || []) {
+          for (const { id: spaceId } of store.db.prepare('SELECT id FROM auth_spaces').all().filter(space => store.appSpaceEnabled(target.appId, space.id, apps))) {
             try {
               let scopeExpiry = Math.min(session.expiresAt, web.permissionsExpireAt ?? Infinity);
               for (const action of target.actions || ['read']) {
