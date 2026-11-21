@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.146 · [简体中文](PRD.md)
+Version: 0.1.147 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -70,6 +70,19 @@ Keep external-agent permission checkboxes unchecked until the user selects them.
 
 All management views align controls to the main content’s left edge and actions to its right edge, including new-space, member, permission, user and password forms; forms must not introduce narrower competing right edges. Use one control-row pattern: related fields and their primary action share a horizontal row with a 12 px gap, stacking only at viewport widths of 390 px or less. Section notes have uniform 12 px spacing above and 20 px below, outside the control/action row. Use consistent field and section spacing, preserve native selects, visible focus, accessible names and touch targets, and retain static bottom clearance for controls. Focusing, opening and closing any native select must preserve the page scroll offset and surrounding layout at desktop and phone widths, including fully visible controls near the viewport bottom; never scroll the page to reserve menu space. Keep the browser-owned popup adjacent to its control and verify its actual open appearance. Do not change management operations, API payloads or authorization. Verify General, Spaces, App access, Agent delegations, Users, Data, MCP and Overview at 1440 px and 390 px with isolated synthetic fixtures, including space creation, enrollment, member and resource-permission forms, native select interaction and absence of horizontal overflow. Browser viewport checks and independent business acceptance remain separate.
 
+## Management confirmations and delegation clarity
+
+In Agent delegations, align status text, including **Unexpired**, to the right edge of its row at desktop and phone widths. Every delegation entry shows its full delegation ID and space ID alongside its name, using labeled monospace values that wrap safely without clipping or horizontal overflow. Identical client names must remain distinguishable by these IDs; keep expiry, scopes and existing controls intact. Add only read-only `grant.spaceIds` metadata to the existing account and administrator grant-list projections, derived as sorted unique IDs from the original grant rules, independently of effective operation scopes, so restricted and historical entries retain their space identities. This additive display field changes no route, write operation, authorization or meaning of existing fields.
+
+All destructive-action confirmations in the management console use one centered modal dialog with a backdrop, outside document flow. Opening and closing it must leave the surrounding content geometry and scroll position unchanged. Trap keyboard focus inside the open dialog; Cancel, Escape and a backdrop click dismiss it without sending a mutation, then return focus to the invoking control. Retain exact-space-ID confirmation for space deletion and all existing action payloads and authorization checks. Keep existing acknowledged success alerts separate.
+
+| ID | Observable acceptance |
+| --- | --- |
+| ADM01 | Chromium at 1440/390 px shows right-aligned delegation status and full, labeled monospace delegation and space IDs on every entry, including identical names and long IDs, without clipping or horizontal overflow. |
+| ADM02 | Every management destructive confirmation opens in a centered backdrop modal; pixel assertions show zero surrounding layout shift on open/close. Tab/Shift+Tab stay inside, and Cancel/Escape/backdrop cancellation sends no mutation and restores focus. |
+| ADM03 | Spaces and Agent delegations Current user are plain native user dropdowns without a search input or search interaction; pagination and selection/refresh preserve the same display context and signed-in identity. |
+| ADM04 | Synthetic checks retain existing management flows, exact-ID space deletion, write payloads, authorization and all existing grant-list field semantics; `grant.spaceIds` is additive read-only metadata. All management views remain consistent at 1440/390 px; technical deployment evidence and independent business acceptance remain separate. |
+
 ## Spaces overview and per-app management
 
 Settings → Spaces uses one screen for one job. Keep the New space form at the top of the space controls, below the administrator-only user-context row. The space overview shows the current space, its members and every installed reviewed app (fourteen in the built-in installation), including a clear indication of whether each app supports agent business actions. Every app row offers **Manage**, opening a dedicated management page for that app in that space. The page shows its current enrollment and the existing enable/disable confirmation behavior, members' permissions for this app and a grant form scoped to this app with member, resources and supported actions. It contains no other app's controls; returning to the overview preserves the space selection. Preserve existing labels and space IDs.
@@ -80,13 +93,13 @@ Across every management view, adjacent sections have one separator, with nested 
 
 ## Administrator display context in Settings
 
-Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer all registered users through the same paginated search listing as Agent delegations, retaining the signed-in administrator and selected account across pages. Selecting an account renders that user’s space read-model: enabled apps, resource permissions and available actions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
+Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer all registered users in a plain native dropdown, with pagination as needed and no search input or search interaction, retaining the signed-in administrator and selected account across pages. Selecting an account renders that user’s space read-model: enabled apps, resource permissions and available actions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
 
-Agent delegations’ **Current user** must name the actual user whose delegations are rendered, including after selection, pagination and refresh; its initial selection is the signed-in administrator. Ordinary users receive no switcher and see only their own context in both views. Ignore obsolete responses after a context change so the label and displayed data remain aligned.
+Both Spaces and Agent delegations use plain native user dropdowns without search, retaining pagination as needed. Agent delegations’ **Current user** must name the actual user whose delegations are rendered, including after selection, pagination and refresh; its initial selection is the signed-in administrator. Ordinary users receive no switcher and see only their own context in both views. Ignore obsolete responses after a context change so the label and displayed data remain aligned.
 
 | ID | Observable acceptance |
 | --- | --- |
-| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can find any registered user through the Agent delegations paginated search listing to render that user’s enabled apps, resource permissions and available actions, including a nonmember’s empty permission state. |
+| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can select any registered user through a plain native dropdown with pagination as needed and no search interaction to render that user’s enabled apps, resource permissions and available actions, including a nonmember’s empty permission state. |
 | BUC02 | Switching display context leaves native session identity and server-side authorization unchanged; synthetic permitted and denied action requests retain the administrator’s own grants. |
 | BUC03 | Agent delegations initially shows the signed-in administrator and keeps Current user aligned with the actual displayed delegations across user changes, refresh and pagination. |
 | BUC04 | Ordinary users have no user-context switcher and cannot select another user’s read-model. Synthetic API and Chromium checks at 1440/390 px cover these boundaries, existing flows, keyboard/native-select operation and zero horizontal overflow. |
@@ -345,6 +358,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.144 | 2026-11-21 | Add creator-confirmed atomic space deletion with personal-space protection and immediate scoped revocation |
 | v0.1.145 | 2026-11-21 | Add administrator display-context switching in Spaces and correct Agent delegations current-user semantics |
 | v0.1.146 | 2026-11-21 | Provision protected personal spaces, designate OAuth space and offer all-user administrator display context. |
+| v0.1.147 | 2026-11-21 | Clarify delegation IDs and status, use modal confirmations and plain user dropdowns in Settings. |
 
 ### Letters and Profiles
 

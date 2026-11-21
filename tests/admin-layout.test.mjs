@@ -71,6 +71,77 @@ async function layoutGeometry(page) {
   }));
 }
 
+async function inspectConfirmation(page, trigger, label) {
+  const evidence = [];
+  for (const dismissal of ['Escape', 'backdrop', 'Cancel']) {
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.evaluate(node => node.focus({ preventScroll: true }));
+    const baseline = await page.evaluate(() => {
+      const snapshot = () => ({ scroll: [scrollX, scrollY], rects: [...document.querySelectorAll('main, #heading, #content, #content *')].filter(node => node.getClientRects().length).map(node => { const r = node.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }) });
+      const original = snapshot(), changes = [], shifts = [];
+      let active = true;
+      const observer = new PerformanceObserver(list => { for (const entry of list.getEntries()) if (entry.value) shifts.push(entry.value); });
+      observer.observe({ type: 'layout-shift' });
+      const probe = () => { if (!active) return; const current = snapshot(); if (JSON.stringify(current) !== JSON.stringify(original)) changes.push(current); requestAnimationFrame(probe); };
+      requestAnimationFrame(probe);
+      window.confirmationProbe = { snapshot, changes, shifts, stop: () => { active = false; observer.disconnect(); } };
+      return original;
+    });
+    await trigger.click();
+    const dialog = page.locator('.confirm-dialog');
+    await dialog.waitFor();
+    const modal = await dialog.evaluate(node => {
+      const r = node.getBoundingClientRect(), backdrop = getComputedStyle(node, '::backdrop');
+      return { modal: node.matches(':modal'), center: [r.x + r.width / 2, r.y + r.height / 2], viewport: [innerWidth, innerHeight], fits: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, backdrop: backdrop.backgroundColor, named: Boolean(node.getAttribute('aria-label') || node.getAttribute('aria-labelledby')) };
+    });
+    assert.equal(modal.modal, true, `${label}: confirmation is modal`);
+    assert.equal(modal.named, true, `${label}: dialog has an accessible name`);
+    assert.equal(modal.fits, true, `${label}: modal fits viewport`);
+    for (let axis = 0; axis < 2; axis++) assert.ok(Math.abs(modal.center[axis] - modal.viewport[axis] / 2) <= 1, `${label}: modal is centered`);
+    assert.doesNotMatch(modal.backdrop, /^(transparent|rgba\(0, 0, 0, 0\))$/, `${label}: visible backdrop`);
+    assert.deepEqual(await page.evaluate(() => window.confirmationProbe.snapshot()), baseline, `${label}: opening does not shift page geometry or scroll`);
+    if (dismissal === 'Escape' && process.env.ADMIN_LAYOUT_ARTIFACTS) await page.screenshot({ path: join(process.env.ADMIN_LAYOUT_ARTIFACTS, `${page.viewportSize().width}-${label.replace(/[^a-z0-9]+/gi, '-')}-modal.png`) });
+    const controls = dialog.locator('button:enabled, input:enabled, select:enabled, a[href]');
+    await controls.last().focus(); await page.keyboard.press('Tab');
+    assert.equal(await controls.first().evaluate(node => document.activeElement === node), true, `${label}: Tab wraps inside modal`);
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await controls.last().evaluate(node => document.activeElement === node), true, `${label}: reverse Tab wraps inside modal`);
+    if (dismissal === 'backdrop') await page.mouse.click(2, 2);
+    else if (dismissal === 'Cancel') await dialog.getByRole('button', { name: /^(Cancel|取消)$/, exact: true }).click();
+    else await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(await trigger.evaluate(node => document.activeElement === node), true, `${label}: ${dismissal} restores trigger focus`);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const probe = await page.evaluate(() => { const value = window.confirmationProbe; value.stop(); return { current: value.snapshot(), changes: value.changes, shifts: value.shifts }; });
+    assert.deepEqual(probe.current, baseline, `${label}: ${dismissal} preserves geometry and scroll`);
+    assert.deepEqual(probe.changes, [], `${label}: no transient geometry changes`);
+    assert.deepEqual(probe.shifts, [], `${label}: zero layout-shift entries`);
+    evidence.push({ dismissal, layoutShift: 0, scrollDelta: 0, focusReturned: true });
+  }
+  return { label, evidence, status: 'Pass' };
+}
+
+async function inspectDelegations(page, expected) {
+  const rows = await page.locator('.grant-row').evaluateAll(nodes => nodes.map(node => {
+    const rect = node.getBoundingClientRect(), status = node.querySelector('.grant-status'), statusRect = status.getBoundingClientRect();
+    const identifiers = [...node.querySelectorAll('.grant-identifiers code')].map(code => { const r = code.getBoundingClientRect(), style = getComputedStyle(code); return { text: code.textContent, font: style.fontFamily, visible: Boolean(code.getClientRects().length), fits: r.left >= rect.left && r.right <= rect.right + 1, unclipped: code.scrollWidth <= code.clientWidth + 1, overflow: style.textOverflow }; });
+    return { id: node.dataset.grant, grantId: node.querySelector('code.grant-id')?.textContent, spaceIds: [...node.querySelectorAll('code.grant-space-id')].map(code => code.textContent), identifiers, rightDelta: rect.right - statusRect.right, statusAlign: getComputedStyle(status).textAlign };
+  }));
+  for (const row of rows) {
+    assert.equal(row.grantId, row.id, 'every row displays its complete delegation ID');
+    assert.deepEqual([...row.spaceIds].sort(), expected.get(row.id), 'every row displays the actual complete space IDs');
+    assert.ok(Math.abs(row.rightDelta) <= 1, 'status ends at the delegation row right edge');
+    assert.equal(row.statusAlign, 'right', 'status text is right aligned');
+    for (const identity of row.identifiers) {
+      assert.match(identity.font, /mono|Consolas/i, 'identifiers use monospace');
+      assert.equal(identity.visible && identity.fits && identity.unclipped, true, `${identity.text}: identifier is visible within the row without clipping`);
+      assert.notEqual(identity.overflow, 'ellipsis', 'the full identifier remains readable');
+    }
+  }
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth <= 1), true, 'delegations have no horizontal overflow');
+  return { rows: rows.length, identifiers: 'complete monospace delegation/space IDs', statusRightDelta: 0 };
+}
+
 async function inspectSeparators(page, width, view) {
   const result = await page.evaluate(() => {
     const visible = node => node.getClientRects().length > 0;
@@ -367,6 +438,7 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     await page.goBack(); await ready(page);
     assert.equal(await page.locator('.space-app-row').count(), 14, 'browser Back returns to overview');
     await manage('reminder');
+    lifecycleEvidence.push(await inspectConfirmation(page, page.getByRole('button', { name: text('Revoke permission', '撤销权限'), exact: true }), `${width}/permission revoke`));
     await page.getByRole('button', { name: text('Revoke permission', '撤销权限'), exact: true }).click();
     await write('DELETE', `/permissions/${saved.id}`, confirm);
     assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE space_id=? AND app_id=?').get(spaceId, 'reminder').n, 0);
@@ -375,6 +447,7 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     await permission.locator('input[name=resources]').fill('synthetic-layout-record');
     await permission.locator('input[type=checkbox][name=read]').check();
     await write('POST', '/permissions', () => permission.locator('button[type=submit]').click());
+    lifecycleEvidence.push(await inspectConfirmation(page, page.getByRole('button', { name: text('Disable', '停用'), exact: true }), `${width}/app disable`));
     await page.getByRole('button', { name: text('Disable', '停用'), exact: true }).click();
     assert.equal(await page.locator('.confirm-box').count(), 1, 'disable retains explicit confirmation');
     await write('PUT', '/apps/reminder', confirm);
@@ -399,6 +472,7 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     await write('PUT', '/apps/finance', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
     await back();
     const memberRow = page.locator('.user-row').filter({ hasText: 'synthetic-member' });
+    lifecycleEvidence.push(await inspectConfirmation(page, memberRow.getByRole('button', { name: text('Remove', '移除'), exact: true }), `${width}/member remove`));
     await memberRow.getByRole('button', { name: text('Remove', '移除'), exact: true }).click();
     await write('DELETE', '/members/a-member', confirm);
     memberAccess = await (await memberContext.request.get(`${origin}/api/business/web-access`)).json();
@@ -509,7 +583,9 @@ test('Chromium space deletion requires typed confirmation and clears revoked spa
     await Promise.all([page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/spaces/${extraPersonal.id}`)), page.locator('.space-delete-confirm button[type=submit]').click()]); await ready(page);
     assert.equal(auth.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(extraPersonal.id), undefined, 'creator deletes an extra personal space');
     await open(page, space.id);
-    const trigger = page.locator('.space-delete'); await trigger.click();
+    const trigger = page.locator('.space-delete');
+    evidence.push(await inspectConfirmation(page, trigger, `${width}/typed space deletion`));
+    await trigger.click();
     const confirmation = page.locator('.space-delete-confirm'), input = confirmation.locator('input[name=confirmSpaceId]'), submit = confirmation.locator('button[type=submit]');
     assert.equal(await confirmation.locator('li').count(), 3, 'warning lists membership, delegation and enrollment removal');
     assert.match(await confirmation.innerText(), /retained for operator cleanup|保留，由运维另行清理/);
@@ -566,6 +642,83 @@ test('Chromium space deletion requires typed confirmation and clears revoked spa
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers', browser: browser.version(), evidence }));
 });
 
+test('Chromium same-name delegations show full IDs and account/delegation confirmations stay modal', { skip: !browserEnabled, timeout: 120000 }, async t => {
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const { origin, auth } = await fixture(t), evidence = [];
+  const longSpaceId = `synthetic-secondary-${'long-space-'.repeat(12)}end`;
+  const originalId = auth.listGrants('a-member')[0].id;
+  auth.setSpaceAppEnrollment({ spaceId: 'synthetic-family', appId: 'reminder', enabled: true });
+  auth.createSpace({ id: longSpaceId, type: 'company', ownerId: 'z-owner' });
+  auth.setSpaceAppEnrollment({ spaceId: longSpaceId, appId: 'reminder', enabled: true });
+  auth.setMembership({ spaceId: longSpaceId, userId: 'a-member', role: 'member' });
+  auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: longSpaceId, actions: ['read'], resources: ['synthetic-secondary-record'] });
+  const rules = [
+    { appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] },
+    { appId: 'reminder', spaceId: longSpaceId, actions: ['read'], resources: ['synthetic-secondary-record'] },
+  ];
+  const multi = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules });
+  const historical = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules });
+  auth.revokeGrant(historical.id);
+  const restrictedSpace = auth.createSelfServiceSpace({ type: 'family', ownerId: 'z-owner' });
+  auth.setSpaceAppEnrollment({ spaceId: restrictedSpace.id, appId: 'reminder', enabled: true });
+  auth.setMembership({ spaceId: restrictedSpace.id, userId: 'a-member', role: 'member' });
+  const temporary = auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: restrictedSpace.id, actions: ['read'], resources: ['synthetic-restricted-record'] });
+  const restricted = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [{ appId: 'reminder', spaceId: restrictedSpace.id, actions: ['read'], resources: ['synthetic-restricted-record'] }] });
+  auth.revokeResource(temporary.id);
+  const expected = new Map(auth.listGrants('a-member').map(grant => [grant.id, [...new Set(grant.rules.map(rule => rule.spaceId))].sort()]));
+  const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
+  if (artifacts) mkdirSync(artifacts, { recursive: true });
+  for (const [width, language] of [[1440, 'en'], [390, 'zh']]) {
+    const text = (en, zh) => language === 'en' ? en : zh;
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    t.after(() => context.close());
+    await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+    assert.equal((await context.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: 'synthetic-owner', password } })).status(), 200);
+    const page = await context.newPage(), errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    const open = async view => { await page.goto(`${origin}/admin/?view=${view}`); await ready(page); };
+    await open('users');
+    await page.locator('[data-user="z-owner"] button').click();
+    for (const name of [text('Disable account', '停用账号'), text('Remove administrator role', '移除管理员')]) {
+      evidence.push({ width, ...await inspectConfirmation(page, page.getByRole('button', { name, exact: true }), name) });
+    }
+    assert.equal(auth.isPlatformAdmin('z-owner'), true, 'cancellation keeps administrator role');
+    assert.equal(auth.db.prepare('SELECT enabled FROM auth_users WHERE id=?').get('z-owner').enabled, 1, 'cancellation keeps account enabled');
+    await open('grants'); await page.locator('#selected-user').selectOption('a-member'); await ready(page);
+    assert.equal(await page.getByRole('searchbox').count(), 0, 'delegations selector has no search input');
+    assert.equal(await page.locator('.grant-row').count(), 4);
+    assert.deepEqual(await page.locator('.grant-heading strong').allTextContents(), Array(4).fill('Synthetic agent'));
+    evidence.push({ width, context: 'administrator', ...await inspectDelegations(page, expected) });
+    evidence.push({ width, ...await inspectConfirmation(page, page.locator('.grant-row button').first(), 'administrator delegation revoke') });
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-delegation-identifiers.png`), fullPage: true });
+    const member = await browser.newContext({ viewport: { width, height: 900 } });
+    t.after(() => member.close());
+    await member.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+    assert.equal((await member.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: 'synthetic-member', password } })).status(), 200);
+    const memberPage = await member.newPage();
+    await memberPage.goto(`${origin}/admin/?view=grants`); await ready(memberPage);
+    assert.equal(await memberPage.locator(`[data-grant="${restricted.id}"]`).getAttribute('data-status'), 'restricted');
+    assert.match(await memberPage.locator(`[data-grant="${restricted.id}"]`).innerText(), /No actions currently available|当前暂无可用操作/);
+    evidence.push({ width, context: 'own account', ...await inspectDelegations(memberPage, expected) });
+    evidence.push({ width, ...await inspectConfirmation(memberPage, memberPage.locator('.grant-row button').first(), 'own delegation revoke') });
+    const actor = width === 1440 ? memberPage : page, revokedId = width === 1440 ? multi.id : originalId;
+    actor.on('dialog', dialog => dialog.accept());
+    await actor.locator(`[data-grant="${revokedId}"] button`).click();
+    const revoked = actor.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/grants/${revokedId}`));
+    await actor.locator('.confirm-dialog').getByRole('button', { name: text('Confirm', '确认'), exact: true }).click();
+    assert.equal((await revoked).status(), 200, 'modal confirmation retains the existing revoke request');
+    await ready(actor);
+    assert.equal(await actor.locator('.confirm-dialog').count(), 0, 'confirmed modal is removed');
+    assert.equal(await actor.locator(`[data-grant="${revokedId}"] button`).count(), 0, 'revoked delegation loses its action');
+    assert.equal(await actor.locator(`[data-grant="${revokedId}"] code.grant-id`).textContent(), revokedId, 'revoked row retains its identity');
+    assert.deepEqual(errors, []);
+    await member.close(); await context.close();
+  }
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore, real HTTP handlers, repeated client names and long multi-space IDs', browser: browser.version(), evidence }));
+});
+
 test('Chromium administrator display contexts keep Spaces and delegations aligned without changing the acting session', { skip: !browserEnabled, timeout: 90000 }, async t => {
   const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
@@ -608,14 +761,8 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     await page.locator('#refresh').click(); await ready(page);
     assert.equal(await page.locator('#selected-user').inputValue(), 'b-context-50', 'refresh retains selected users outside the first catalog page');
     await switchUser('z-owner');
-    await page.getByRole('searchbox', { name: text('Search users', '搜索用户'), exact: true }).fill('synthetic-context-50');
-    await page.getByRole('button', { name: text('Search', '搜索'), exact: true }).click(); await ready(page);
-    assert.deepEqual(await page.locator('#selected-user option').evaluateAll(nodes => nodes.map(node => node.value)), ['z-owner', 'b-context-50'], 'search traverses catalog pages and retains the signed-in account');
-    await switchUser('b-context-50');
-    assert.equal(await sessionId(), 'z-owner');
-    await page.getByRole('searchbox', { name: text('Search users', '搜索用户'), exact: true }).fill('');
-    await page.getByRole('button', { name: text('Search', '搜索'), exact: true }).click(); await ready(page);
-    await switchUser('z-owner');
+    assert.equal(await page.getByRole('searchbox').count(), 0, 'Spaces current user is a plain dropdown without search');
+    assert.equal(await page.locator('.user-context form').count(), 0, 'Spaces has no search interaction');
     assert.equal(await page.locator('input[name=username]').count(), 1, 'administrator owner sees member actions in own context');
     if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-spaces-own-overview.png`), fullPage: true });
     // Exercise the actual native select with the keyboard.
@@ -657,11 +804,14 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     assert.ok(!firstUsers.users.some(user => user.id === 'z-owner'), 'administrator really is beyond first user page');
     assert.equal(await page.locator('#selected-user').inputValue(), 'z-owner', 'delegations defaults to signed-in administrator outside catalog page');
     assert.equal(await page.locator('.grant-row').count(), 0, 'administrator empty grants are not mislabeled member grants');
+    assert.equal(await page.getByRole('searchbox').count(), 0, 'Agent delegations current user is a plain dropdown without search');
     await switchUser('a-member'); assert.equal(await page.locator('.grant-row').count(), 50);
     await page.getByRole('button', { name: text('Load more delegations', '加载更多委托'), exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('.grant-row').length === 51);
     assert.equal(await page.locator('#selected-user').inputValue(), 'a-member');
     const expectedIds = auth.listGrants('a-member').map(grant => grant.id).sort();
+    const expectedSpaces = new Map(auth.listGrants('a-member').map(grant => [grant.id, [...new Set(grant.rules.map(rule => rule.spaceId))].sort()]));
+    evidence.push({ width, paginatedIdentifiers: await inspectDelegations(page, expectedSpaces) });
     assert.deepEqual(await page.locator('.grant-row').evaluateAll(nodes => nodes.map(node => node.dataset.grant).sort()), expectedIds, 'displayed rows belong to the selected user through pagination');
     await page.locator('#refresh').click(); await ready(page);
     assert.equal(await page.locator('#selected-user').inputValue(), 'a-member'); assert.equal(await page.locator('.grant-row').count(), 50);
@@ -684,7 +834,7 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     assert.ok(await memberPage.evaluate(() => document.documentElement.scrollWidth - innerWidth <= 1));
     if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-delegations-own-context.png`), fullPage: true });
     assert.deepEqual(errors, []);
-    evidence.push({ width, language, spaceUserCatalog: 'all registered users; page traversal, search and selection beyond first page survive refresh', spaceDefault: 'administrator', memberProjection: 'matches actual member browser', foreignOwnerWrite: 403, nativeSession: 'unchanged', delegations: 'own default outside first catalog page; selection, pagination, refresh, stale read', ordinaryUser: 'own only, no switcher', overflow: 0, status: 'Pass' });
+    evidence.push({ width, language, spaceUserCatalog: 'plain dropdown; all registered users; pagination and selection beyond first page survive refresh', spaceDefault: 'administrator', memberProjection: 'matches actual member browser', foreignOwnerWrite: 403, nativeSession: 'unchanged', delegations: 'own default outside first catalog page; selection, pagination, refresh, stale read', ordinaryUser: 'own only, no switcher', overflow: 0, status: 'Pass' });
     await context.close(); await memberContext.close();
   }
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers', browser: browser.version(), evidence }));

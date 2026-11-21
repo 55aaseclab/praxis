@@ -18,7 +18,8 @@ document.querySelector('#navigation').append(spacesNavigation);
 let expiryTimer, accessTimer, overview, overviewLoading, mcpView, mcpLoading, dataView, dataLoading, dataController, booting = false, bootRevision = 0, usersLoaded = false;
 const controllers = new Set();
 let writeFocus;
-const knownUsers = new Map(), pickerQueries = { spaces: '', grants: '' };
+const knownUsers = new Map();
+let closeConfirmation = () => {};
 let pickerLoading = false;
 const contextSelectionId = () => view === 'spaces' ? selectedSpaceUserId : selectionId();
 const pickerUsers = () => {
@@ -77,7 +78,7 @@ function setSession(value) {
     clearAppFacts();
     if (session.user.id !== value.user.id) view = null;
     epoch++; for (const controller of controllers) controller.abort(); overview?.clear();
-    users = []; knownUsers.clear(); pickerQueries.spaces = ''; pickerQueries.grants = ''; nextCursor = null; selectedId = null; selectedGrantId = null; selectedSpaceId = null; selectedAppId = null; selectedSpaceUserId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
+    closeConfirmation(); users = []; knownUsers.clear(); nextCursor = null; selectedId = null; selectedGrantId = null; selectedSpaceId = null; selectedAppId = null; selectedSpaceUserId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
   }
   session = value; clearTimeout(expiryTimer); clearTimeout(accessTimer);
   if (!view || !value.platformAdmin && !['general', 'spaces', 'access', 'grants'].includes(view)) view = 'general';
@@ -120,6 +121,7 @@ function time(value) { if (value === null || value === undefined) return t("No e
 function terminal(status, text) {
   if (ended) return;
   clearAppFacts();
+  closeConfirmation();
   ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; knownUsers.clear(); nextCursor = null; selectedId = null; selectedGrantId = null;
   for (const controller of controllers) controller.abort();
   overview?.clear(); dataController?.destroy(); dataController = null; document.querySelector('#overview-controls').hidden = true;
@@ -154,7 +156,6 @@ function setBusy(value) {
     writeFocus = content.contains(active) ? { node: active, tag: active.tagName, name: active.name, text: active.textContent, scope: [view, selectedSpaceId, selectedAppId, selectionId()].join('/') } : null;
   }
   writing = value; for (const node of content.querySelectorAll('button, input, select')) node.disabled = value; document.querySelector('#create-user').disabled = value; document.querySelector('#refresh').disabled = value;
-  if (!value) for (const box of content.querySelectorAll('.space-delete-confirm')) box.querySelector('button[type=submit]').disabled = box.querySelector('input').value !== box.dataset.spaceId;
   if (!value && writeFocus) {
     if (writeFocus.scope === [view, selectedSpaceId, selectedAppId, selectionId()].join('/')) {
       const target = writeFocus.node.isConnected ? writeFocus.node : [...content.querySelectorAll('button,input,select,a')].find(node => node.tagName === writeFocus.tag && (writeFocus.name ? node.name === writeFocus.name : node.textContent === writeFocus.text));
@@ -179,56 +180,73 @@ function field(label, name, type = 'text') {
   const root = el('label', 'field'), input = el('input'); input.name = name; input.type = type;
   root.append(el('span', '', label), input); return { root, input };
 }
+function openConfirmation(box, label, initialFocus) {
+  closeConfirmation();
+  const trigger = document.activeElement, dialog = el('dialog', 'confirm-dialog');
+  dialog.setAttribute('aria-label', label);
+  dialog.append(box); document.body.append(dialog);
+  const close = () => {
+    dialog.close(); dialog.remove();
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    if (closeConfirmation === close) closeConfirmation = () => {};
+  };
+  closeConfirmation = close;
+  dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+  dialog.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const controls = [...dialog.querySelectorAll('button,input,select,a[href]')].filter(node => !node.disabled && node.getClientRects().length);
+    const first = controls[0], last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first || !event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); (event.shiftKey ? last : first)?.focus({ preventScroll: true });
+    }
+  });
+  const outside = event => {
+    const rect = dialog.getBoundingClientRect();
+    return event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom);
+  };
+  let backdropPressed = false;
+  dialog.addEventListener('pointerdown', event => { backdropPressed = outside(event); });
+  dialog.addEventListener('click', event => { if (backdropPressed && outside(event)) close(); });
+  const position = [scrollX, scrollY];
+  initialFocus.autofocus = true;
+  dialog.showModal(); initialFocus.focus({ preventScroll: true });
+  scrollTo(...position);
+  return close;
+}
 function confirmAction(parent, text, action) {
-  parent.querySelector('.confirm-box')?.remove();
-  const box = el('div', 'confirm-box'); box.setAttribute('role', 'group'); box.setAttribute('aria-label', t("Confirm action", "确认操作"));
-  const trigger = document.activeElement;
-  const cancel = () => { box.remove(); if (trigger?.isConnected) trigger.focus(); };
-  const actions = el('div', 'actions'), cancelButton = button(t("Cancel", "取消"), 'quiet-button', cancel);
-  actions.append(button(t("Confirm", "确认"), 'danger-button', action), cancelButton);
-  box.addEventListener('keydown', event => { if (event.key === 'Escape' && !writing) { event.preventDefault(); cancel(); } });
-  box.append(el('p', '', text), actions); parent.append(box); cancelButton.focus();
+  const box = el('div', 'confirm-box'), actions = el('div', 'actions');
+  const cancelButton = button(t("Cancel", "取消"), 'quiet-button', () => close());
+  actions.append(button(t("Confirm", "确认"), 'danger-button', () => { const current = parent.isConnected; close(); if (current) action(); }), cancelButton);
+  box.append(el('p', '', text), actions);
+  const close = openConfirmation(box, t("Confirm action", "确认操作"), cancelButton);
 }
 function userPath(user, suffix = '') { return `/users/${encodeURIComponent(user.id)}${suffix}`; }
 function updateUser(user) { knownUsers.set(user.id, user); const index = users.findIndex(value => value.id === user.id); if (index >= 0) users[index] = user; else users.push(user); }
 function picker(options = pickerUsers(), value = selectionId(), change = id => { if (view === 'grants') selectedGrantId = id; else selectedId = id; void render(); }) {
-  const searchable = Object.hasOwn(pickerQueries, view), query = searchable ? pickerQueries[view] : '';
-  const matches = user => user.username.toLocaleLowerCase().includes(query.toLocaleLowerCase()) || user.id.toLocaleLowerCase().includes(query.toLocaleLowerCase());
   const root = el('div', 'user-context'), label = el('label', 'user-picker'), select = el('select'); select.id = 'selected-user';
   label.append(el('span', '', t("Current user", "当前用户")), select); root.append(label);
-  for (const user of options.filter(user => !query || matches(user) || user.id === value || user.id === session.user.id)) {
+  for (const user of options) {
     const option = el('option', '', `${user.username}${user.enabled === false ? t(" (disabled)", "（已停用）") : ''}`); option.value = user.id; select.append(option);
   }
   select.value = value;
   select.addEventListener('change', () => { if (!writing && !booting && !ended && !pickerLoading) change(select.value); else select.value = value; });
-  if (searchable) {
-    const form = el('form', 'user-search'), search = field(t('Search users', '搜索用户'), 'userSearch', 'search');
-    search.input.value = query; search.input.maxLength = 200;
-    const submit = el('button', 'quiet-button', t('Search', '搜索')); submit.type = 'submit';
-    form.append(controlRow(search.root, submit));
-    const load = async searching => {
-      if (writing || booting || ended || pickerLoading) return;
-      const current = epoch, activeView = view, nextQuery = searching ? search.input.value.trim() : pickerQueries[view];
-      pickerQueries[view] = nextQuery; pickerLoading = true; content.setAttribute('aria-busy', 'true');
-      for (const control of root.querySelectorAll('button,input,select')) control.disabled = true;
-      const match = user => user.username.toLocaleLowerCase().includes(nextQuery.toLocaleLowerCase()) || user.id.toLocaleLowerCase().includes(nextQuery.toLocaleLowerCase());
-      const target = searching ? 50 : users.filter(match).length + 50;
-      try {
-        // Search the same paginated catalog without changing the management API or acting identity.
-        do {
-          if (!nextCursor || searching && users.filter(match).length >= target) break;
-          const result = await api(`/users?limit=50&after=${encodeURIComponent(nextCursor)}`);
-          if (ended || current !== epoch || activeView !== view) return;
-          for (const user of result.users) updateUser(user); nextCursor = result.nextCursor;
-        } while (nextCursor && users.filter(match).length < target);
-        if (!ended && current === epoch && activeView === view) await render();
-      } catch (error) { report(error); }
-      finally { pickerLoading = false; for (const control of root.querySelectorAll('button,input,select')) control.disabled = writing; if (current === epoch) content.setAttribute('aria-busy', 'false'); }
-    };
-    form.addEventListener('submit', event => { event.preventDefault(); void load(true); }); root.append(form);
-    if (nextCursor) root.append(button(t('Load more users', '加载更多用户'), 'quiet-button pagination', () => void load(false)));
-    if (query && !users.some(matches)) root.append(el('p', 'section-note', t('No matching users.', '没有匹配的用户。')));
-  }
+  if (nextCursor && ['spaces', 'grants'].includes(view)) root.append(button(t('Load more users', '加载更多用户'), 'quiet-button pagination', async () => {
+    if (writing || booting || ended || pickerLoading) return;
+    const current = epoch, activeView = view;
+    pickerLoading = true; content.setAttribute('aria-busy', 'true');
+    for (const control of root.querySelectorAll('button,select')) control.disabled = true;
+    try {
+      const result = await api(`/users?limit=50&after=${encodeURIComponent(nextCursor)}`);
+      if (ended || current !== epoch || activeView !== view) return;
+      for (const user of result.users) updateUser(user); nextCursor = result.nextCursor;
+      await render();
+    } catch (error) { report(error); }
+    finally {
+      pickerLoading = false;
+      for (const control of root.querySelectorAll('button,select')) control.disabled = writing;
+      if (current === epoch) content.setAttribute('aria-busy', 'false');
+    }
+  }));
   return root;
 }
 function createForm() {
@@ -338,11 +356,20 @@ function renderGrants(user, value, own = false) {
   const list = el('ul', 'grant-list');
   for (const grant of value.grants) {
     const row = el('li', 'grant-row'), summary = el('div', 'control-summary'), controls = controlRow(summary), heading = el('div', 'grant-heading');
-    row.append(controls); row.dataset.grant = grant.id;
+    row.dataset.grant = grant.id;
     const revoked = grant.revokedAt != null, expired = grant.expiresAt <= Date.now();
     const status = grant.status || (revoked ? 'revoked' : expired ? 'expired' : 'current'); row.dataset.status = status;
     heading.append(el('strong', '', grant.client.name), el('span', 'grant-status', ({ current: t("Unexpired", "未到期"), restricted: t("Scope restricted", "范围已受限"), expired: t("Expired", "已到期"), revoked: t("Revoked", "已撤销") })[status] || t("Status unconfirmed", "状态待确认")));
-    summary.append(heading, el('span', 'meta', t("Expires {0}", "有效期至 {0}", time(grant.expiresAt))));
+    const identifiers = el('div', 'grant-identifiers meta');
+    const addIdentifier = (label, value, className) => {
+      const line = el('div'); line.append(el('span', '', label + ': '), el('code', className, value)); identifiers.append(line);
+    };
+    addIdentifier(t('Delegation ID', '委托 ID'), grant.id, 'grant-id');
+    const spaceIds = grant.spaceIds;
+    for (const spaceId of spaceIds) addIdentifier(t('Space ID', '空间 ID'), spaceId, 'grant-space-id');
+    if (!spaceIds.length) identifiers.append(el('span', '', t('No recorded spaces.', '暂无空间记录。')));
+    row.append(heading, identifiers, controls);
+    summary.append(el('span', 'meta', t("Expires {0}", "有效期至 {0}", time(grant.expiresAt))));
     if (own && ['expired', 'revoked'].includes(status)) summary.append(el('p', 'meta', t("Historical grant scope; current permissions may differ.", "以下为历史授权范围，不代表当前可用权限。")));
     if (own && status === 'restricted') summary.append(el('p', 'meta', t("App or resource access changed. The list shows the actions currently available.", "应用或资源权限已变化，当前可用操作以所列范围为准。")));
     const scopes = el('ul', 'grant-scopes');
@@ -358,10 +385,8 @@ const spaceTypeName = type => ({ personal: t('Personal', '个人'), family: t('F
 const spaceLabel = space => `${spaceTypeName(space.type)} · ${space.id.slice(0, 8)}`;
 const spacePath = suffix => `${accountBase}/spaces/${encodeURIComponent(selectedSpaceId)}${suffix}`;
 function confirmSpaceDeletion(parent, space) {
-  parent.querySelector('.confirm-box')?.remove();
-  const trigger = document.activeElement, box = el('form', 'confirm-box space-delete-confirm');
+  const box = el('form', 'confirm-box space-delete-confirm');
   box.dataset.spaceId = space.id; box.setAttribute('aria-label', t('Confirm space deletion', '确认删除空间'));
-  const cancel = () => { box.remove(); if (trigger?.isConnected) trigger.focus(); };
   box.append(el('p', '', t('Permanently delete this space? This cannot be undone. Access to this space stops immediately. The following will be removed:', '永久删除此空间？此操作无法撤销，空间访问将立即停止。以下内容将被移除：')));
   const removed = el('ul', 'space-delete-effects');
   for (const text of [t('All space memberships and resource permissions', '全部空间成员关系与资源权限'), t('Agent delegation rules and consent scopes referencing this space', '引用此空间的智能体委托规则与授权范围'), t('App enrollments and the web entries granted by this space', '空间应用启用记录及其授予的网页入口')]) removed.append(el('li', '', text));
@@ -371,17 +396,17 @@ function confirmSpaceDeletion(parent, space) {
   const identity = el('p', 'space-delete-id', space.id); box.append(identity);
   const submit = el('button', 'danger-button', t('Delete space permanently', '永久删除空间')); submit.type = 'submit'; submit.disabled = true;
   confirmation.input.addEventListener('input', () => { submit.disabled = writing || confirmation.input.value !== space.id; });
-  box.append(controlRow(confirmation.root, submit), button(t('Cancel', '取消'), 'quiet-button', cancel));
-  box.addEventListener('keydown', event => { if (event.key === 'Escape' && !writing) { event.preventDefault(); cancel(); } });
+  box.append(controlRow(confirmation.root, submit), button(t('Cancel', '取消'), 'quiet-button', () => close()));
   box.addEventListener('submit', event => {
-    event.preventDefault(); if (confirmation.input.value !== space.id) return;
+    event.preventDefault(); if (confirmation.input.value !== space.id || !parent.isConnected) return;
+    close();
     void mutateSpace(`${accountBase}/spaces/${encodeURIComponent(space.id)}`, { method: 'DELETE', body: { confirmSpaceId: confirmation.input.value } }, t('Space deleted.', '空间已删除。'), () => {
       selectedSpaceId = null; selectedAppId = null; history.replaceState(null, '', spaceHref()); content.replaceChildren();
     }).then(() => {
       if (!ended && view === 'spaces' && !notice.classList.contains('error')) (content.querySelector('select[name=space]') || document.querySelector('#heading')).focus();
     });
   });
-  parent.append(box); confirmation.input.focus();
+  const close = openConfirmation(box, t('Confirm space deletion', '确认删除空间'), confirmation.input);
 }
 function selectField(label, name, choices) {
   const root = el('label', 'field'), input = el('select'); input.name = name;
@@ -519,6 +544,7 @@ async function render({ preserve = writing && content.childElementCount > 0 } = 
   finally { if (position && !ended) scrollTo(position.x, position.y); }
 }
 async function renderView(preserve) {
+  closeConfirmation();
   if (ended || !session) return;
   if (!session.platformAdmin && !['general', 'spaces', 'access', 'grants'].includes(view)) view = 'general';
   overview?.clear(); dataController?.destroy(); dataController = null;

@@ -104,7 +104,7 @@ export function createAccountHandler({ auth } = {}) {
         const grants = rows.slice(0, limit).map(row => {
           const original = JSON.parse(row.rules), effective = auth.effectiveRules(session.user.id, original), reduced = JSON.stringify(canonical(original)) !== JSON.stringify(canonical(effective));
           const status = row.revoked_at !== null ? 'revoked' : row.expires_at <= auth.clock() ? 'expired' : !effective.length || reduced ? 'restricted' : 'current';
-          return { id: row.id, client: { id: row.client_id, name: row.client_name }, expiresAt: row.expires_at, revokedAt: row.revoked_at, status, scopes: scopes(['expired', 'revoked'].includes(status) ? original : effective) };
+          return { id: row.id, client: { id: row.client_id, name: row.client_name }, expiresAt: row.expires_at, revokedAt: row.revoked_at, status, spaceIds: [...new Set(original.map(rule => rule.spaceId))].sort(), scopes: scopes(['expired', 'revoked'].includes(status) ? original : effective) };
         });
         requireAccountSession(request, { auth });
         send(response, 200, { grants, nextCursor: rows.length > limit ? rows[limit - 1].id : null });
@@ -190,7 +190,7 @@ export function createAdminHandler({ auth } = {}) {
           if (action === 'grants' && request.method === 'GET') {
             const { limit, after } = page(url.searchParams);
             const rows = auth.db.prepare('SELECT g.id,g.rules,g.expires_at,g.revoked_at,c.id AS client_id,c.name AS client_name FROM auth_grants g JOIN auth_clients c ON c.id=g.client_id WHERE g.user_id=? AND g.id>? ORDER BY g.id LIMIT ?').all(targetId, after, limit + 1);
-            return { status: 200, value: { grants: rows.slice(0, limit).map(row => ({ id: row.id, client: { id: row.client_id, name: row.client_name }, expiresAt: row.expires_at, revokedAt: row.revoked_at, scopes: scopes(JSON.parse(row.rules)) })), nextCursor: rows.length > limit ? rows[limit - 1].id : null } };
+            return { status: 200, value: { grants: rows.slice(0, limit).map(row => ({ id: row.id, client: { id: row.client_id, name: row.client_name }, expiresAt: row.expires_at, revokedAt: row.revoked_at, spaceIds: [...new Set(JSON.parse(row.rules).map(rule => rule.spaceId))].sort(), scopes: scopes(JSON.parse(row.rules)) })), nextCursor: rows.length > limit ? rows[limit - 1].id : null } };
           }
         }
         if (grantMatch && request.method === 'DELETE') {
