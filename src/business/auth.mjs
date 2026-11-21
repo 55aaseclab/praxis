@@ -338,6 +338,7 @@ export class AuthStore {
     return Boolean(app && !app.integration.business && app.integration.web.policy === 'grant');
   }
   appSpaceEnabled(appId, spaceId, installedApps = this.webAccessBoundary.apps) {
+    if (!this.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(spaceId)) return false;
     if (!this.spaceAppEnrollmentAllowed(appId, installedApps)) return false;
     const enrollment = this.db.prepare('SELECT enabled FROM auth_space_apps WHERE space_id=? AND app_id=?').get(spaceId, appId);
     if (enrollment) return enrollment.enabled === 1;
@@ -377,6 +378,37 @@ export class AuthStore {
       this.audit({ event: 'space.created', userId: ownerId, spaceId: id, outcome: 'allowed' });
       this.changed({ type: 'space', spaceId: id });
       return { id, type, ownerId };
+    });
+  }
+  canDeleteSpace(userId, space) {
+    return space.type !== 'personal' && (space.ownerId === userId || this.isPlatformAdmin(userId));
+  }
+  deleteSpace({ spaceId, actorId, confirmSpaceId }) {
+    identifier(spaceId, 'Space'); identifier(actorId, 'User');
+    return this.controlTransaction(() => {
+      const space = this.db.prepare('SELECT id,type,owner_id AS ownerId FROM auth_spaces WHERE id=?').get(spaceId);
+      if (!space) fail('Space not found.', 404, 'NOT_FOUND');
+      if (!this.db.prepare('SELECT 1 FROM auth_users WHERE id=? AND enabled=1').get(actorId) || space.ownerId !== actorId && !this.isPlatformAdmin(actorId)) fail('Only the space creator or a platform administrator can delete this space.', 403, 'FORBIDDEN');
+      if (space.type === 'personal') fail('Personal spaces cannot be deleted.', 409, 'PERSONAL_SPACE_REQUIRED');
+      if (confirmSpaceId !== spaceId) fail('Type the exact space ID to confirm deletion.', 400, 'CONFIRMATION_REQUIRED');
+      // Include expired/revoked delegations: retained history must not contain
+      // reusable space scopes. Multi-space credentials keep their other rules.
+      for (const grant of this.db.prepare('SELECT id,rules FROM auth_grants').all()) {
+        const original = JSON.parse(grant.rules), retained = original.filter(rule => rule.spaceId !== spaceId);
+        if (retained.length === original.length) continue;
+        this.db.prepare('UPDATE auth_grants SET rules=? WHERE id=?').run(JSON.stringify(retained), grant.id);
+        if (!retained.length) {
+          this.revokeGrant(grant.id);
+          this.db.prepare('DELETE FROM auth_codes WHERE grant_id=?').run(grant.id);
+        }
+      }
+      for (const table of ['auth_resources', 'auth_members', 'auth_space_apps', 'auth_self_service_spaces']) {
+        this.db.prepare(`DELETE FROM ${table} WHERE space_id=?`).run(spaceId);
+      }
+      this.db.prepare('DELETE FROM auth_spaces WHERE id=?').run(spaceId);
+      this.audit({ event: 'space.deleted', userId: actorId, spaceId, outcome: 'allowed' });
+      this.changed({ type: 'space_deleted', spaceId });
+      return { deleted: true, spaceId };
     });
   }
   setSpaceAppEnrollment({ spaceId, appId, enabled }, installedApps = this.webAccessBoundary.apps) {
@@ -498,6 +530,7 @@ export class AuthStore {
     return { expiresAt: Math.min(this.webPermissionExpiry(userId), ...expiries) };
   }
   userPermissions(userId, spaceId, appId, action) {
+    if (!this.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(spaceId)) return [];
     if (!Object.hasOwn(this.appActions, appId) || !this.appActions[appId].includes(action) || !this.db.prepare('SELECT 1 FROM auth_users WHERE id=? AND enabled=1').get(userId)) return [];
     if (!this.webBoundaryAllows(userId, spaceId, appId)) return [];
     const member = this.db.prepare('SELECT role FROM auth_members WHERE user_id=? AND space_id=?').get(userId, spaceId);
@@ -869,7 +902,8 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         store.requireNativeSession(token);
         const writing = !['GET', 'HEAD'].includes(request.method);
         if (writing) store.requireRequestCsrf(request);
-        const input = ['POST', 'PUT'].includes(request.method) ? await readBody(request) : {};
+        const deletingSpace = request.method === 'DELETE' && /^\/api\/business\/account\/spaces\/[^/]+$/.test(path);
+        const input = ['POST', 'PUT'].includes(request.method) || deletingSpace ? await readBody(request) : {};
         const fields = (allowed, required = allowed) => {
           if (Object.keys(input).some(key => !allowed.includes(key)) || required.some(key => !Object.hasOwn(input, key))) fail('Space request contains unknown or missing fields.');
         };
@@ -880,10 +914,13 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
             entryPolicy: app.integration.web.policy, enrollmentAllowed: store.spaceAppEnrollmentAllowed(id, apps) };
         });
         const result = store.controlTransaction(() => {
-          const session = store.requireNativeSession(token), userId = session.user.id;
+          const session = store.requireNativeSession(token), userId = session.user.id, platformAdmin = store.isPlatformAdmin(userId);
           if (writing) store.requireRequestCsrf(request);
           if (path === '/api/business/account/spaces') {
-            if (request.method === 'GET') return { status: 200, value: { spaces: store.db.prepare('SELECT s.id,s.type,s.owner_id AS ownerId,m.role FROM auth_spaces s JOIN auth_members m ON m.space_id=s.id WHERE m.user_id=? ORDER BY s.id').all(userId), catalog } };
+            if (request.method === 'GET') {
+              const spaces = store.db.prepare('SELECT s.id,s.type,s.owner_id AS ownerId,m.role FROM auth_spaces s LEFT JOIN auth_members m ON m.space_id=s.id AND m.user_id=? WHERE m.user_id IS NOT NULL OR s.owner_id=? OR ?=1 ORDER BY s.id').all(userId, userId, Number(platformAdmin));
+              return { status: 200, value: { spaces: spaces.map(space => ({ ...space, canDelete: store.canDeleteSpace(userId, space) })), catalog } };
+            }
             if (request.method === 'POST') { fields(['type']); return { status: 201, value: store.createSelfServiceSpace({ type: input.type, ownerId: userId }) }; }
             fail('Space method is not supported.', 405, 'METHOD_NOT_ALLOWED');
           }
@@ -892,13 +929,17 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
           const spaceId = decodeURIComponent(match[1]), section = match[2], targetId = match[3] ? decodeURIComponent(match[3]) : null;
           const space = store.db.prepare('SELECT id,type,owner_id AS ownerId FROM auth_spaces WHERE id=?').get(spaceId);
           const role = store.membershipRole(userId, spaceId);
-          if (!space || !role) fail('Space not found.', 404, 'NOT_FOUND');
+          if (!space || !role && space.ownerId !== userId && !platformAdmin) fail('Space not found.', 404, 'NOT_FOUND');
+          if (request.method === 'DELETE' && !section) {
+            fields(['confirmSpaceId']);
+            return { status: 200, value: store.deleteSpace({ spaceId, actorId: userId, confirmSpaceId: input.confirmSpaceId }) };
+          }
           if (writing && space.ownerId !== userId) fail('Only the space owner can change this setting.', 403, 'FORBIDDEN');
           if (request.method === 'GET' && !section) {
             const members = store.db.prepare('SELECT m.user_id AS userId,u.username,m.role FROM auth_members m JOIN auth_users u ON u.id=m.user_id WHERE m.space_id=? ORDER BY m.user_id').all(spaceId);
             const permissions = store.db.prepare('SELECT id,user_id AS userId,app_id AS appId,resources,actions,expires_at AS expiresAt FROM auth_resources WHERE space_id=?').all(spaceId)
               .filter(row => space.ownerId === userId || row.userId === userId).map(row => ({ ...row, resources: JSON.parse(row.resources), actions: JSON.parse(row.actions) }));
-            return { status: 200, value: { space: { ...space, role }, apps: catalog.map(app => ({ ...app, enabled: store.appSpaceEnabled(app.id, spaceId, apps) })), members, permissions } };
+            return { status: 200, value: { space: { ...space, role, canDelete: store.canDeleteSpace(userId, space) }, apps: catalog.map(app => ({ ...app, enabled: store.appSpaceEnabled(app.id, spaceId, apps) })), members, permissions } };
           }
           let value;
           if (section === 'apps' && targetId && request.method === 'PUT') {

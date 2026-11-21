@@ -5,6 +5,8 @@ const base = '/api/business/admin', accountBase = '/api/business/account';
 const actionNames = { read: t("Read", "读取"), create: t("Create", "新增"), update: t("Update", "修改"), complete: t("Complete", "完成"), delete: t("Delete", "删除"), submit: t("Submit corrections", "提交校正"), assign: t("Assign tasks", "分配任务"), manage_members: t("Manage members", "管理成员"), manage_sharing: t("Manage sharing", "管理共享"), manage_delegation: t("Manage delegations", "管理委托") };
 const titles = { spaces: t('Spaces', '空间'), general: t('General', '通用'), overview: t("Overview", "状态概览"), data: t("Data management", "数据管理"), mcp: 'MCP', users: t("Users", "用户"), access: t("App access", "入口权限"), grants: t("Agent delegations", "智能体委托") };
 const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入内容。"), READ_TIMEOUT: t("Read timed out. Try again.", "读取超时，请重试。"), WRITE_TIMEOUT: t("Request timed out. Refresh to check whether it was saved.", "请求超时，尚未确认是否保存。请先刷新核对结果。"), INVALID_REQUEST: t("Check the form fields.", "请检查输入内容。"), NOT_FOUND: t("This record no longer exists. Refresh to continue.", "这条记录已不存在，请刷新。"), FORBIDDEN: t("This action is no longer permitted. Refresh to check your space access.", "当前无权执行此操作，请刷新核对空间权限。"), CONFLICT: t("Account already exists or its state changed. Check and try again.", "账号已存在或状态已变化，请检查后重试。"), LAST_ADMIN_REQUIRED: t("Keep at least one active platform administrator.", "至少需要保留一名启用的平台管理员。"), POLICY_BUSY: t("Authorization is being updated. Try again shortly.", "授权正在更新，请稍后重试。"), CSRF_REJECTED: t("Session changed. Sign in again.", "登录状态已变化，请重新登录。"), UNAVAILABLE: t("Service unavailable. Try again later.", "服务暂时不可用，请稍后重试。"), DATA_INVENTORY_UNAVAILABLE: t("Could not load data locations. Refresh to retry.", "暂时无法读取数据位置，请稍后刷新。"), ADMIN_DEFAULT_ACCESS: t("Platform administrators have access to all app entries.", "平台管理员默认拥有全部入口，无需单独授权。") };
+errorNames.CONFIRMATION_REQUIRED = t('Type the full space ID exactly to confirm deletion.', '请输入完整且一致的空间 ID 以确认删除。');
+errorNames.PERSONAL_SPACE_REQUIRED = t('Personal spaces cannot be deleted.', '个人空间不能删除。');
 const content = document.querySelector('#content'), notice = document.querySelector('#notice');
 let session = null, users = [], nextCursor = null, selectedId = null, view = Object.hasOwn(titles, new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : null, epoch = 0, ended = false, writing = false, createOpen = false;
 const initialRoute = new URLSearchParams(location.search);
@@ -89,7 +91,8 @@ function message(text = '', kind = '') {
   notice.replaceChildren(document.createTextNode(text)); notice.className = `notice ${kind}`;
 }
 function spaceHref(appId = null) {
-  const query = new URLSearchParams({ view: 'spaces', space: selectedSpaceId });
+  const query = new URLSearchParams({ view: 'spaces' });
+  if (selectedSpaceId) query.set('space', selectedSpaceId);
   if (appId) query.set('app', appId);
   return `/admin/?${query}`;
 }
@@ -141,6 +144,7 @@ function setBusy(value) {
     writeFocus = content.contains(active) ? { node: active, tag: active.tagName, name: active.name, text: active.textContent, scope: [view, selectedSpaceId, selectedAppId, selectedId].join('/') } : null;
   }
   writing = value; for (const node of content.querySelectorAll('button, input, select')) node.disabled = value; document.querySelector('#create-user').disabled = value; document.querySelector('#refresh').disabled = value;
+  if (!value) for (const box of content.querySelectorAll('.space-delete-confirm')) box.querySelector('button[type=submit]').disabled = box.querySelector('input').value !== box.dataset.spaceId;
   if (!value && writeFocus) {
     if (writeFocus.scope === [view, selectedSpaceId, selectedAppId, selectedId].join('/')) {
       const target = writeFocus.node.isConnected ? writeFocus.node : [...content.querySelectorAll('button,input,select,a')].find(node => node.tagName === writeFocus.tag && (writeFocus.name ? node.name === writeFocus.name : node.textContent === writeFocus.text));
@@ -310,6 +314,32 @@ function renderGrants(user, value, own = false) {
 const spaceTypeName = type => ({ personal: t('Personal', '个人'), family: t('Family', '家庭'), company: t('Team', '团队') })[type] || t('Space', '空间');
 const spaceLabel = space => `${spaceTypeName(space.type)} · ${space.id.slice(0, 8)}`;
 const spacePath = suffix => `${accountBase}/spaces/${encodeURIComponent(selectedSpaceId)}${suffix}`;
+function confirmSpaceDeletion(parent, space) {
+  parent.querySelector('.confirm-box')?.remove();
+  const trigger = document.activeElement, box = el('form', 'confirm-box space-delete-confirm');
+  box.dataset.spaceId = space.id; box.setAttribute('aria-label', t('Confirm space deletion', '确认删除空间'));
+  const cancel = () => { box.remove(); if (trigger?.isConnected) trigger.focus(); };
+  box.append(el('p', '', t('Permanently delete this space? This cannot be undone. Access to this space stops immediately. The following will be removed:', '永久删除此空间？此操作无法撤销，空间访问将立即停止。以下内容将被移除：')));
+  const removed = el('ul', 'space-delete-effects');
+  for (const text of [t('All space memberships and resource permissions', '全部空间成员关系与资源权限'), t('Agent delegation rules and consent scopes referencing this space', '引用此空间的智能体委托规则与授权范围'), t('App enrollments and the web entries granted by this space', '空间应用启用记录及其授予的网页入口')]) removed.append(el('li', '', text));
+  box.append(removed, el('p', '', t('App data files are retained for operator cleanup. Other spaces, accounts and independent permissions are preserved.', '应用数据文件保留，由运维另行清理。其他空间、账号及独立权限将保留。')));
+  const confirmation = field(t('Type the full space ID to confirm', '输入完整空间 ID 以确认'), 'confirmSpaceId');
+  confirmation.input.autocomplete = 'off'; confirmation.input.spellcheck = false; confirmation.input.required = true;
+  const identity = el('p', 'space-delete-id', space.id); box.append(identity);
+  const submit = el('button', 'danger-button', t('Delete space permanently', '永久删除空间')); submit.type = 'submit'; submit.disabled = true;
+  confirmation.input.addEventListener('input', () => { submit.disabled = writing || confirmation.input.value !== space.id; });
+  box.append(controlRow(confirmation.root, submit), button(t('Cancel', '取消'), 'quiet-button', cancel));
+  box.addEventListener('keydown', event => { if (event.key === 'Escape' && !writing) { event.preventDefault(); cancel(); } });
+  box.addEventListener('submit', event => {
+    event.preventDefault(); if (confirmation.input.value !== space.id) return;
+    void mutateSpace(`${accountBase}/spaces/${encodeURIComponent(space.id)}`, { method: 'DELETE', body: { confirmSpaceId: confirmation.input.value } }, t('Space deleted.', '空间已删除。'), () => {
+      selectedSpaceId = null; selectedAppId = null; history.replaceState(null, '', spaceHref()); content.replaceChildren();
+    }).then(() => {
+      if (!ended && view === 'spaces' && !notice.classList.contains('error')) (content.querySelector('select[name=space]') || document.querySelector('#heading')).focus();
+    });
+  });
+  parent.append(box); confirmation.input.focus();
+}
 function selectField(label, name, choices) {
   const root = el('label', 'field'), input = el('select'); input.name = name;
   for (const choice of choices) { const option = el('option', '', choice.label); option.value = choice.value; input.append(option); }
@@ -331,7 +361,10 @@ async function renderSpaces(current, preserve) {
   const value = await api(`${accountBase}/spaces`);
   if (ended || current !== epoch || view !== 'spaces') return;
   const spaces = value.spaces;
-  if (!spaces.some(space => space.id === selectedSpaceId)) { selectedSpaceId = spaces[0]?.id || null; selectedAppId = null; }
+  if (!spaces.some(space => space.id === selectedSpaceId)) {
+    selectedSpaceId = spaces[0]?.id || null; selectedAppId = null;
+    history.replaceState(null, '', spaceHref());
+  }
   const detail = selectedSpaceId ? await api(spacePath('')) : null;
   if (ended || current !== epoch || view !== 'spaces') return;
   content.replaceChildren();
@@ -350,7 +383,10 @@ async function renderSpaces(current, preserve) {
     const picker = selectField(t('Current space', '当前空间'), 'space', spaces.map(space => ({ value: space.id, label: spaceLabel(space) })));
     picker.input.value = selectedSpaceId;
     picker.input.addEventListener('change', () => { selectedSpaceId = picker.input.value; selectedAppId = null; history.pushState(null, '', spaceHref()); void render(); });
-    context.append(picker.root, el('p', 'section-note', owner ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
+    const selection = controlRow(picker.root);
+    if (space.canDelete) selection.append(button(t('Delete space', '删除空间'), 'danger-button space-delete', () => confirmSpaceDeletion(context, space)));
+    context.append(selection, el('p', 'section-note', owner ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
+    if (space.type === 'personal') context.append(el('p', 'section-note', t('Personal spaces cannot be deleted.', '个人空间不能删除。')));
     panel.append(context);
     const memberSection = el('section', 'space-section'); memberSection.append(el('h2', '', t('Members', '成员')));
     const memberList = el('ul', 'user-list');

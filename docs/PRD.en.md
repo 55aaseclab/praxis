@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.143 · [简体中文](PRD.md)
+Version: 0.1.144 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -87,6 +87,19 @@ Owners add existing accounts through the product member flow and explicitly gran
 | BSP06 | Grant-policy non-business app enrollment provides web entry only to current space members; disabling/removing membership withdraws that entry without granting business actions. Platform-administrator/document-owner apps remain visible but cannot be enrolled by a space owner. |
 | BSP07 | All management views use a single separator between sections. Success uses a browser alert acknowledged by the user, with no page row, copy change or auto-dismiss timer. Fixed error/loading notices add no layout row or geometry shift; errors persist until addressed, retried or explicitly refreshed, including failed follow-up reads. Same-view saves retain controls until refresh completes, preserving height, scroll and focus. |
 | BSP08 | Synthetic API and real Chromium checks at 1440/390 px cover enrollment, member add/remove, grant/revoke, unchanged authorization and labels, zero horizontal overflow and both workbench PRD languages. |
+
+## Creator-initiated space deletion
+
+The signed-in user who created a space can delete it from Settings → Spaces and the documented account API; deletion follows creation and requires no additional owner/admin role. Platform administrators can delete any otherwise deletable space. A member who only joined cannot delete it. All personal spaces, including the automatically provisioned personal space, are protected from deletion. Before sending a deletion, show an explicit warning and require the exact space ID to be typed and confirmed. The warning lists memberships, resource permissions, agent delegation rules and consent scopes referencing the space, per-space app enrollments and their granted web entries.
+
+Commit the platform cascade atomically under the current policy serialization boundary: remove the space and all listed references, withdraw its access immediately, and preserve all other spaces, users and independent authorizations. Refresh lists and pickers, clear a deleted selection and show the remaining spaces or the existing empty state without stale references. App-adapter provisioned data files are outside this platform deletion operation; retain them for separately authorized operator cleanup and document that boundary.
+
+| ID | Observable acceptance |
+| --- | --- |
+| BSD01 | A creator sees Delete, types the exact space ID and explicitly confirms; missing/wrong confirmation and a joined member's deletion attempt are refused without changes. No extra role gate is required. |
+| BSD02 | A platform administrator deletes an otherwise deletable space; all personal spaces, including the automatically provisioned personal space, remain protected for every caller. |
+| BSD03 | Synthetic deletion removes memberships, permissions, delegation rules/consent scopes, enrollments and enrollment-derived web entries atomically; immediate re-access is refused and other spaces/users/authorizations remain unchanged. App-owned files are retained. |
+| BSD04 | Real Chromium flows at 1440/390 px verify warning/confirmation, cancellation, success, refreshed pickers/lists and no stale selection or horizontal overflow; both workbench PRD languages render. Source checks and test deployment evidence remain separate from independent business acceptance. |
 
 ## External agent tools and authorization
 
@@ -307,6 +320,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.141 | 2026-11-21 | Unify Settings control rows, note spacing and native select clearance across management views |
 | v0.1.142 | 2026-11-21 | Keep native Settings selects stationary on focus, opening and dismissal |
 | v0.1.143 | 2026-11-21 | Separate Spaces overview and per-app management with complete app catalog, bounded web enrollment, single separators and browser success alerts |
+| v0.1.144 | 2026-11-21 | Add creator-confirmed atomic space deletion with personal-space protection and immediate scoped revocation |
 
 ### Letters and Profiles
 

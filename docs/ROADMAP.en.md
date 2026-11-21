@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.143
+Version: 0.1.144
 
 [简体中文](ROADMAP.md)
 
@@ -34,6 +34,10 @@ Define BSP05–BSP08 before implementation. Separate the space overview (members
 ## Self-service business spaces
 
 Define BSP01–BSP04 before implementation. Extend the existing workbench/Settings with signed-in space creation, owner-controlled enrollment from the installed reviewed catalog, member management and explicit resource grants. Persist runtime enrollment while preserving existing static spaces, personal isolation, operation ceilings and least privilege. Use one current boundary for web, bridge execution/discovery, app HTTP and jobs. Verify synthetic public UI → member grant → code/S256 PKCE → scoped MCP discovery, restart, revocation and escalation refusals, then run the platform suite and both PRD reader languages. Commit checked source, build the affected web/core pair and deploy through the authorized test blue/green environment; read back entries and anonymous MCP rejection. Independent business-client acceptance remains separate.
+
+## Creator-initiated space deletion
+
+Define BSD01–BSD04 before implementation. Add creator deletion with exact-ID confirmation inside the existing Settings → Spaces overview and documented account API, plus platform-administrator deletion; reject joined members and protect all personal spaces, including the automatically provisioned personal space. Atomically remove the space's memberships, resource permissions, delegation rules/consent scopes, enrollments and enrollment-derived web entries under the existing policy lock. Preserve other spaces/users/independent authorizations and adapter-owned files, documenting retained files for separately authorized operator cleanup. Verify synthetic allow/deny, failed-confirmation, rollback and immediate-revocation cases plus real Chromium 1440/390 px warning, cancel, success and refreshed picker/list flows. Run the extended authorization/layout checks, full platform suite and aligned one-PATCH version gate; read both PRDs through the workbench, commit verified source, then build and deploy the affected web/core pair through the authorized test blue/green environment. Report actual runtime version and unchanged public readback separately from the independent business client's acceptance.
 
 ## External-client acceptance correction
 
@@ -285,6 +289,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.141 | 2026-11-21 | Unify Settings control rows, note spacing and native select clearance across management views |
 | v0.1.142 | 2026-11-21 | Keep native Settings selects stationary on focus, opening and dismissal |
 | v0.1.143 | 2026-11-21 | Separate Spaces overview and per-app management with complete app catalog, bounded web enrollment, single separators and browser success alerts |
+| v0.1.144 | 2026-11-21 | Add creator-confirmed atomic space deletion with personal-space protection and immediate scoped revocation |
 
 ### Public applications with private collections
 

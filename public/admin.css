@@ -54,3 +54,5 @@ a.quiet-button{display:inline-flex;align-items:center;justify-content:center;tex
 #notice:empty{display:none}
 @media(max-width:760px){#notice{right:16px;bottom:calc(72px + env(safe-area-inset-bottom,0px))}}
 #content>.form-panel+.space-overview{margin-top:var(--section-gap);padding-top:var(--section-gap);border-top:1px solid var(--line)}
+
+.space-delete-effects{font-size:13px;line-height:1.6;margin:0 0 12px;padding-left:20px}.space-delete-id{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;user-select:all}.space-delete-confirm{min-width:0}.space-delete-confirm .control-row{margin-bottom:12px}

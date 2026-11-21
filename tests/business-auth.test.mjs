@@ -65,7 +65,10 @@ async function httpFixture(t, { core = false, gateway = false, apps = {} } = {})
     // Node fetch does not preserve a custom Host. Exercise the real gateway's
     // canonical Host guard using the HTTP transport, without binding its port.
     return new Promise((resolve, reject) => {
-      const outgoing = httpRequest(new URL(path, base), { method: options.method ?? 'GET', headers: { ...Object.fromEntries(new Headers(options.headers)), Host: new URL(issuer).host } }, incoming => {
+      const outgoing = httpRequest(new URL(path, base), { method: options.method ?? 'GET', headers: {
+        ...Object.fromEntries(new Headers(options.headers)), Host: new URL(issuer).host,
+        ...(options.body === undefined ? {} : { 'Content-Length': Buffer.byteLength(options.body) }),
+      } }, incoming => {
         const parts = [];
         incoming.on('error', reject);
         incoming.on('data', part => parts.push(part));
@@ -858,4 +861,165 @@ test('explicit self-service owner permissions constrain dispatch and subject exp
   f.clock.now = expiresAt;
   assert.throws(() => f.store.authorize(login.sessionToken, query), { status: 403 });
   assert.equal(f.store.subjectReadScope('alice', query), null);
+});
+
+test('space deletion requires exact confirmation and creator or platform administration, with native request safeguards', async t => {
+  const f = await httpFixture(t, { gateway: true });
+  const owner = await f.login('alice'), member = await f.login('bob'), outsider = await f.login('guest');
+  const prefix = '/api/business/account/spaces';
+  const read = (actor, path = '') => f.request(prefix + path, { headers: { Cookie: actor.cookie } });
+  const remove = (actor, id, input = { confirmSpaceId: id }, headers = {}) => f.json(`${prefix}/${id}`, input, {
+    method: 'DELETE', headers: { Cookie: actor.cookie, 'X-CSRF-Token': actor.body.csrfToken, ...headers },
+  });
+  const before = f.store.db.prepare('SELECT * FROM auth_spaces ORDER BY id').all();
+  for (const input of [{}, { confirmSpaceId: 'company-a' }, { confirmSpaceId: true }, { confirmSpaceId: 'family-a', ownerId: 'alice' }]) {
+    assert.equal((await remove(owner, 'family-a', input)).status, 400);
+  }
+  assert.equal((await remove(member, 'family-a')).status, 403);
+  f.store.setMembership({ spaceId: 'family-a', userId: 'bob', role: 'admin' });
+  assert.equal((await remove(member, 'family-a')).status, 403, 'space administrator is not the creator');
+  assert.equal((await remove(outsider, 'family-a')).status, 404);
+  assert.equal((await remove(owner, 'family-a', undefined, { 'X-CSRF-Token': 'forged' })).status, 403);
+  assert.equal((await remove(owner, 'family-a', undefined, { Origin: 'https://attacker.example' })).status, 403);
+  assert.equal((await remove(owner, 'family-a', undefined, { Authorization: `Bearer pxa_${'a'.repeat(43)}` })).status, 401);
+  assert.equal((await f.json(`${prefix}/family-a`, { confirmSpaceId: 'family-a' }, { method: 'DELETE' })).status, 401);
+  const personal = await remove(owner, 'personal-a');
+  assert.equal(personal.status, 409); assert.equal((await personal.json()).error, 'PERSONAL_SPACE_REQUIRED');
+  assert.deepEqual(f.store.db.prepare('SELECT * FROM auth_spaces ORDER BY id').all(), before, 'rejected requests leave every space intact');
+  assert.equal((await (await read(owner)).json()).spaces.find(space => space.id === 'family-a').canDelete, true);
+  assert.equal((await (await read(member)).json()).spaces.find(space => space.id === 'family-a').canDelete, false);
+  assert.equal((await (await read(owner)).json()).spaces.find(space => space.id === 'personal-a').canDelete, false);
+  // Synthetic compatibility fixture: ownership, rather than a second role gate,
+  // determines who created this space.
+  f.store.db.prepare("UPDATE auth_members SET role='member' WHERE space_id='family-a' AND user_id='alice'").run();
+  assert.equal((await remove(owner, 'family-a')).status, 200);
+  assert.equal((await read(owner, '/family-a')).status, 404);
+  assert.ok(!(await (await read(owner)).json()).spaces.some(space => space.id === 'family-a'));
+  f.store.setPlatformAdmin({ userId: 'guest', enabled: true });
+  const listed = (await (await read(outsider)).json()).spaces;
+  assert.equal(listed.find(space => space.id === 'company-a').canDelete, true);
+  assert.equal(listed.find(space => space.id === 'personal-b').canDelete, false);
+  assert.equal((await read(outsider, '/company-a')).status, 200);
+  assert.equal((await remove(outsider, 'personal-b')).status, 409);
+  assert.equal((await remove(outsider, 'company-a')).status, 200, 'platform administrator can delete a foreign space');
+  assert.equal((await remove(outsider, 'company-a')).status, 404);
+  assert.ok(f.store.db.prepare("SELECT 1 FROM auth_spaces WHERE id='personal-b'").get());
+});
+
+test('space deletion atomically removes all authorization slices and derived entries while preserving other spaces and users', t => {
+  const f = fixture(t), store = f.store;
+  const apps = { reminder: { spaces: ['family-a', 'company-a'] } };
+  store.configureWebAccessBoundary({ enabled: true, apps });
+  store.setWebAccess({ userId: 'bob', apps: ['reminder'], prds: false });
+  store.setWebAccess({ userId: 'guest', apps: ['matrix-reader'], prds: true });
+  const space = store.createSelfServiceSpace({ type: 'family', ownerId: 'alice' });
+  store.setMembership({ spaceId: space.id, userId: 'bob', role: 'member' });
+  for (const appId of ['reminder', 'finance', 'calendar']) store.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
+  store.grantResource({ userId: 'bob', ...rule(space.id, ['read'], ['synthetic-record']) });
+  store.grantResource({ userId: 'guest', ...rule(space.id, ['read'], ['synthetic-shared-record']) });
+  const only = f.grant('bob', [rule(space.id, ['read'], ['synthetic-record'])]);
+  const mixed = f.grant('bob', [rule(space.id, ['read'], ['synthetic-record']), rule('family-a', ['read'], ['other-record'])]);
+  const expired = f.grant('bob', [rule(space.id, ['read'], ['synthetic-record'])]);
+  const revoked = f.grant('bob', [rule(space.id, ['read'], ['synthetic-record'])]);
+  store.db.prepare('UPDATE auth_grants SET expires_at=? WHERE id=?').run(f.clock.now - 1, expired.id);
+  store.revokeGrant(revoked.id);
+  const onlyTokens = store.tokenPair(only.id), mixedTokens = store.tokenPair(mixed.id);
+  const session = store.login({ username: 'bob', password });
+  const consent = store.createConsent(session.sessionToken, [rule(space.id, ['read'], ['synthetic-record'])], 'synthetic-delete');
+  const verifier = 'synthetic-delete-verifier-'.repeat(3);
+  const request = { clientId: 'agent-a', redirectUri: 'https://client.example/callback', challenge: hashVerifier(verifier), resource: store.resource, requested: { reminder: ['read'] } };
+  const onlyCode = store.createAuthorizationCode({ request, userId: 'bob', rules: [rule(space.id, ['read'], ['synthetic-record'])] });
+  const mixedCode = store.createAuthorizationCode({ request, userId: 'bob', rules: [rule(space.id, ['read'], ['synthetic-record']), rule('family-a', ['read'], ['other-record'])] });
+  const unrelated = {
+    users: store.db.prepare('SELECT * FROM auth_users ORDER BY id').all(),
+    web: store.db.prepare('SELECT * FROM auth_web_access ORDER BY user_id').all(),
+    members: store.db.prepare('SELECT * FROM auth_members WHERE space_id<>? ORDER BY space_id,user_id').all(space.id),
+    resources: store.db.prepare('SELECT * FROM auth_resources WHERE space_id<>? ORDER BY id').all(space.id),
+  };
+  assert.deepEqual(store.currentWebApps('bob'), ['calendar', 'finance', 'reminder']);
+  let observedCommit = false;
+  const off = store.onChange(() => {
+    assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM auth_spaces WHERE id=?').get(space.id).n, 0);
+    assert.ok(store.db.prepare('SELECT rules FROM auth_grants').all().every(row => JSON.parse(row.rules).every(rule => rule.spaceId !== space.id)));
+    observedCommit = true;
+  });
+  store.deleteSpace({ spaceId: space.id, actorId: 'alice', confirmSpaceId: space.id });
+  off(); assert.equal(observedCommit, true, 'observers see the committed cascade, never an intermediate policy');
+  for (const table of ['auth_members', 'auth_resources', 'auth_space_apps', 'auth_self_service_spaces']) {
+    assert.equal(store.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE space_id=?`).get(space.id).n, 0, table);
+  }
+  for (const grant of store.db.prepare('SELECT rules FROM auth_grants').all()) assert.ok(JSON.parse(grant.rules).every(rule => rule.spaceId !== space.id));
+  for (const id of [only.id, expired.id, revoked.id, onlyCode.grantId]) {
+    const row = store.db.prepare('SELECT rules,revoked_at FROM auth_grants WHERE id=?').get(id);
+    assert.deepEqual(JSON.parse(row.rules), []); assert.notEqual(row.revoked_at, null);
+  }
+  assert.deepEqual(store.currentWebApps('bob'), ['reminder'], 'only enrollment-derived entries disappear');
+  assert.deepEqual(store.currentWebApps('guest'), ['matrix-reader'], 'independent administrator entry remains');
+  assert.deepEqual(store.userPermissions('bob', space.id, 'reminder', 'read'), []);
+  assert.throws(() => store.authenticate(onlyTokens.access_token), { status: 401 });
+  assert.throws(() => store.refresh({ refreshToken: onlyTokens.refresh_token, clientId: 'agent-a', resource: store.resource }));
+  assert.throws(() => store.authorize(mixedTokens.access_token, { appId: 'reminder', spaceId: space.id, action: 'read', resourceId: 'synthetic-record' }), { status: 403 });
+  assert.equal(store.authorize(mixedTokens.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'read', resourceId: 'other-record' }).userId, 'bob');
+  assert.ok(store.listSpaces(mixedTokens.access_token).every(item => item.id !== space.id));
+  assert.throws(() => store.createGrant({ userId: 'bob', clientId: 'agent-a', rules: store.consentRules(session.sessionToken, { consent, rule_0: '1' }, 'synthetic-delete') }), { status: 403 });
+  const exchange = code => store.exchangeCode({ code, clientId: 'agent-a', redirectUri: request.redirectUri, verifier, resource: store.resource });
+  assert.throws(() => exchange(onlyCode.code));
+  const exchanged = exchange(mixedCode.code);
+  assert.equal(store.authorize(exchanged.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'read', resourceId: 'other-record' }).userId, 'bob');
+  assert.deepEqual(store.db.prepare('SELECT * FROM auth_users ORDER BY id').all(), unrelated.users);
+  assert.deepEqual(store.db.prepare('SELECT * FROM auth_web_access ORDER BY user_id').all(), unrelated.web);
+  assert.deepEqual(store.db.prepare('SELECT * FROM auth_members WHERE space_id<>? ORDER BY space_id,user_id').all(space.id), unrelated.members);
+  assert.deepEqual(store.db.prepare('SELECT * FROM auth_resources WHERE space_id<>? ORDER BY id').all(space.id), unrelated.resources);
+  const restored = f.reopen();
+  restored.configureWebAccessBoundary({ enabled: true, apps });
+  assert.deepEqual(restored.currentWebApps('bob'), ['reminder']);
+  assert.equal(restored.db.prepare('SELECT COUNT(*) AS n FROM auth_spaces WHERE id=?').get(space.id).n, 0);
+  assert.throws(() => restored.authenticate(onlyTokens.access_token), { status: 401 });
+  assert.equal(restored.authorize(mixedTokens.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'read', resourceId: 'other-record' }).userId, 'bob');
+});
+
+test('a failed space cascade rolls back policy, references, audit and notifications together', t => {
+  const f = fixture(t), store = f.store;
+  store.setSpaceAppEnrollment({ spaceId: 'family-a', appId: 'finance', enabled: true });
+  const grant = f.grant('bob', [rule('family-a', ['read'])]), token = store.issueToken({ grantId: grant.id }).accessToken;
+  const tables = ['auth_spaces', 'auth_members', 'auth_resources', 'auth_grants', 'auth_tokens', 'auth_space_apps', 'auth_audit', 'auth_meta'];
+  const snapshot = () => Object.fromEntries(tables.map(table => [table, store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]));
+  const before = snapshot(); let notifications = 0;
+  store.onChange(() => notifications++);
+  store.db.exec("CREATE TEMP TRIGGER synthetic_delete_failure BEFORE DELETE ON auth_spaces BEGIN SELECT RAISE(ABORT,'synthetic rollback'); END");
+  assert.throws(() => store.deleteSpace({ spaceId: 'family-a', actorId: 'alice', confirmSpaceId: 'family-a' }), /synthetic rollback/);
+  assert.deepEqual(snapshot(), before);
+  assert.equal(notifications, 0);
+  assert.equal(store.authorize(token, { appId: 'reminder', spaceId: 'family-a', action: 'read' }).userId, 'bob');
+  store.db.exec('DROP TRIGGER synthetic_delete_failure');
+  store.deleteSpace({ spaceId: 'family-a', actorId: 'alice', confirmSpaceId: 'family-a' });
+  assert.ok(notifications > 0);
+  assert.throws(() => store.authenticate(token), { status: 401 });
+});
+
+test('space deletion serializes with an existing cross-connection business policy lease', async t => {
+  const f = fixture(t), other = new AuthStore({ file: f.file, issuer, clock: () => f.clock.now, busyTimeoutMs: 1 });
+  t.after(() => other.close());
+  await f.store.withPolicyLease(async () => {
+    assert.throws(() => other.deleteSpace({ spaceId: 'family-a', actorId: 'alice', confirmSpaceId: 'family-a' }), { status: 503, code: 'POLICY_BUSY' });
+    assert.ok(f.store.db.prepare("SELECT 1 FROM auth_spaces WHERE id='family-a'").get());
+  });
+  other.deleteSpace({ spaceId: 'family-a', actorId: 'alice', confirmSpaceId: 'family-a' });
+  assert.equal(f.store.db.prepare("SELECT COUNT(*) AS n FROM auth_spaces WHERE id='family-a'").get().n, 0);
+});
+
+test('deleted spaces remain denied despite stale static app configuration and resource identifiers', t => {
+  const f = fixture(t), apps = { reminder: { spaces: ['family-a', 'company-a'] } };
+  f.store.configureWebAccessBoundary({ enabled: true, apps });
+  f.store.setWebAccess({ userId: 'alice', apps: ['reminder'], prds: false });
+  const session = f.store.login({ username: 'alice', password });
+  const token = f.token('alice', [rule('family-a', ['read']), rule('company-a', ['read'])]);
+  f.store.deleteSpace({ spaceId: 'family-a', actorId: 'alice', confirmSpaceId: 'family-a' });
+  assert.equal(f.store.appSpaceEnabled('reminder', 'family-a', apps), false);
+  for (const credential of [token, session.sessionToken]) {
+    assert.throws(() => f.store.authorize(credential, { appId: 'reminder', spaceId: 'family-a', action: 'read', resourceId: 'synthetic-old-record' }), { status: 403 });
+    assert.ok(f.store.listSpaces(credential).every(space => space.id !== 'family-a'));
+    assert.equal(f.store.authorize(credential, { appId: 'reminder', spaceId: 'company-a', action: 'read' }).userId, 'alice');
+  }
+  assert.deepEqual(f.store.availableRules('alice').filter(rule => rule.spaceId === 'family-a'), []);
 });
