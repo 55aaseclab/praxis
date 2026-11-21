@@ -1,8 +1,12 @@
 # Praxis roadmap
 
-Version: 0.1.151
+Version: 0.1.152
 
 [简体中文](ROADMAP.md)
+
+## Delegation management and Spaces context reactivity
+
+Deliver DM01–DM03: expose centered-modal revocation for every unrevoked delegation, including expired/restricted entries; show matching space/app delegations in per-app management with only the acting account's existing revocation rights, clearly confirming whole-grant revocation. Refresh selected-user app access, resource permissions and actions in Spaces without stale responses, preserving the complete catalog and administrator capabilities. Verify isolated synthetic API authorization/CSRF, immediate access removal and unchanged audit events plus actual Chromium 1440/390 px comparisons against each account's native session view. Open both PRDs, pass the full suite and one aligned PATCH gate, commit, then build/deploy only the affected web/core pair through the authorized test blue/green environment. Report running version and public readback; independent business acceptance stays with its designated client.
 
 ## MCP space chain and Settings cleanup
 
@@ -321,6 +325,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.149 | 2026-11-21 | Separate Users creation and detail pages and add confirmed atomic administrator account deletion |
 | v0.1.150 | 2026-11-21 | Render persisted platform language before first paint |
 | v0.1.151 | 2026-11-21 | Audit MCP space discovery and simplify consent and Settings error surfaces. |
+| v0.1.152 | 2026-11-21 | Manage delegations across Settings surfaces and refresh Spaces user-context permissions. |
 
 ### Public applications with private collections
 

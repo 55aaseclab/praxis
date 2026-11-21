@@ -420,8 +420,12 @@ async function revokeOwnGrant(id) {
 }
 function renderGrants(user, value, own = false) {
   content.append(el('p', 'section-note', own ? t("View delegations granted to external agents. Current permissions are checked on every action; a grant alone does not establish a successful connection.", "这里展示你授予外部智能体的委托。授权记录不代表已经连接或成功调用；每次操作仍受你当前的应用与数据权限限制。") : t("Agents receive a delegation through OAuth and user consent. Current business permissions apply. Revocation stops further use of the grant.", "智能体通过 OAuth 登录与用户确认获得委托；委托范围仍受当前业务权限限制。撤销后，该智能体不能继续使用这份委托。")));
+  content.append(grantList(value.grants, own));
+  if (value.nextCursor) content.append(button(t("Load more delegations", "加载更多委托"), 'quiet-button pagination', async () => { const current = epoch; try { const more = await api(own ? `${accountBase}/grants?limit=50&after=${encodeURIComponent(value.nextCursor)}` : userPath(user, `/grants?limit=50&after=${encodeURIComponent(value.nextCursor)}`)); if (ended || current !== epoch || !own && selectionId() !== user.id || view !== 'grants') return; const combined = { grants: [...value.grants, ...more.grants], nextCursor: more.nextCursor }; content.replaceChildren(); if (!own) content.append(picker()); renderGrants(user, combined, own); } catch (error) { report(error); } }));
+}
+function grantList(grants, own = false, scoped = false) {
   const list = el('ul', 'grant-list');
-  for (const grant of value.grants) {
+  for (const grant of grants) {
     const row = el('li', 'grant-row'), summary = el('div', 'control-summary'), controls = controlRow(summary), heading = el('div', 'grant-heading');
     row.dataset.grant = grant.id;
     const revoked = grant.revokedAt != null, expired = grant.expiresAt <= Date.now();
@@ -436,18 +440,24 @@ function renderGrants(user, value, own = false) {
     for (const spaceId of spaceIds) addIdentifier(t('Space ID', '空间 ID'), spaceId, 'grant-space-id');
     if (!spaceIds.length) identifiers.append(el('span', '', t('No recorded spaces.', '暂无空间记录。')));
     row.append(heading, identifiers, controls);
+    if (scoped) summary.append(el('strong', '', grant.username || grant.userId));
     summary.append(el('span', 'meta', t("Expires {0}", "有效期至 {0}", time(grant.expiresAt))));
+    if (scoped) summary.append(el('p', 'meta', t('Recorded scope in this app and space; current permissions apply on every action.', '此应用在本空间内的已记录范围；每次操作仍受当前权限限制。')));
     if (own && ['expired', 'revoked'].includes(status)) summary.append(el('p', 'meta', t("Historical grant scope; current permissions may differ.", "以下为历史授权范围，不代表当前可用权限。")));
     if (own && status === 'restricted') summary.append(el('p', 'meta', t("App or resource access changed. The list shows the actions currently available.", "应用或资源权限已变化，当前可用操作以所列范围为准。")));
     const scopes = el('ul', 'grant-scopes');
     for (const scope of grant.scopes) { const actions = scope.actions.map(action => actionNames[action] || t("Other capabilities", "其他能力")).join('、'); const resources = scope.allResources ? t("Permitted resources in scope", "范围内获准资源") : Number.isSafeInteger(scope.resourceCount) ? t("Resources: {0}", "{0}项资源", scope.resourceCount) : t("Resource scope unconfirmed", "资源范围待确认"); scopes.append(el('li', '', t("{0}: {1}; scopes: {2}, {3}", "{0}：{1}；{2}个范围，{3}", appNames[scope.appId] || t("Other apps", "其他应用"), actions, scope.spaceCount, resources))); }
     summary.append(grant.scopes.length ? scopes : el('p', 'meta', own && !['expired', 'revoked'].includes(status) ? t("No actions currently available.", "当前暂无可用操作。") : t("No recorded scopes.", "暂无范围记录。")));
-    if (!revoked && !expired && ['current', 'restricted'].includes(status)) controls.append(button(t("Revoke delegation", "撤销委托"), 'danger-button', () => confirmAction(row, t("Revoke this delegation for {0}?", "撤销 {0} 的这份委托？", grant.client.name), () => own ? void revokeOwnGrant(grant.id) : void mutate(`/grants/${encodeURIComponent(grant.id)}`, { method: 'DELETE' }, async () => { await render(); message(t("Delegation revoked.", "委托已撤销。"), 'success'); }))));
+    if (!revoked && (!scoped || grant.canRevoke)) controls.append(button(t("Revoke delegation", "撤销委托"), 'danger-button', () => confirmAction(row, t("Revoke this entire delegation for {0}? Access through it will stop across all apps and spaces.", "撤销 {0} 的整份委托？通过此委托访问的全部应用与空间权限都将停止。", grant.client.name), () => session.platformAdmin ? void mutate(`/grants/${encodeURIComponent(grant.id)}`, { method: 'DELETE' }, async () => { await render(); message(t("Delegation revoked.", "委托已撤销。"), 'success'); }) : void revokeOwnGrant(grant.id))));
     list.append(row);
   }
-  content.append(value.grants.length ? list : el('p', 'empty', t("No agent delegations.", "暂无智能体委托。")));
-  if (value.nextCursor) content.append(button(t("Load more delegations", "加载更多委托"), 'quiet-button pagination', async () => { const current = epoch; try { const more = await api(own ? `${accountBase}/grants?limit=50&after=${encodeURIComponent(value.nextCursor)}` : userPath(user, `/grants?limit=50&after=${encodeURIComponent(value.nextCursor)}`)); if (ended || current !== epoch || !own && selectionId() !== user.id || view !== 'grants') return; const combined = { grants: [...value.grants, ...more.grants], nextCursor: more.nextCursor }; content.replaceChildren(); if (!own) content.append(picker()); renderGrants(user, combined, own); } catch (error) { report(error); } }));
+  return grants.length ? list : el('p', 'empty', t("No agent delegations.", "暂无智能体委托。"));
 }
+function appAccessSummary(app) {
+  const actions = app.availableActions || [];
+  return actions.length ? t('Available actions: {0}. Resources: {1}', '可用操作：{0}。资源：{1}', actions.map(action => actionNames[action] || action).join(', '), (app.availableResources || []).join(', ')) : t('No business resource access.', '无业务资源访问权限。');
+}
+
 const spaceTypeName = type => ({ personal: t('Personal', '个人'), family: t('Family', '家庭'), company: t('Team', '团队') })[type] || t('Space', '空间');
 const spaceLabel = space => `${spaceTypeName(space.type)} · ${space.id.slice(0, 8)}`;
 const spacePath = suffix => `${accountBase}/spaces/${encodeURIComponent(selectedSpaceId)}${suffix}`;
@@ -492,7 +502,13 @@ async function mutateSpace(path, options, text, after) {
   finally { if (!ended) setBusy(false); }
 }
 async function renderSpaces(current, preserve) {
-  if (!preserve) content.append(el('p', 'loading', t('Loading spaces…', '正在读取空间…')));
+  if (session.platformAdmin && !selectedSpaceUserId) selectedSpaceUserId = session.user.id;
+  const contextUserId = selectedSpaceUserId;
+  const contextPicker = () => picker(pickerUsers(), selectedSpaceUserId, id => { selectedSpaceUserId = id; void render(); });
+  if (!preserve) {
+    if (session.platformAdmin) content.append(contextPicker());
+    content.append(el('p', 'loading', t('Loading spaces…', '正在读取空间…')));
+  }
   const value = await api(`${accountBase}/spaces`);
   if (ended || current !== epoch || view !== 'spaces') return;
   const spaces = value.spaces;
@@ -500,8 +516,7 @@ async function renderSpaces(current, preserve) {
     selectedSpaceId = spaces[0]?.id || null; selectedAppId = null;
     history.replaceState(null, '', spaceHref());
   }
-  if (session.platformAdmin && !selectedSpaceUserId) selectedSpaceUserId = session.user.id;
-  let detail = selectedSpaceId ? await api(spacePath('') + (session.platformAdmin && selectedSpaceUserId !== session.user.id ? `?contextUserId=${encodeURIComponent(selectedSpaceUserId)}` : '')) : null;
+  let detail = selectedSpaceId ? await api(spacePath('') + (session.platformAdmin && contextUserId !== session.user.id ? `?contextUserId=${encodeURIComponent(contextUserId)}` : '')) : null;
   if (ended || current !== epoch || view !== 'spaces') return;
   // Keep the acting session's capabilities separate from the display projection.
   const capabilities = { canDelete: Boolean(detail?.space.canDelete), canManage: detail?.space.ownerId === session.user.id };
@@ -512,7 +527,7 @@ async function renderSpaces(current, preserve) {
     displayedUserId = selectedSpaceUserId;
     if (detail && displayedUserId !== session.user.id && context?.user.id !== displayedUserId) throw Object.assign(new Error('Display context unavailable.'), { code: 'UNAVAILABLE' });
     if (context) detail = context;
-    content.append(picker(pickerUsers(), displayedUserId, id => { selectedSpaceUserId = id; void render(); }));
+    content.append(contextPicker());
     if (displayedUserId !== session.user.id) content.append(el('p', 'section-note', t('Viewing {0}. Actions still use your signed-in account’s permissions.', '正在查看 {0} 的视图。操作仍使用你登录账号的权限。', context?.user.username || knownUsers.get(displayedUserId)?.username || displayedUserId)));
   }
   if (detail && selectedAppId) { renderSpaceApp(detail, capabilities); return; }
@@ -556,6 +571,7 @@ async function renderSpaces(current, preserve) {
     for (const app of apps) {
       const row = el('div', 'account-setting space-app-row'), description = el('div'); row.dataset.app = app.id;
       description.append(el('strong', '', app.name || app.id), el('span', 'meta', app.enabled ? t('Enabled', '已启用') : t('Disabled', '未启用')), el('span', 'meta app-capability', app.supportsBusinessActions ? t('Agent business actions supported', '支持智能体业务操作') : t('Web entry only · No agent business actions', '仅网页入口 · 不支持智能体业务操作')));
+      if (app.supportsBusinessActions) description.append(el('span', 'meta app-user-access', appAccessSummary(app)));
       const manage = spaceLink(t('Manage', '管理'), app.id); manage.setAttribute('aria-label', t('Manage {0}', '管理 {0}', app.name || app.id));
       row.append(description, manage); appSection.append(row);
     }
@@ -564,7 +580,7 @@ async function renderSpaces(current, preserve) {
   }
   if (!detail) content.append(el('p', 'empty', t('No spaces yet.', '暂无空间。')));
 }
-function renderSpaceApp({ space, apps, members, permissions }, { canManage }) {
+function renderSpaceApp({ space, apps, members, permissions, delegations = [] }, { canManage }) {
   const app = apps.find(app => app.id === selectedAppId);
   const context = el('div', 'space-app-context'); context.append(spaceLink(t('Back to Spaces', '返回空间'), null, 'link-button space-back'), el('p', 'meta', spaceLabel(space))); content.append(context);
   if (!app) { content.append(el('p', 'empty', t('This app is no longer installed. Return to Spaces to choose another app.', '此应用已不再安装，请返回空间选择其他应用。'))); return; }
@@ -582,6 +598,10 @@ function renderSpaceApp({ space, apps, members, permissions }, { canManage }) {
   if (app.enrollmentAllowed === false) note = app.entryPolicy === 'document-owner' ? t('Web entry only. This app is restricted to its configured document owner; space enrollment cannot grant entry.', '仅网页入口。此应用仅限配置的文档所有者，空间启用不能授予入口。') : app.entryPolicy === 'platform-admin' ? t('Web entry only. This app requires a platform administrator; space enrollment cannot grant entry.', '仅网页入口。此应用需要平台管理员身份，空间启用不能授予入口。') : t('Agent business actions are declared, but this installation has no configured business adapter. Enrollment is unavailable.', '应用声明支持智能体业务操作，但当前安装尚未配置业务适配，暂不能启用。');
   enrollment.append(el('p', 'section-note', note)); content.append(enrollment);
   if (!app.supportsBusinessActions) return;
+  enrollment.append(el('p', 'meta app-user-access', appAccessSummary(app)));
+  const delegationSection = el('section', 'editor space-delegations');
+  delegationSection.append(el('h2', '', t('Agent delegations', '智能体委托')), grantList(delegations.filter(grant => grant.scopes.some(scope => scope.appId === app.id)).map(grant => ({ ...grant, scopes: grant.scopes.filter(scope => scope.appId === app.id) })), !session.platformAdmin, true));
+  content.append(delegationSection);
   const permissionSection = el('section', 'editor'); permissionSection.append(el('h2', '', t('Resource permissions', '资源权限')));
   const scopedPermissions = permissions.filter(permission => permission.appId === app.id), permissionList = el('ul', 'grant-list');
   for (const permission of scopedPermissions) {

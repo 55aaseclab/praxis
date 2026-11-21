@@ -698,6 +698,7 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   const details = await (await read(owner, path)).json();
   assert.equal(details.apps.length, 14);
   assert.ok(details.apps.every(app => app.enabled === false));
+  assert.ok(details.apps.every(app => !app.availableActions.length && !app.availableResources.length), 'new space has no effective business access');
   assert.equal((await call(owner, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 200);
   assert.deepEqual(f.store.userPermissions(owner.user.id, space.id, 'reminder', 'read'), [], 'owner enrollment is not a resource grant');
   assert.equal((await call(owner, path + '/members', { username: member.user.username, role: 'member' })).status, 201);
@@ -874,8 +875,9 @@ test('space catalog includes every installed app and retains business adapter ID
   for (const id of ['polaris', 'letters', 'profiles']) assert.equal(catalog.find(app => app.id === id).enrollmentAllowed, false);
   const space = await (await call('', { type: 'family' })).json(), path = `/${space.id}`;
   const details = await (await read(path)).json();
-  assert.deepEqual(details.apps.map(({ enabled, ...app }) => app), catalog);
+  assert.deepEqual(details.apps.map(({ enabled, availableActions, availableResources, ...app }) => app), catalog);
   assert.ok(details.apps.every(app => app.enabled === false));
+  assert.ok(details.apps.every(app => !app.availableActions.length && !app.availableResources.length), 'new space has no effective business access');
   for (const id of ['knowledge', 'polaris', 'letters', 'profiles', 'unknown', 'lattice-slides', '__proto__']) {
     assert.equal((await call(path + `/apps/${id}`, { enabled: true }, 'PUT')).status, 403);
     assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_space_apps WHERE space_id=?').get(space.id).n, 0, 'rejected enrollment has no side effect');

@@ -82,3 +82,27 @@ test('enrolled Calendar opens from the workbench and returns Home at desktop and
   }
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic identity store, real managed web gateway and native Calendar; empty synthetic agenda', browser: browser.version(), evidence }));
 });
+
+test('updated platform requirements open in both workbench reader languages', { skip: !process.env.PLAYWRIGHT_MODULE, timeout: 60000 }, async t => {
+  const server = createPraxisServer({ observationsFile: null, consoleUpstream: null, businessUrl: null, publicUrlsFile: null });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  for (const width of [1440, 390]) for (const [cookie, lang] of [['en', 'en'], ['zh', 'zh-CN']]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    await context.addCookies([{ name: 'praxis_locale', value: cookie, url: origin }]);
+    const page = await context.newPage();
+    await page.goto(`${origin}/prds/`);
+    await page.locator('a.prd-entry[href="/prds/praxis/"]').click();
+    await page.waitForURL(`${origin}/prds/praxis/`);
+    assert.equal(await page.locator('html').getAttribute('lang'), lang);
+    assert.match(await page.locator('body').innerText(), /DM01/);
+    assert.match(await page.locator('body').innerText(), /0\.1\.152/);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    t.diagnostic(JSON.stringify({ width, language: lang, reader: '/prds/praxis/', acceptance: 'DM01–DM03', status: 'Pass' }));
+    await context.close();
+  }
+});

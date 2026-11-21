@@ -1148,3 +1148,102 @@ test('Chromium user sections, dedicated account pages and confirmed deletion wor
   evidence.push({ deepLinkBeyondFirstPage: 'Pass' });
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real authorization/administration HTTP handlers; synthetic identities only', browser: browser.version(), evidence }));
 });
+
+test('Chromium Spaces switches effective user access in place and manages app-scoped delegations', { skip: !browserEnabled, timeout: 120000 }, async t => {
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const { origin, auth } = await fixture(t), evidence = [];
+  const space = auth.createSelfServiceSpace({ type: 'family', ownerId: 'z-owner' });
+  auth.setMembership({ spaceId: space.id, userId: 'a-member', role: 'member' });
+  auth.setSpaceAppEnrollment({ spaceId: space.id, appId: 'reminder', enabled: true });
+  auth.grantResource({ userId: 'z-owner', spaceId: space.id, appId: 'reminder', resources: ['synthetic-owner-resource'], actions: ['update'] });
+  auth.grantResource({ userId: 'a-member', spaceId: space.id, appId: 'reminder', resources: ['synthetic-member-resource'], actions: ['read'] });
+  const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
+  if (artifacts) mkdirSync(artifacts, { recursive: true });
+  for (const [width, language] of [[1440, 'en'], [390, 'zh']]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const memberContext = await browser.newContext({ viewport: { width, height: 900 } });
+    t.after(() => context.close()); t.after(() => memberContext.close());
+    for (const [target, username] of [[context, 'synthetic-owner'], [memberContext, 'synthetic-member']]) {
+      await target.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+      assert.equal((await target.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username, password } })).status(), 200);
+    }
+    const page = await context.newPage(), memberPage = await memberContext.newPage(), errors = [];
+    for (const target of [page, memberPage]) { target.setDefaultTimeout(10000); target.on('pageerror', error => errors.push(error.message)); target.on('dialog', dialog => dialog.accept()); }
+    const open = async (target, app = '') => { await target.goto(`${origin}/admin/?view=spaces&space=${space.id}${app ? `&app=${app}` : ''}`); await ready(target); };
+    const switchUser = async id => { await page.locator('#selected-user').selectOption(id); await ready(page); assert.equal(await page.locator('#selected-user').inputValue(), id); };
+    await open(page); await open(memberPage);
+    const summary = '.space-app-row[data-app=reminder] .app-user-access';
+    const ownerSummary = await page.locator(summary).innerText();
+    assert.match(ownerSummary, /synthetic-owner-resource/);
+    await switchUser('a-member');
+    assert.notEqual(await page.locator(summary).innerText(), ownerSummary, 'overview changes immediately without navigating');
+    assert.equal(await page.locator(summary).innerText(), await memberPage.locator(summary).innerText(), 'overview matches the selected user real session');
+    assert.doesNotMatch(await page.locator(summary).innerText(), /synthetic-owner-resource/);
+    assert.equal(await page.locator('.space-delete, input[name=username]').count(), 2, 'acting owner capabilities survive user switch');
+    await page.locator('.space-app-row[data-app=reminder] a').click(); await ready(page);
+    await memberPage.locator('.space-app-row[data-app=reminder] a').click(); await ready(memberPage);
+    assert.equal(await page.locator('.app-user-access').innerText(), await memberPage.locator('.app-user-access').innerText());
+    await switchUser('z-owner');
+    assert.match(await page.locator('.app-user-access').innerText(), /synthetic-owner-resource/);
+    await switchUser('a-member');
+    assert.match(await page.locator('.app-user-access').innerText(), /synthetic-member-resource/);
+    assert.equal(await page.locator('input[name=resources]').count(), 1, 'administrator grant form remains available');
+    await switchUser('z-owner');
+    let release, seen, finish;
+    const held = new Promise(resolve => { release = resolve; }), requested = new Promise(resolve => { seen = resolve; }), finished = new Promise(resolve => { finish = resolve; });
+    const contextUrl = `${origin}/api/business/account/spaces/${space.id}?contextUserId=a-member`;
+    const delayed = async route => { const response = await route.fetch(); seen(); await held; await route.fulfill({ response }); finish(); };
+    await page.route(contextUrl, delayed);
+    await page.locator('#selected-user').selectOption('a-member'); await requested;
+    assert.equal(await page.locator('.app-user-access').count(), 0, 'old user data is cleared while loading');
+    await page.locator('#selected-user').selectOption('z-owner'); await ready(page);
+    release(); await finished; await page.unroute(contextUrl, delayed);
+    assert.equal(await page.locator('#selected-user').inputValue(), 'z-owner');
+    assert.match(await page.locator('.app-user-access').innerText(), /synthetic-owner-resource/, 'delayed member response cannot replace current context');
+    await switchUser('a-member');
+
+    const rule = { appId: 'reminder', spaceId: space.id, actions: ['read'], resources: ['synthetic-member-resource'] };
+    const active = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [rule] });
+    const token = auth.issueToken({ grantId: active.id }).accessToken;
+    const expired = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [rule] });
+    auth.db.prepare('UPDATE auth_grants SET expires_at=? WHERE id=?').run(Date.now() - 1000, expired.id);
+    await page.locator('#refresh').click(); await ready(page);
+    const row = page.locator(`.space-delegations [data-grant="${active.id}"]`);
+    assert.equal(await row.count(), 1, 'matching app and space delegation visible');
+    assert.equal(await page.locator(`.space-delegations [data-grant="${expired.id}"] button`).count(), 1, 'expired delegation is manageable');
+    evidence.push({ width, ...await inspectConfirmation(page, row.locator('button'), 'app delegation revoke') });
+    const deleted = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/grants/${active.id}`));
+    await row.locator('button').click();
+    assert.match(await page.locator('.confirm-dialog').innerText(), /all apps and spaces|全部应用与空间/);
+    await page.locator('.confirm-dialog').getByRole('button', { name: /^(Confirm|确认)$/ }).click();
+    assert.equal((await deleted).status(), 200); await ready(page);
+    await page.waitForFunction(id => document.querySelector(`[data-grant="${id}"]`)?.dataset.status === 'revoked', active.id);
+    assert.equal(await page.locator(`[data-grant="${active.id}"]`).getAttribute('data-status'), 'revoked');
+    assert.equal(await page.locator(`[data-grant="${active.id}"] button`).count(), 0);
+    assert.throws(() => auth.authenticate(token), error => error.status === 401, 'token immediately refused');
+    await page.goto(`${origin}/admin/?view=grants`); await ready(page); await switchUser('a-member');
+    assert.equal(await page.locator(`[data-grant="${active.id}"]`).getAttribute('data-status'), 'revoked', 'grant view reflects per-app revocation');
+    const expiredRow = page.locator(`[data-grant="${expired.id}"]`);
+    assert.equal(await expiredRow.locator('button').count(), 1, 'grant management includes expired records');
+    await expiredRow.locator('button').click();
+    await page.locator('.confirm-dialog').getByRole('button', { name: /^(Confirm|确认)$/ }).click(); await ready(page);
+    await page.waitForFunction(id => document.querySelector(`[data-grant="${id}"]`)?.dataset.status === 'revoked', expired.id);
+    assert.equal(await page.locator(`[data-grant="${expired.id}"]`).getAttribute('data-status'), 'revoked');
+    // Self-service uses the unchanged own-grant API even on a Space page.
+    const self = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [rule] });
+    await open(memberPage, 'reminder');
+    const selfDeleted = memberPage.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/account/grants/${self.id}`));
+    await memberPage.locator(`[data-grant="${self.id}"] button`).click();
+    await memberPage.locator('.confirm-dialog').getByRole('button', { name: /^(Confirm|确认)$/ }).click();
+    assert.equal((await selfDeleted).status(), 200); await ready(memberPage);
+    await memberPage.waitForFunction(id => document.querySelector(`[data-grant="${id}"]`)?.dataset.status === 'revoked', self.id);
+    assert.equal(await memberPage.locator(`[data-grant="${self.id}"]`).getAttribute('data-status'), 'revoked');
+    for (const target of [page, memberPage]) assert.ok(await target.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    if (artifacts) await memberPage.screenshot({ path: join(artifacts, `${width}-space-delegation-management.png`), fullPage: true });
+    assert.deepEqual(errors, []);
+    evidence.push({ width, language, context: 'overview and app effective actions/resources equal real member session; actor controls preserved', revocation: 'admin and own app page; expired in grants view; modal cancellation/focus/geometry; immediate token 401', overflow: 0, status: 'Pass' });
+  }
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic HTTP AuthStore', browser: browser.version(), evidence }));
+});

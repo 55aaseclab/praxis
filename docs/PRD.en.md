@@ -1,8 +1,20 @@
 # Praxis product requirements
 
-Version: 0.1.151 · [简体中文](PRD.md)
+Version: 0.1.152 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
+
+## Delegation management and reactive Spaces context
+
+Agent delegations provides **Revoke delegation** for every unrevoked entry, including expired and restricted grants, using the existing centered confirmation modal. Revoked history remains labeled and read-only. Per-app Space management shows delegations scoped to the selected space and app alongside its resource permissions. A revocation affordance is available only when the signed-in actor can revoke through the existing administrator or own-account grant endpoint. Confirmation explains that revocation removes the entire delegation, including its other apps and spaces; immediate access removal and existing audit events remain unchanged.
+
+Changing **Current user** in Spaces refreshes the panel's displayed app access, resource permissions and available actions for that account, retaining the complete installed-app catalog and showing explicit unavailable/empty states. The data agrees with that account's actual native session view. Discard responses from older selections. The signed-in administrator's own deletion and owner-management capabilities remain separate from this display projection; selecting another owner never lends their authority. Keep server authorization, API write contracts and existing confirmation flows unchanged.
+
+| ID | Observable acceptance |
+| --- | --- |
+| DM01 | Isolated synthetic API and real Chromium at 1440/390 px exercise revocation from Agent delegations and the matching per-app Space page through the centered modal, including expired/restricted entries, cancellation and revoked history; confirmed revocation immediately removes access, preserves existing audit events and is reflected on both surfaces. |
+| DM02 | Chromium switches between synthetic accounts with different app/resource/action permissions and compares the rendered panels to each account's actual native session view; returning, refresh and delayed older reads never restore stale content. Existing administrator capabilities and server authorization/CSRF denials remain intact. |
+| DM03 | The full version-gated suite and both workbench PRD readers pass with one aligned PATCH release. Commit verified source before building and deploying only the affected web/core pair to the authorized managed test environment; report technical evidence, actual running version and public readback separately from independent business acceptance. |
 
 ## MCP connection space audit and Settings cleanup
 
@@ -397,6 +409,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.149 | 2026-11-21 | Separate Users creation and detail pages and add confirmed atomic administrator account deletion |
 | v0.1.150 | 2026-11-21 | Render persisted platform language before first paint |
 | v0.1.151 | 2026-11-21 | Audit MCP space discovery and simplify consent and Settings error surfaces. |
+| v0.1.152 | 2026-11-21 | Manage delegations across Settings surfaces and refresh Spaces user-context permissions. |
 
 ### Letters and Profiles
 

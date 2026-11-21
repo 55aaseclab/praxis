@@ -1025,13 +1025,30 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
             const members = store.db.prepare('SELECT m.user_id AS userId,u.username,m.role FROM auth_members m JOIN auth_users u ON u.id=m.user_id WHERE m.space_id=? ORDER BY m.user_id').all(spaceId);
             const permissions = store.db.prepare('SELECT id,user_id AS userId,app_id AS appId,resources,actions,expires_at AS expiresAt FROM auth_resources WHERE space_id=?').all(spaceId);
             const scopedApps = catalog.map(app => ({ ...app, enabled: store.appSpaceEnabled(app.id, spaceId, apps) }));
+            const grants = store.db.prepare("SELECT g.id,g.user_id,g.rules,g.expires_at,g.revoked_at,c.id AS client_id,c.name AS client_name,u.username FROM auth_grants g JOIN auth_clients c ON c.id=g.client_id JOIN auth_users u ON u.id=g.user_id WHERE g.client_id<>'praxis-browser' ORDER BY g.id").all()
+              .map(row => ({ ...row, rules: JSON.parse(row.rules).filter(rule => rule.spaceId === spaceId) })).filter(row => row.rules.length);
             // Display projections never supply an actor to the write paths above/below.
-            const projection = subjectId => ({
-              space: { ...space, role: store.membershipRole(subjectId, spaceId), deletionProtected: store.spaceDeletionProtected(spaceId), canDelete: store.canDeleteSpace(subjectId, space) },
-              apps: scopedApps, members,
-              permissions: permissions.filter(row => space.ownerId === subjectId || row.userId === subjectId)
-                .map(row => ({ ...row, resources: JSON.parse(row.resources), actions: JSON.parse(row.actions) })),
-            });
+            const projection = subjectId => {
+              const available = store.availableRules(subjectId).filter(rule => rule.spaceId === spaceId);
+              return {
+                space: { ...space, role: store.membershipRole(subjectId, spaceId), deletionProtected: store.spaceDeletionProtected(spaceId), canDelete: store.canDeleteSpace(subjectId, space) },
+                apps: scopedApps.map(app => {
+                  const rules = available.filter(rule => rule.appId === app.id);
+                  return { ...app, availableActions: [...new Set(rules.flatMap(rule => rule.actions))].sort(), availableResources: [...new Set(rules.flatMap(rule => rule.resources))].sort() };
+                }), members,
+                permissions: permissions.filter(row => space.ownerId === subjectId || row.userId === subjectId)
+                  .map(row => ({ ...row, resources: JSON.parse(row.resources), actions: JSON.parse(row.actions) })),
+                delegations: grants.filter(row => space.ownerId === subjectId || row.user_id === subjectId).map(row => ({
+                  id: row.id, userId: row.user_id, username: row.username, client: { id: row.client_id, name: row.client_name },
+                  expiresAt: row.expires_at, revokedAt: row.revoked_at, spaceIds: [spaceId],
+                  canRevoke: platformAdmin || row.user_id === userId,
+                  scopes: [...new Set(row.rules.map(rule => rule.appId))].sort().map(appId => {
+                    const rules = row.rules.filter(rule => rule.appId === appId), resources = new Set(rules.flatMap(rule => rule.resources));
+                    return { appId, actions: [...new Set(rules.flatMap(rule => rule.actions))].sort(), spaceCount: 1, allResources: resources.has('*'), resourceCount: resources.has('*') ? null : resources.size };
+                  }),
+                })),
+              };
+            };
             const value = projection(userId);
             if (platformAdmin) value.userContexts = [session.user, ...members.filter(member => member.userId !== userId).map(member => ({ id: member.userId, username: member.username }))]
               .map(user => ({ user: { id: user.id, username: user.username }, ...projection(user.id) }));
