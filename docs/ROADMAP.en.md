@@ -1,8 +1,12 @@
 # Praxis roadmap
 
-Version: 0.1.150
+Version: 0.1.151
 
 [简体中文](ROADMAP.md)
+
+## MCP space chain and Settings cleanup
+
+Deliver MCP01–MCP03: remove obsolete MCP activity/disclaimer/timestamp UI; use the direct native consent dropdown with inline creation retained; verify owned-space deletion refusals through the existing persistent error overlay. Audit public guidance, consent, token designation and real SDK tool arguments in order, including a current authorized-space discovery fallback for SDKs stripping token extensions. Record bilingual source/browser evidence, run the complete suite and one aligned patch, open both PRDs, commit and then deploy only the affected web/core pair to the assigned managed test environment. Independent business acceptance remains with its designated client.
 
 ## Long-lived AI-native testing
 
@@ -316,6 +320,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.148 | 2026-11-21 | Keep Spaces management capabilities tied to the signed-in session across display contexts |
 | v0.1.149 | 2026-11-21 | Separate Users creation and detail pages and add confirmed atomic administrator account deletion |
 | v0.1.150 | 2026-11-21 | Render persisted platform language before first paint |
+| v0.1.151 | 2026-11-21 | Audit MCP space discovery and simplify consent and Settings error surfaces. |
 
 ### Public applications with private collections
 

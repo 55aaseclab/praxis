@@ -71,6 +71,91 @@ async function layoutGeometry(page) {
   }));
 }
 
+test('Chromium MCP cleanup and owned-space refusals share the persistent Settings error overlay', { skip: !browserEnabled, timeout: 90000 }, async t => {
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const { origin, auth } = await fixture(t), evidence = [];
+  const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
+  if (artifacts) mkdirSync(artifacts, { recursive: true });
+  for (const width of [1440, 390]) for (const language of ['en', 'zh']) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    t.after(() => context.close());
+    await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+    assert.equal((await context.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: 'synthetic-owner', password } })).status(), 200);
+    const page = await context.newPage(), errors = [], dialogs = [];
+    page.setDefaultTimeout(10000);
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('dialog', async dialog => { dialogs.push(dialog.message()); await dialog.accept(); });
+    await page.goto(`${origin}/admin/?view=mcp`); await ready(page);
+    const checkMcp = async () => {
+      const text = await page.locator('#content').innerText();
+      assert.doesNotMatch(text, /App configuration and successful calls in the past seven days|应用配置与近七天成功调用/);
+      assert.doesNotMatch(text, /Tools are available according to|This registry lists configured tools|业务工具按使用者的当前权限|这里的注册清单/);
+      assert.doesNotMatch(text, /Updated |更新于|Business adapter configured|业务适配器已配置|No successful calls observed|未观测到成功调用/);
+      assert.equal(await page.locator('.mcp-table').count(), 2, 'only protocol endpoints and capabilities remain');
+      assert.match(text, /synthetic_reminder_list/);
+      assert.match(text, /spaceId/);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    };
+    await checkMcp();
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-${language}-mcp-cleanup.png`), fullPage: true });
+    const ownedUser = `synthetic-overlay-owner-${width}-${language}`;
+    const ownedIds = ['family', 'team'].map(type => `synthetic-${type}-owned-space-${width}-${language}-complete-id`);
+    auth.createUser({ id: ownedUser, username: ownedUser, password });
+    for (const [index, id] of ownedIds.entries()) auth.createSpace({ id, type: index ? 'company' : 'family', ownerId: ownedUser });
+    await page.goto(`${origin}/admin/?view=users&user=${ownedUser}`); await ready(page);
+    await page.evaluate(() => { window.sharedErrorOverlay = document.querySelector('#notice'); });
+    const detailUrl = `${origin}/api/business/admin/users/${ownedUser}`;
+    await page.route(detailUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'UNAVAILABLE' }) }));
+    await page.locator('#refresh').click(); await ready(page, { allowError: true });
+    assert.match(await page.locator('#notice.error').innerText(), /Service unavailable|服务暂时不可用/);
+    assert.equal(await page.locator('#notice').evaluate(node => node === window.sharedErrorOverlay && getComputedStyle(node).position === 'fixed'), true, 'ordinary read error uses the shared fixed overlay');
+    await page.unroute(detailUrl);
+    await page.locator('#refresh').click(); await ready(page);
+    assert.equal(await page.locator('#notice').innerText(), '', 'explicit successful refresh clears the ordinary error');
+    const trigger = page.getByRole('button', { name: language === 'en' ? 'Delete user' : '删除用户', exact: true });
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.click();
+    await page.locator('.confirm-dialog input[name=confirmUsername]').fill(ownedUser);
+    const before = await layoutGeometry(page);
+    const refusal = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url() === detailUrl);
+    await page.locator('.confirm-dialog button[type=submit]').click();
+    const response = await refusal;
+    assert.equal(response.status(), 409);
+    assert.equal((await response.json()).code, 'OWNED_SPACES_REQUIRED');
+    await ready(page, { allowError: true });
+    const refusalText = await page.locator('#notice.error').innerText();
+    for (const id of ownedIds) assert.ok(refusalText.includes(id), 'each complete owned-space ID remains visible');
+    assert.match(refusalText, /Delete the owned spaces first|请先删除以下自有空间/);
+    const overlay = await page.locator('#notice.error').evaluate(node => {
+      const rect = node.getBoundingClientRect(), style = getComputedStyle(node);
+      return { sameNode: node === window.sharedErrorOverlay, position: style.position, fits: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight, bottom: innerHeight - rect.bottom };
+    });
+    assert.equal(overlay.sameNode, true, 'owned-space refusal reuses the exact ordinary-error overlay node');
+    assert.equal(overlay.position, 'fixed'); assert.equal(overlay.fits, true);
+    assert.ok(overlay.bottom >= (width === 390 ? 72 : 24), 'overlay retains the standard desktop/phone placement');
+    assert.equal(await page.locator('dialog').count(), 0, 'confirmation closes before the refusal and no error popup is added');
+    assert.deepEqual(dialogs, [], 'refusal creates no browser popup');
+    assert.deepEqual(await layoutGeometry(page), before, 'refusal overlay leaves content geometry and scroll unchanged');
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-${language}-owned-space-error-overlay.png`) });
+    await page.locator('#navigation [data-view=mcp]').click(); await ready(page, { allowError: true });
+    await checkMcp();
+    assert.equal(await page.locator('#notice.error').innerText(), refusalText, 'owned-space error persists across views');
+    assert.equal(await page.locator('#notice').evaluate(node => node === window.sharedErrorOverlay), true);
+    const mcpGeometry = await layoutGeometry(page);
+    await page.locator('#refresh').click(); await ready(page);
+    assert.equal(await page.locator('#notice').innerText(), '');
+    assert.deepEqual(await layoutGeometry(page), mcpGeometry, 'clearing the overlay leaves MCP content geometry unchanged');
+    assert.ok(auth.db.prepare('SELECT 1 FROM auth_users WHERE id=?').get(ownedUser), 'refused deletion preserves the account');
+    for (const id of ownedIds) assert.ok(auth.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(id), 'refused deletion preserves each owned space');
+    assert.deepEqual(errors, []);
+    evidence.push({ width, language, mcp: 'protocol and capabilities only', ordinaryAndOwnedSpaceError: 'same fixed #notice node', fullOwnedIds: ownedIds.length, popups: 0, geometryChange: 0, persistsAcrossViews: true, explicitRefreshClears: true, overflow: 0, result: 'Pass' });
+    await context.close();
+  }
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic auth HTTP; synthetic MCP projection; ordinary read failure injected at HTTP boundary', browser: browser.version(), evidence }));
+});
+
 async function inspectConfirmation(page, trigger, label) {
   const evidence = [];
   for (const dismissal of ['Escape', 'backdrop', 'Cancel']) {

@@ -25,10 +25,13 @@ function toolAnnotations(tool) {
 function currentCapabilities(bridge, token, version) {
   bridge.auth.authenticate(token);
   const catalog = bridge.catalog(token);
+  const spaces = catalog.map(({ id, apps }) => ({ spaceId: id, apps }));
   const availableTools = [...MCP_CONTROL_TOOLS, ...bridge.registry.tools.filter(tool => catalog.some(space => space.apps.some(app => app.id === tool.appId && app.actions.includes(tool.action) && (!tool.sourceRead || app.actions.includes('read')) && (tool.requiredActions || []).every(action => app.actions.includes(action)))))];
   const instructions = [
     'Praxis is a business-data service for external agents, not an agent harness. This contract is delivered by MCP negotiation and does not depend on your startup command or local configuration.',
     `Authorized tools: ${availableTools.map(tool => tool.name).join(', ')}`,
+    `Current authorized spaces and app actions: ${JSON.stringify(spaces)}`,
+    'OAuth code-exchange and refresh responses include space_id for designated consent. Pass that value as the tool argument spaceId. Some client SDKs hide token extensions; use the current authorized spaces above or praxis_refresh_capabilities.spaces to obtain spaceId instead. Never guess an ID or use a space outside this connection. If a legacy grant allows several spaces and the intended space is unclear, ask the user rather than choosing the first. Refresh after permissions change; every operation still checks current space, resource and action permissions.',
     'When this service changes or you need to verify its current capabilities, call praxis_refresh_capabilities with {}. Follow the returned instructions and schemas. Capability refresh does not reconnect your client transport or automatically update its tool cache; do not claim that it does.',
     'Every MCP tool has a companion skill in its metadata. Read the matching skill before using the tool: resources/list and resources/read expose authorized skills; tool-only clients can get the same full text in praxis_refresh_capabilities.skills[].content. Skill guidance does not grant new permissions or install anything in your harness.',
     'Before promising to execute a Praxis request, inspect tools/list and the inputSchema and description of the relevant tool. tools/list is authoritative for the capabilities of this connection. A visible workbench app is not an MCP capability.',
@@ -38,13 +41,13 @@ function currentCapabilities(bridge, token, version) {
     ...[...new Set(availableTools.map(tool => tool.appId).filter(Boolean))].flatMap(appId => bridge.registry.getBusiness(appId)?.instructions || []),
     'No code, host, file, or deployment tools are provided. These instructions constrain this Praxis connection, not the startup or system prompt of the external agent.',
   ].join('\n');
-  return { serverInfo: { name: 'praxis-business', version }, instructions, availableTools };
+  return { serverInfo: { name: 'praxis-business', version }, instructions, availableTools, spaces };
 }
 
 function refreshedContract(bridge, token, version) {
-  const { serverInfo, instructions, availableTools } = currentCapabilities(bridge, token, version);
+  const { serverInfo, instructions, availableTools, spaces } = currentCapabilities(bridge, token, version);
   return {
-    serverInfo, instructions, transportReconnected: false,
+    serverInfo, instructions, spaces, transportReconnected: false,
     skills: skillsForTools(availableTools, bridge.registry),
     tools: availableTools.map(tool => ({
       name: tool.name, description: tool.description,

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest } from 'node:http';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -9,6 +10,14 @@ import { AuthStore, createAuthHandler, credentialFromRequest, hashVerifier, SESS
 const password = 'Synthetic-test-password-2026';
 const issuer = 'http://127.0.0.1:4326';
 const defaultCsp = "default-src 'none'; img-src 'self'; manifest-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+function assertConsentCsp(value, html, callbackOrigin) {
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  assert.equal(scripts.length, 1, 'only the fixed selector script is executable');
+  const digest = createHash('sha256').update(scripts[0][1]).digest('base64');
+  const policy = callbackOrigin ? defaultCsp.replace("form-action 'self'", `form-action 'self' ${callbackOrigin}`) : defaultCsp;
+  assert.equal(value, `${policy}; script-src 'sha256-${digest}'`);
+  assert.doesNotMatch(html, /onchange=|<button>Choose space|<button>选择空间/);
+}
 const allReminderActions = ['read', 'create', 'update', 'complete', 'delete'];
 const rule = (spaceId = 'family-a', actions = allReminderActions, resources = ['*'], appId = 'reminder') => ({ appId, spaceId, actions, resources });
 
@@ -286,9 +295,9 @@ test('OAuth HTTP login, consent, token exchange and revocation complete with syn
   const login = await f.login('bob');
   const form = await f.request(path, { headers: { Cookie: login.cookie } });
   assert.equal(form.status, 200);
-  const consentCsp = defaultCsp.replace("form-action 'self'", "form-action 'self' https://client.example");
-  assert.equal(form.headers.get('content-security-policy'), consentCsp);
-  assert.match(await form.text(), /Authorize external agent/);
+  const consentHtml = await form.text();
+  assertConsentCsp(form.headers.get('content-security-policy'), consentHtml, 'https://client.example');
+  assert.match(consentHtml, /Authorize external agent/);
   const escalation = await f.json(path, { rules: [rule('family-a', ['delete'])] }, { headers: { Cookie: login.cookie, 'X-CSRF-Token': login.body.csrfToken } });
   assert.equal(escalation.status, 403);
   const consent = await f.json(path, { rules: [rule('family-a', ['read'])] }, { headers: { Cookie: login.cookie, 'X-CSRF-Token': login.body.csrfToken } });
@@ -307,7 +316,6 @@ test('OAuth HTTP login, consent, token exchange and revocation complete with syn
 
 for (const language of ['en', 'zh']) test(`empty OAuth consent shows an actionable ${language} form and retries through PKCE`, async t => {
   const f = await httpFixture(t), verifier = 'empty-selection-verifier-'.repeat(3);
-  const consentCsp = defaultCsp.replace("form-action 'self'", "form-action 'self' https://client.example");
   assert.equal((await f.json('/auth/register', { username: 'consent-visitor', password })).status, 201);
   const userId = f.store.db.prepare('SELECT id FROM auth_users WHERE username=?').get('consent-visitor').id;
   f.store.grantResource({ userId, ...rule('family-a', ['read'], ['synthetic-record']) });
@@ -318,8 +326,8 @@ for (const language of ['en', 'zh']) test(`empty OAuth consent shows an actionab
   const path = '/oauth/authorize?' + new URLSearchParams({ client_id: clientId, redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read', state: 'empty-selection-retry', space_id: 'family-a', lang: language });
   const form = await f.request(path, { headers: { Cookie: login.cookie } });
   assert.equal(form.status, 200);
-  assert.equal(form.headers.get('content-security-policy'), consentCsp);
   const html = await form.text();
+  assertConsentCsp(form.headers.get('content-security-policy'), html, 'https://client.example');
   assert.match(html, /name="rule_0"/);
   assert.doesNotMatch(html, /\bchecked\b|role="alert"/);
   const consent = html.match(/name="consent" value="([^"]+)"/)[1];
@@ -339,11 +347,11 @@ for (const language of ['en', 'zh']) test(`empty OAuth consent shows an actionab
   }
   const empty = await submit({ csrf: login.body.csrfToken, consent });
   assert.equal(empty.status, 400);
-  assert.equal(empty.headers.get('content-security-policy'), consentCsp);
   assert.equal(empty.headers.get('location'), null);
   assert.match(empty.headers.get('content-type'), /text\/html/);
   assert.match(empty.headers.get('cache-control'), /no-store/);
   const retry = await empty.text();
+  assertConsentCsp(empty.headers.get('content-security-policy'), retry, 'https://client.example');
   assert.match(retry, language === 'en' ? /role="alert">Select at least one permission, then choose Authorize selected actions\./ : /role="alert">请至少勾选一项权限，再点击「确认授权」。/);
   assert.match(retry, /Synthetic &lt;consent&gt; client/);
   assert.match(retry, /<form method="post" action="\/oauth\/authorize\?/);
@@ -385,14 +393,17 @@ test('only verified selectable OAuth documents allow a safe registered callback 
   ]) {
     const response = await f.request(path, { headers: { Cookie: cookie } });
     assert.equal(response.status, status);
-    assert.equal(response.headers.get('content-security-policy'), defaultCsp);
+    const html = await response.text();
+    if (status === 200) assertConsentCsp(response.headers.get('content-security-policy'), html);
+    else assert.equal(response.headers.get('content-security-policy'), defaultCsp);
   }
   for (const uri of ['https://client.example/callback?state=x;form-action%20*', 'http://[::1]:7890/callback', 'https://*.example/callback', 'https://client.example;script-src.example/callback', "https://client'example/callback"]) {
     const client = f.store.createClient({ name: 'Synthetic CSP client', redirectUris: [uri] });
     const response = await f.request(requestPath(uri, { client_id: client.id }), { headers: { Cookie: login.cookie } });
     const safe = ['client.example', '[::1]'].includes(new URL(uri).hostname);
     assert.equal(response.status, safe ? 200 : 400);
-    assert.equal(response.headers.get('content-security-policy'), safe ? defaultCsp.replace("form-action 'self'", `form-action 'self' ${new URL(uri).origin}`) : defaultCsp);
+    if (safe) assertConsentCsp(response.headers.get('content-security-policy'), await response.text(), new URL(uri).origin);
+    else assert.equal(response.headers.get('content-security-policy'), defaultCsp);
   }
 });
 
@@ -447,8 +458,7 @@ test('Chromium follows consent POST to a cross-origin callback and completes PKC
     const spaceId = store.ensurePersonalSpace(userId).id;
     store.grantResource({ userId, ...rule(spaceId, ['read'], ['synthetic-record']) });
     const form = await page.reload();
-    const expectedCsp = defaultCsp.replace("form-action 'self'", `form-action 'self' ${new URL(redirectUri).origin}`);
-    assert.equal(form.headers()['content-security-policy'], expectedCsp);
+    assertConsentCsp(form.headers()['content-security-policy'], await form.text(), new URL(redirectUri).origin);
     assert.equal(await page.locator('input[name=rule_0]').isChecked(), false);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await page.locator('select[name=space_id]').inputValue(), spaceId);
@@ -458,7 +468,7 @@ test('Chromium follows consent POST to a cross-origin callback and completes PKC
     await page.locator('[role=alert]').waitFor();
     assert.equal(empty.status(), 400);
     assert.equal(empty.headers()['location'], undefined);
-    assert.equal(empty.headers()['content-security-policy'], expectedCsp);
+    assertConsentCsp(empty.headers()['content-security-policy'], await empty.text(), new URL(redirectUri).origin);
     assert.equal(new URL(page.url()).pathname, '/oauth/authorize');
     assert.match(await page.locator('[role=alert]').innerText(), language === 'en' ? /Select at least one permission/ : /请至少勾选一项权限/);
     assert.deepEqual(counts(), before);

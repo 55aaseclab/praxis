@@ -227,15 +227,36 @@ test('Chromium chooses consent spaces and creates inline at 1440/390 without ove
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
   t.after(() => browser.close());
   for (const width of [1440, 390]) {
-    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const language = width === 390 ? 'zh' : 'en';
+    const context = await browser.newContext({ viewport: { width, height: 900 }, screen: { width, height: 900 } });
     const page = await context.newPage();
     const actor = await f.login('operator');
     const [name, value] = actor.cookie.split('=');
     await context.addCookies([{ name, value, url: f.origin }]);
-    await page.goto(f.origin + f.oauth());
+    await page.goto(f.origin + f.oauth({ lang: language }));
     assert.equal(await page.locator('select[name=space_id]').inputValue(), 'personal-operator');
-    await page.locator('select[name=space_id]').selectOption('family-other');
-    await Promise.all([page.waitForURL(url => url.searchParams.get('space_id') === 'family-other'), page.locator('form[method=get] button').click()]);
+    assert.equal(await page.locator('form[method=get] button').count(), 0, 'designation is a direct native dropdown');
+    const geometry = () => page.evaluate(() => {
+      const rect = selector => {
+        const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return { scrollX, scrollY, main: rect('main'), space: rect('select[name=space_id]'), consent: rect('form[method=post]') };
+    });
+    const beforePointer = await geometry();
+    await page.locator('select[name=space_id]').click();
+    assert.deepEqual(await geometry(), beforePointer, 'opening the actual native menu preserves scroll and surrounding geometry');
+    assert.equal(await page.locator('select[name=space_id]').evaluate(element => document.activeElement === element), true);
+    await page.keyboard.press('Escape');
+    assert.deepEqual(await geometry(), beforePointer, 'dismissing the native menu preserves scroll and surrounding geometry');
+    assert.equal(await page.locator('select[name=space_id]').inputValue(), 'personal-operator');
+    assert.equal(await page.locator('select[name=space_id]').evaluate(element => document.activeElement === element), true);
+    await Promise.all([page.waitForURL(url => url.searchParams.get('space_id') === 'family-other'), page.locator('select[name=space_id]').selectOption('family-other')]);
+    assert.equal(await page.locator('input[name=rule_0]').isChecked(), false, 'switching does not consent to any action');
+    await page.locator('select[name=space_id]').focus();
+    await Promise.all([page.waitForURL(url => url.searchParams.get('space_id') === 'personal-operator'), page.keyboard.press('ArrowDown')]);
+    assert.equal(await page.locator('input[name=space_id]').inputValue(), 'personal-operator');
+    await Promise.all([page.waitForURL(url => url.searchParams.get('space_id') === 'family-other'), page.locator('select[name=space_id]').selectOption('family-other')]);
     assert.equal(await page.locator('input[name=space_id]').inputValue(), 'family-other');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await context.clearCookies();
@@ -244,7 +265,7 @@ test('Chromium chooses consent spaces and creates inline at 1440/390 without ove
     const inlineActor = await f.login(username);
     const [inlineName, inlineValue] = inlineActor.cookie.split('=');
     await context.addCookies([{ name: inlineName, value: inlineValue, url: f.origin }]);
-    await page.goto(f.origin + f.oauth());
+    await page.goto(f.origin + f.oauth({ lang: language }));
     await page.locator('select[name=type]').selectOption('personal');
     await Promise.all([page.waitForURL(url => url.searchParams.has('space_id')), page.locator('form[method=post] button').click()]);
     const createdId = new URL(page.url()).searchParams.get('space_id');

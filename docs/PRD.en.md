@@ -1,8 +1,18 @@
 # Praxis product requirements
 
-Version: 0.1.150 · [简体中文](PRD.md)
+Version: 0.1.151 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
+
+## MCP connection space audit and Settings cleanup
+
+MCP Settings renders protocol endpoints and capability schemas without the app configuration/seven-day call block, registry disclaimer or updated timestamp. OAuth space designation uses a directly available labeled native dropdown; changing it refreshes the available unchecked permissions without a separate selection button. Preserve inline creation for accounts without spaces and all existing authorization checks. Account deletion blocked by owned spaces uses the same persistent fixed error overlay as every other Settings error, retaining the complete space IDs and stable page geometry.
+
+| ID | Observable acceptance |
+| --- | --- |
+| MCP01 | Synthetic Chromium at 1440/390 px verifies both languages of the cleaned MCP view, direct consent dropdown, retained no-space creation and owned-space refusal through the existing fixed error overlay without a bespoke popup. |
+| MCP02 | Audit public connection guidance → consent designation → code/refresh `space_id` → real SDK `tools/call` with `arguments.spaceId`. If an SDK strips token extensions, authenticated initialization and `praxis_refresh_capabilities.spaces` expose only current authorized catalog spaces; no new authority is granted. Document actual results bilingually. |
+| MCP03 | PKCE, Origin, CSRF, callback, legacy and cross-space refusals, the complete version-gated suite and both workbench PRD readers pass. Commit before building/deploying only the affected test web/core pair; report running version and public-only readback separately from business acceptance. |
 
 ## Long-lived AI-native testing
 
@@ -386,6 +396,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.148 | 2026-11-21 | Keep Spaces management capabilities tied to the signed-in session across display contexts |
 | v0.1.149 | 2026-11-21 | Separate Users creation and detail pages and add confirmed atomic administrator account deletion |
 | v0.1.150 | 2026-11-21 | Render persisted platform language before first paint |
+| v0.1.151 | 2026-11-21 | Audit MCP space discovery and simplify consent and Settings error surfaces. |
 
 ### Letters and Profiles
 

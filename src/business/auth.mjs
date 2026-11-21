@@ -867,6 +867,10 @@ async function readBody(request) {
   fail('Authentication request requires JSON or form encoding.', 415, 'UNSUPPORTED_MEDIA_TYPE');
 }
 const contentSecurityPolicy = "default-src 'none'; img-src 'self'; manifest-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+// Only this fixed script may run on consent pages. User/client values remain
+// escaped markup, outside the script and its exact CSP hash.
+const spaceSelectorScript = `document.querySelector('select[name="space_id"]').addEventListener('change', function () { this.form.requestSubmit(); });`;
+const spaceSelectorPolicy = `script-src 'sha256-${createHash('sha256').update(spaceSelectorScript).digest('base64')}'`;
 function send(response, status, value, type = 'application/json; charset=utf-8', headers = {}) {
   response.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', Pragma: 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'Content-Security-Policy': contentSecurityPolicy, ...headers });
   response.end(type.startsWith('application/json') ? JSON.stringify(value) : value);
@@ -1302,9 +1306,10 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
           // Chromium applies form-action to the POST's 303 destination too.
           const origin = new URL(oauth.redirectUri).origin;
           if (!/^https?:\/\/(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::[0-9]+)?$/i.test(origin)) fail('Registered callback origin is not a safe CSP source.', 400, 'INVALID_CLIENT');
-          send(response, status, renderConsent(error), 'text/html; charset=utf-8', available.length ? {
-            'Content-Security-Policy': contentSecurityPolicy.replace("form-action 'self'", `form-action 'self' ${origin}`),
-          } : {});
+          const policy = available.length ? contentSecurityPolicy.replace("form-action 'self'", `form-action 'self' ${origin}`) : contentSecurityPolicy;
+          send(response, status, renderConsent(error), 'text/html; charset=utf-8', {
+            'Content-Security-Policy': spaces.length ? `${policy}; ${spaceSelectorPolicy}` : policy,
+          });
         };
         const renderConsent = (error = false) => {
           const action = escapeHtml(`${url.pathname}${url.search}`);
@@ -1312,7 +1317,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
           const description = `<p><strong>${escapeHtml(oauth.clientName)}</strong>${translate(' is requesting access to act on your behalf. Select the allowed actions. This grant can be revoked at any time during its seven-day term.', ' 请求代表你操作以下业务。请选择获准范围，七天内可随时撤销。')}</p>`;
           if (!spaces.length) return renderPage('Authorize external agent', '授权外部智能体', `${description}<p>${translate('Create a space to continue. App access and agent permissions are granted separately.', '请先创建一个空间。应用访问和智能体操作权限需要分别授权。')}</p><form method="post" action="${action}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="intent" value="create_space"><label>${translate('Space type', '空间类型')}<select name="type"><option value="personal">${translate('Personal', '个人')}</option><option value="family">${translate('Family', '家庭')}</option><option value="company">${translate('Team', '团队')}</option></select></label><button>${translate('Create space and continue', '创建空间并继续')}</button></form>`);
           const parameters = [...url.searchParams].filter(([key]) => key !== 'space_id').map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}">`).join('');
-          const selector = `<form method="get" action="/oauth/authorize">${parameters}<label>${translate('Authorized space', '授权空间')}<select name="space_id">${spaces.map(space => `<option value="${escapeHtml(space.id)}"${space.id === selectedSpace ? ' selected' : ''}>${escapeHtml(({ personal: translate('Personal', '个人'), family: translate('Family', '家庭'), company: translate('Team', '团队') })[space.type])} · ${escapeHtml(space.id)}</option>`).join('')}</select></label><button>${translate('Choose space', '选择空间')}</button></form>`;
+          const selector = `<form method="get" action="/oauth/authorize">${parameters}<label>${translate('Authorized space', '授权空间')}<select name="space_id">${spaces.map(space => `<option value="${escapeHtml(space.id)}"${space.id === selectedSpace ? ' selected' : ''}>${escapeHtml(({ personal: translate('Personal', '个人'), family: translate('Family', '家庭'), company: translate('Team', '团队') })[space.type])} · ${escapeHtml(space.id)}</option>`).join('')}</select></label><noscript><p>${translate('Enable JavaScript to switch spaces. You can continue with the displayed space.', '请启用 JavaScript 以切换空间，也可以使用当前显示的空间继续。')}</p></noscript></form><script>${spaceSelectorScript}</script>`;
           if (!available.length) return renderPage('No actions available', '暂无可授权操作', `${description}${selector}<p>${translate('No requested operations are available in this space. Choose another space, or enable an app and obtain its resource permissions in Settings → Spaces, then return here.', '此空间暂无可授权的请求操作。请选择其他空间，或前往设置 → 空间启用应用并取得资源权限后，再返回授权。')}</p><a href="/admin/?view=spaces">${translate('Open Spaces', '打开空间设置')}</a>`);
           const consent = store.createConsent(parseCookie(request), available, `${url.pathname}${url.search}`);
           return renderPage('Authorize external agent', '授权外部智能体', `${description}${selector}${message}<form method="post" action="${action}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}"><input type="hidden" name="space_id" value="${escapeHtml(selectedSpace)}">${choices(available, language, store.registry)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`);
