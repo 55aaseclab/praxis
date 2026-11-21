@@ -240,6 +240,37 @@ export class AuthStore {
     catch (error) { if ((error.errcode & 255) === 19) fail('User or username already exists.', 409, 'CONFLICT'); throw error; }
     return { id, username };
   }
+  limitUserRegistration(remote) {
+    const now = this.clock(), period = 3600000;
+    // Use the transport peer, never caller-controlled forwarding headers. A
+    // reverse proxy shares this conservative limit across its visitors.
+    const limits = [[`registration:peer:${hash(remote)}`, 5], ['registration:global', 100]];
+    this.transaction(() => {
+      this.db.prepare("DELETE FROM auth_login_attempts WHERE key LIKE 'registration:%' AND reset_at<=?").run(now);
+      for (const [key, maximum] of limits) {
+        const attempts = this.db.prepare('SELECT count,reset_at FROM auth_login_attempts WHERE key=?').get(key);
+        if (attempts && attempts.count >= maximum) {
+          const error = new AuthError('Account registration rate limit exceeded.', 429, 'RATE_LIMITED');
+          error.retryAfter = Math.max(1, Math.ceil((attempts.reset_at - now) / 1000));
+          throw error;
+        }
+      }
+      for (const [key] of limits) this.db.prepare('INSERT INTO auth_login_attempts VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET count=count+1').run(key, 1, now + period);
+    });
+  }
+  registerUser(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['username', 'password', 'return_to'].includes(key))) fail('Registration contains unknown or invalid fields.');
+    const username = typeof input.username === 'string' ? input.username.trim() : '';
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{2,63}$/.test(username)) fail('Username must contain 3 to 64 letters, numbers, dots, underscores or hyphens and start with a letter or number.');
+    // Registration creates an identity only. App, space, resource and platform
+    // privileges remain separately authorized, including for the first user.
+    return this.controlTransaction(() => {
+      const user = this.createUser({ username, password: input.password });
+      this.audit({ event: 'user.registered', userId: user.id, outcome: 'allowed' });
+      this.changed({ type: 'user', userId: user.id });
+      return user;
+    });
+  }
   setUserEnabled(userId, enabled) {
     if (typeof enabled !== 'boolean') fail('Enabled must be a boolean.');
     identifier(userId, 'User');
@@ -711,11 +742,24 @@ function loginLanguage(request, url) {
   if (choice === 'zh' || choice === 'en') return choice;
   return /(?:^|;\s*)praxis_locale=zh(?:;|$)/.test(request.headers.cookie || '') ? 'zh' : 'en';
 }
-function loginPage(target, language, username = '', errorCode = '') {
+function loginPage(target, language, username = '', errorCode = '', registered = false) {
   const zh = language === 'zh', alternate = zh ? 'en' : 'zh';
   const message = errorCode ? `<p role="alert">${loginErrors[errorCode][zh ? 1 : 0]}</p>` : '';
   const switcher = `<form method="get"><input type="hidden" name="return_to" value="${escapeHtml(target)}"><button class="language" type="submit" name="lang" value="${alternate}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'English' : '简体中文'}</button></form>`;
-  return page(zh ? '登录 Praxis' : 'Sign in to Praxis', `${message}<form method="post"><input type="hidden" name="return_to" value="${escapeHtml(target)}"><label>${zh ? '账号' : 'Username'}<input name="username" autocomplete="username" required value="${escapeHtml(username)}"></label><label>${zh ? '密码' : 'Password'}<input type="password" name="password" autocomplete="current-password" required${errorCode ? ' autofocus' : ''}></label><button>${zh ? '登录' : 'Sign in'}</button></form>${switcher}`, language);
+  const registration = `/auth/register?${new URLSearchParams({ return_to: target, lang: language })}`;
+  const success = registered ? `<p role="status">${zh ? '账号已创建，请登录。' : 'Account created. Sign in to continue.'}</p>` : '';
+  return page(zh ? '登录 Praxis' : 'Sign in to Praxis', `${success}${message}<form method="post"><input type="hidden" name="return_to" value="${escapeHtml(target)}"><label>${zh ? '账号' : 'Username'}<input name="username" autocomplete="username" required value="${escapeHtml(username)}"></label><label>${zh ? '密码' : 'Password'}<input type="password" name="password" autocomplete="current-password" required${errorCode ? ' autofocus' : ''}></label><button>${zh ? '登录' : 'Sign in'}</button></form><p><a href="${escapeHtml(registration)}">${zh ? '创建账号' : 'Create an account'}</a></p>${switcher}`, language);
+}
+const registrationErrors = {
+  INVALID_INPUT: ['Use a username of 3–64 letters, numbers, dots, underscores or hyphens, starting with a letter or number, and a password of 12–1024 characters.', '账号需为 3–64 位字母、数字、点、下划线或连字符，以字母或数字开头；密码需为 12–1024 个字符。'],
+  CONFLICT: ['That username is unavailable. Choose another or sign in.', '该账号名不可用，请换一个或登录。'],
+  RATE_LIMITED: ['Too many registration attempts. Try again later.', '注册尝试次数过多，请稍后再试。'],
+};
+function registrationPage(target, language, username = '', errorCode = '') {
+  const zh = language === 'zh';
+  const message = errorCode ? `<p role="alert">${registrationErrors[errorCode][zh ? 1 : 0]}</p>` : '';
+  const login = `/auth/login?${new URLSearchParams({ return_to: target, lang: language })}`;
+  return page(zh ? '创建 Praxis 账号' : 'Create a Praxis account', `${message}<p>${zh ? '创建账号后登录。应用和业务资源的访问权限需单独授权。' : 'Create your account, then sign in. Access to apps and business resources is granted separately.'}</p><form method="post"><input type="hidden" name="return_to" value="${escapeHtml(target)}"><label>${zh ? '账号' : 'Username'}<input name="username" autocomplete="username" required minlength="3" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,63}" aria-describedby="username-help" value="${escapeHtml(username)}"></label><small id="username-help">${zh ? '3–64 位字母、数字、点、下划线或连字符，以字母或数字开头。' : '3–64 letters, numbers, dots, underscores or hyphens. Start with a letter or number.'}</small><label>${zh ? '密码' : 'Password'}<input type="password" name="password" autocomplete="new-password" required minlength="12" maxlength="1024" aria-describedby="password-help"${errorCode ? ' autofocus' : ''}></label><small id="password-help">${zh ? '至少 12 个字符。' : 'At least 12 characters.'}</small><button>${zh ? '创建账号' : 'Create account'}</button></form><p><a href="${escapeHtml(login)}">${zh ? '已有账号？登录' : 'Already have an account? Sign in'}</a></p><form method="get"><input type="hidden" name="return_to" value="${escapeHtml(target)}"><button class="language" name="lang" value="${zh ? 'en' : 'zh'}" lang="${zh ? 'en' : 'zh-CN'}">${zh ? 'English' : '简体中文'}</button></form>`, language);
 }
 function cookie(store, token, expired = false) {
   return `${SESSION_COOKIE}=${expired ? '' : encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${expired ? 0 : 8 * 3600}${store.issuer.startsWith('https:') ? '; Secure' : ''}`;
@@ -881,12 +925,35 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         if ((input.token_endpoint_auth_method ?? 'none') !== 'none' || (input.grant_types && (!Array.isArray(input.grant_types) || input.grant_types.some(type => !['authorization_code', 'refresh_token'].includes(type)))) || (input.response_types && (!Array.isArray(input.response_types) || input.response_types.some(type => type !== 'code')))) fail('Only public authorization-code clients are supported.');
         const client = store.createClient({ name: input.client_name || 'External MCP client', redirectUris: input.redirect_uris });
         send(response, 201, { client_id: client.id, client_name: client.name, redirect_uris: client.redirectUris, token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'] });
+      } else if (path === '/auth/register' && ['GET', 'POST'].includes(request.method)) {
+        const fallback = webGateway?.enabled === true ? '/' : '/business/';
+        const localeHeaders = ['en', 'zh'].includes(url.searchParams.get('lang'))
+          ? { 'Set-Cookie': `praxis_locale=${language}; Path=/; SameSite=Lax; Max-Age=31536000${store.issuer.startsWith('https:') ? '; Secure' : ''}` } : {};
+        if (request.method === 'GET') {
+          send(response, 200, registrationPage(localReturn(url.searchParams.get('return_to'), fallback, true), language), 'text/html; charset=utf-8', localeHeaders);
+        } else {
+          requireOrigin(request, store);
+          let input = {}, target = localReturn(url.searchParams.get('return_to'), fallback, true);
+          try {
+            store.limitUserRegistration(request.socket?.remoteAddress ?? 'unknown');
+            input = await readBody(request);
+            target = localReturn(input.return_to, fallback, true);
+            const user = store.registerUser(input);
+            const loginUrl = `/auth/login?${new URLSearchParams({ return_to: target, lang: language, registered: '1' })}`;
+            if ((request.headers['content-type'] ?? '').startsWith('application/x-www-form-urlencoded')) send(response, 303, '', 'text/plain', { ...localeHeaders, Location: loginUrl });
+            else send(response, 201, { user, loginUrl }, undefined, localeHeaders);
+          } catch (error) {
+            if (!(request.headers['content-type'] ?? '').startsWith('application/x-www-form-urlencoded') || !Object.hasOwn(registrationErrors, error.code)) throw error;
+            const username = typeof input.username === 'string' ? input.username.slice(0, 64) : '';
+            send(response, error.status, registrationPage(target, language, username, error.code), 'text/html; charset=utf-8', { ...localeHeaders, ...(error.retryAfter ? { 'Retry-After': String(error.retryAfter) } : {}) });
+          }
+        }
       } else if (path === '/auth/login' && request.method === 'GET') {
         const target = localReturn(url.searchParams.get('return_to'), webGateway?.enabled === true ? '/' : '/business/', true);
         const headers = ['en', 'zh'].includes(url.searchParams.get('lang'))
           ? { 'Set-Cookie': `praxis_locale=${language}; Path=/; SameSite=Lax; Max-Age=31536000${store.issuer.startsWith('https:') ? '; Secure' : ''}` }
           : {};
-        send(response, 200, loginPage(target, language), 'text/html; charset=utf-8', headers);
+        send(response, 200, loginPage(target, language, '', '', url.searchParams.get('registered') === '1'), 'text/html; charset=utf-8', headers);
       } else if (path === '/auth/login' && request.method === 'POST') {
         requireOrigin(request, store);
         const input = await readBody(request);
@@ -972,6 +1039,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         send(response, 200, {});
       } else send(response, 404, { error: 'NOT_FOUND', message: 'Authentication route or method was not found.' });
     } catch (error) {
+      if (error.retryAfter) response.setHeader('Retry-After', String(error.retryAfter));
       const status = error.status ?? 500;
       const code = error.code ?? 'INTERNAL_ERROR', message = error.status ? error.message : 'Authentication request failed.';
       if (path === '/api/business/web-access' || path.startsWith('/api/business/web-resource-access/')) {

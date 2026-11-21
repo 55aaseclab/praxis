@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { AuthStore, createAuthHandler, credentialFromRequest, hashVerifier, SESSION_COOKIE } from '../src/business/auth.mjs';
 
 const password = 'Synthetic-test-password-2026';
@@ -36,23 +36,53 @@ function fixture(t) {
   };
 }
 
-async function httpFixture(t) {
+async function httpFixture(t, { core = false, gateway = false } = {}) {
   const f = fixture(t);
-  const handler = createAuthHandler({ store: f.store });
-  const server = createServer(async (request, response) => {
+  let handler = createAuthHandler({ store: f.store });
+  const config = { issuer, database: f.file, eventsDatabase: join(dirname(f.file), 'events.db'), observationsFile: join(dirname(f.file), 'observations.db'), allowedHosts: [], apps: {}, ...(gateway ? { webGateway: { enabled: true } } : {}) };
+  const server = core ? (await import('../src/business/server.mjs')).createBusinessServer({ config, auth: f.store, pollMs: 60000 }) : createServer(async (request, response) => {
     if (!(await handler(request, response))) { response.writeHead(404); response.end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
-  const base = `http://127.0.0.1:${server.address().port}`;
-  const request = (path, options = {}) => fetch(`${base}${path}`, { redirect: 'manual', ...options });
+  t.after(async () => {
+    if (core) await server.core.shutdown();
+    server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+    if (core) server.core.events.close();
+  });
+  let base = `http://127.0.0.1:${server.address().port}`;
+  config.allowedHosts.push(new URL(base).host);
+  if (gateway) {
+    const { createPraxisServer } = await import('../src/server.mjs');
+    const web = createPraxisServer({ publicUrlsFile: null, observationsFile: null, businessUrl: null, consoleUpstream: null,
+      webGateway: { enabled: true, canonicalUrl: issuer, coreUrl: base, appTargets: {} } });
+    await new Promise(resolve => web.listen(0, '127.0.0.1', resolve));
+    t.after(async () => { web.closeAllConnections(); await new Promise(resolve => web.close(resolve)); });
+    base = `http://127.0.0.1:${web.address().port}`;
+  }
+  const request = (path, options = {}) => {
+    if (!gateway) return fetch(`${base}${path}`, { redirect: 'manual', ...options });
+    // Node fetch does not preserve a custom Host. Exercise the real gateway's
+    // canonical Host guard using the HTTP transport, without binding its port.
+    return new Promise((resolve, reject) => {
+      const outgoing = httpRequest(new URL(path, base), { method: options.method ?? 'GET', headers: { ...Object.fromEntries(new Headers(options.headers)), Host: new URL(issuer).host } }, incoming => {
+        const parts = [];
+        incoming.on('error', reject);
+        incoming.on('data', part => parts.push(part));
+        incoming.on('end', () => resolve(new Response([204, 304].includes(incoming.statusCode) ? null : Buffer.concat(parts), { status: incoming.statusCode,
+          headers: Object.entries(incoming.headers).flatMap(([key, value]) => Array.isArray(value) ? value.map(item => [key, item]) : [[key, value]]) })));
+      });
+      outgoing.on('error', reject); outgoing.end(options.body);
+    });
+  };
   const json = (path, data, options = {}) => request(path, { method: 'POST', ...options, headers: { 'Content-Type': 'application/json', Origin: issuer, ...(options.headers ?? {}) }, body: JSON.stringify(data) });
   async function login(username = 'alice') {
     const response = await json('/auth/login', { username, password });
     assert.equal(response.status, 200);
     return { cookie: response.headers.get('set-cookie').split(';')[0], body: await response.json(), response };
   }
-  return { ...f, request, json, login, base };
+  return { ...f, get store() { return f.store; }, request, json, login, base,
+    restartAuth() { assert.equal(core, false); f.reopen(); handler = createAuthHandler({ store: f.store }); },
+  };
 }
 
 test('business tokens are bound to current user, client, space, resource and action', t => {
@@ -266,4 +296,184 @@ test('OAuth HTTP login, consent, token exchange and revocation complete with syn
   assert.throws(() => f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'delete' }), { status: 403 });
   assert.equal((await f.json('/oauth/revoke', { token: tokens.refresh_token, client_id: 'agent-a' })).status, 200);
   assert.throws(() => f.store.authenticate(tokens.access_token), { status: 401 });
+});
+
+test('public registration is reachable in both languages and preserves a validated OAuth return path', async t => {
+  const f = await httpFixture(t);
+  const target = '/oauth/authorize?client_id=agent-a&state=synthetic-register';
+  for (const [language, title] of [['en', /Create.*account|Register/i], ['zh', /创建.*账号|注册/]]) {
+    const login = await f.request(`/auth/login?${new URLSearchParams({ return_to: target, lang: language })}`);
+    const loginHtml = await login.text();
+    const link = loginHtml.match(/href="(\/auth\/register[^\"]*)"/);
+    assert.ok(link, 'sign-in offers public account registration');
+    const registrationUrl = new URL(link[1].replaceAll('&amp;', '&'), issuer);
+    assert.equal(registrationUrl.searchParams.get('return_to'), target);
+    const registration = await f.request(registrationUrl.pathname + registrationUrl.search);
+    assert.equal(registration.status, 200);
+    assert.match(registration.headers.get('cache-control'), /no-store/);
+    const html = await registration.text();
+    assert.match(html, title);
+    assert.match(html, /autocomplete="new-password"/);
+    assert.match(html, /name="username"/);
+    assert.match(html, /name="return_to"/);
+    assert.ok(!html.includes(password));
+  }
+  const unsafe = await f.json('/auth/register', { username: 'safe-return', password, return_to: '//evil.example/callback' });
+  assert.equal(unsafe.status, 201);
+  const loginUrl = new URL((await unsafe.json()).loginUrl, issuer);
+  assert.equal(loginUrl.origin, issuer);
+  assert.ok(!loginUrl.href.includes('evil.example'));
+});
+
+test('public JSON registration creates only a durable ordinary identity and never returns credentials', async t => {
+  const f = await httpFixture(t);
+  const response = await f.json('/auth/register', { username: ' new-visitor ', password, return_to: '/oauth/authorize?state=synthetic' });
+  assert.equal(response.status, 201);
+  assert.equal(response.headers.get('set-cookie'), null, 'registration requires a separate sign-in');
+  const body = await response.json();
+  assert.deepEqual(Object.keys(body).sort(), ['loginUrl', 'user']);
+  assert.equal(body.user.username, 'new-visitor');
+  assert.ok(body.user.id);
+  assert.deepEqual(Object.keys(body.user).sort(), ['id', 'username']);
+  assert.equal(new URL(body.loginUrl, issuer).searchParams.get('return_to'), '/oauth/authorize?state=synthetic');
+  assert.equal(f.store.isPlatformAdmin(body.user.id), false);
+  assert.equal(f.store.getWebEntryPolicy(body.user.id), null);
+  assert.deepEqual(f.store.availableRules(body.user.id), []);
+  assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_members WHERE user_id=?').get(body.user.id).n, 0);
+  assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_resources WHERE user_id=?').get(body.user.id).n, 0);
+  for (const secret of [password, 'password_hash', 'sessionToken', 'access_token']) assert.ok(!JSON.stringify(body).includes(secret));
+  f.restartAuth();
+  const login = await f.login('new-visitor');
+  assert.equal(login.body.user.id, body.user.id);
+  assert.equal(login.body.delegated, false);
+  assert.deepEqual(f.store.availableRules(body.user.id), []);
+});
+
+test('public registration rejects invalid input, duplicate identities and origin attacks without side effects', async t => {
+  const f = await httpFixture(t);
+  const count = () => f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_users').get().n;
+  const before = count();
+  for (const [patch, expected] of [
+    [{ username: 'ab' }, 400], [{ username: 'invalid user' }, 400], [{ username: '<script>evil</script>' }, 400],
+    [{ username: 'x'.repeat(65) }, 400], [{ password: 'short' }, 400], [{ password: 'x'.repeat(1025) }, 400],
+    [{ platformAdmin: true }, 400], [{ id: 'alice' }, 400], [{ apps: ['reminder'] }, 400],
+  ]) {
+    f.clock.now += 3600001;
+    const response = await f.json('/auth/register', { username: 'invalid-visitor', password, ...patch });
+    assert.equal(response.status, expected);
+    assert.equal((await response.json()).error, 'INVALID_INPUT');
+    assert.equal(count(), before);
+  }
+  const duplicate = await f.json('/auth/register', { username: 'ALICE', password });
+  assert.equal(duplicate.status, 409);
+  assert.equal((await duplicate.json()).error, 'CONFLICT');
+  for (const Origin of ['https://evil.example', 'null', '']) {
+    const response = await f.json('/auth/register', { username: 'cross-site', password }, { headers: { Origin } });
+    assert.equal(response.status, 403);
+  }
+  assert.equal(count(), before);
+  assert.equal((await f.login('alice')).body.user.id, 'alice', 'duplicate attempts leave the existing password unchanged');
+});
+
+test('registration form returns localized validation and returns to sign-in after success', async t => {
+  const f = await httpFixture(t);
+  const form = data => f.request('/auth/register?lang=zh', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: issuer }, body: new URLSearchParams(data) });
+  const invalid = await form({ username: 'form-visitor', password: 'short', return_to: '/oauth/authorize?state=form' });
+  assert.equal(invalid.status, 400);
+  assert.match(invalid.headers.get('content-type'), /text\/html/);
+  const html = await invalid.text();
+  assert.match(html, /role="alert"/);
+  assert.match(html, /value="form-visitor"/);
+  assert.ok(!html.includes('value="short"'));
+  const response = await form({ username: 'form-visitor', password, return_to: '/oauth/authorize?state=form' });
+  assert.equal(response.status, 303);
+  const destination = new URL(response.headers.get('location'), issuer);
+  assert.equal(destination.pathname, '/auth/login');
+  assert.equal(destination.searchParams.get('return_to'), '/oauth/authorize?state=form');
+  assert.equal(destination.searchParams.get('lang'), 'zh');
+  assert.equal(destination.searchParams.get('registered'), '1');
+  assert.match(await (await f.request(destination.pathname + destination.search)).text(), /注册成功|账号已创建/);
+  assert.equal((await f.login('form-visitor')).body.user.username, 'form-visitor');
+});
+
+test('registration abuse protection survives restart, ignores spoofed forwarding and expires', async t => {
+  const f = await httpFixture(t);
+  for (let index = 0; index < 5; index++) {
+    const response = await f.json('/auth/register', { username: `rate-visitor-${index}`, password: 'short' });
+    assert.equal(response.status, 400);
+  }
+  f.restartAuth();
+  const response = await f.json('/auth/register', { username: 'rate-visitor-valid', password }, { headers: { 'X-Forwarded-For': '203.0.113.75' } });
+  assert.equal(response.status, 429);
+  assert.equal((await response.json()).error, 'RATE_LIMITED');
+  assert.equal(response.headers.get('retry-after'), '3600');
+  assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_users WHERE username=?').get('rate-visitor-valid').n, 0);
+  f.clock.now += 3600001;
+  assert.equal((await f.json('/auth/register', { username: 'rate-visitor-valid', password })).status, 201);
+});
+
+test('a publicly registered identity can sign in, consent with PKCE and authenticate the protected MCP resource', async t => {
+  const f = await httpFixture(t, { core: true, gateway: true });
+  for (const [path, note] of [['/', /Create a Praxis account/], ['/zh-cn/', /创建 Praxis 账号/]]) {
+    const home = await f.request(path);
+    assert.equal(home.status, 200);
+    const html = await home.text();
+    assert.match(html, note);
+    assert.match(html, /\/auth\/register\?lang=/);
+    assert.doesNotMatch(html, /Self-service registration is planned|开放自助注册仍在计划中/);
+  }
+  assert.equal((await f.request('/auth/register')).status, 200);
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+  const registered = await f.json('/auth/register', { username: 'oauth-visitor', password });
+  assert.equal(registered.status, 201);
+  const { user } = await registered.json();
+  assert.deepEqual(f.store.availableRules(user.id), [], 'registration confers no business rights');
+  const login = await f.login('oauth-visitor');
+  const verifier = 'public-registration-pkce-verifier-'.repeat(2);
+  const path = '/oauth/authorize?' + new URLSearchParams({ client_id: 'agent-a', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read', state: 'public-registration' });
+  assert.match(await (await f.request(path, { headers: { Cookie: login.cookie } })).text(), /No actions available/);
+  // Only this isolated fixture supplies pre-existing business permission. The
+  // public registration path creates neither this permission nor a membership.
+  f.store.configureWebAccessBoundary({ enabled: true, apps: { reminder: { spaces: ['family-a'] } } });
+  f.store.setWebAccess({ userId: user.id, apps: ['reminder'], prds: false });
+  f.store.grantResource({ userId: user.id, ...rule('family-a', ['read'], ['synthetic-register-record']) });
+  const page = await f.request(path, { headers: { Cookie: login.cookie } });
+  const html = await page.text();
+  assert.match(html, /Authorize external agent/);
+  const consent = html.match(/name="consent" value="([^\"]+)"/)[1];
+  const allowed = await f.json(path, { csrf: login.body.csrfToken, consent, rule_0: '1' }, { headers: { Cookie: login.cookie } });
+  assert.equal(allowed.status, 303);
+  const destination = new URL(allowed.headers.get('location'));
+  assert.equal(destination.searchParams.get('state'), 'public-registration');
+  const exchange = { grant_type: 'authorization_code', code: destination.searchParams.get('code'), client_id: 'agent-a', redirect_uri: 'https://client.example/callback', code_verifier: verifier, resource: `${issuer}/mcp` };
+  assert.equal((await f.json('/oauth/token', { ...exchange, code_verifier: 'wrong-verifier'.repeat(4) })).status, 400);
+  const response = await f.json('/oauth/token', exchange);
+  assert.equal(response.status, 200);
+  const tokens = await response.json();
+  const actor = f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'read', resourceId: 'synthetic-register-record' });
+  assert.equal(actor.userId, user.id);
+  assert.throws(() => f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'read', resourceId: 'other-record' }), { status: 403 });
+  const client = new Client({ name: 'synthetic-public-registration', version: '1.0.0' });
+  t.after(() => client.close());
+  await client.connect(new StreamableHTTPClientTransport(new URL('/mcp', f.base), { fetch: (url, options) => f.request(new URL(url).pathname, options), requestInit: { headers: { Authorization: `Bearer ${tokens.access_token}` } } }));
+  assert.ok((await client.listTools()).tools.some(tool => tool.name === 'praxis_refresh_capabilities'));
+  assert.equal((await f.json('/oauth/token', exchange)).status, 400, 'authorization codes remain single-use');
+  assert.equal((await f.request('/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
+});
+
+
+test('global registration limit bounds distinct transport peers and malformed bodies create no accounts', async t => {
+  const f = await httpFixture(t);
+  const before = f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_users').get().n;
+  for (const body of ['null', '[]', '"invalid"', '{']) {
+    const response = await f.request('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: issuer }, body });
+    assert.equal(response.status, 400);
+  }
+  f.clock.now += 3600001;
+  for (let index = 0; index < 100; index++) f.store.limitUserRegistration(`synthetic-peer-${index}`);
+  const rejected = await f.json('/auth/register', { username: 'global-limit-visitor', password });
+  assert.equal(rejected.status, 429);
+  assert.equal(rejected.headers.get('retry-after'), '3600');
+  assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_users').get().n, before);
 });

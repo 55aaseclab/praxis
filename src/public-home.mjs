@@ -41,7 +41,8 @@ const copy = {
     ],
     startHeading: 'Try one real task.', startLead: 'Before setting up your own instance, paste this prompt into your agent.',
     signIn: 'Open the workbench to sign in',
-    accountNote: 'The online service requires a Praxis account. Self-service registration is planned.',
+    accountNote: 'Create a Praxis account, then sign in. App and resource access is granted separately.',
+    register: 'Create an account',
     firstTask: 'Then ask: “Remind me tomorrow to review the field notes.”',
     copyPrompt: 'Copy prompt', copied: 'Copied', copyFailed: 'Copy failed. Select and copy the text.',
     hostHeading: 'Or make it your own.',
@@ -90,7 +91,8 @@ const copy = {
     ],
     startHeading: '先试一件真正的事。', startLead: '部署自己的实例之前，把下面这段话复制给你的智能体。',
     signIn: '打开工作台并登录',
-    accountNote: '在线服务需要已有 Praxis 账号，开放自助注册仍在计划中。',
+    accountNote: '创建 Praxis 账号后登录。应用与资源访问权限需单独授权。',
+    register: '创建账号',
     firstTask: '然后说：“提醒我明天复核现场笔记。”',
     copyPrompt: '复制连接提示', copied: '已复制', copyFailed: '复制失败，请选择并复制文本。',
     hostHeading: '也可以，部署你自己的。',
@@ -148,7 +150,7 @@ function homeHtml({ texts, origin, apps, icons, icon, stylesHref, scriptHref }) 
 <section id="apps" class="apps-section wrap" aria-labelledby="apps-heading"><div class="section-heading"><h2 id="apps-heading">${texts.appsHeading}</h2><p>${texts.appsLead}</p></div><ul class="apps">${appsList}</ul></section>
 <section id="cards" class="cards-section wrap" aria-labelledby="cards-heading"><div class="cards-grid"><div><h2 id="cards-heading">${texts.cardsHeading}</h2><p class="cards-lead">${texts.cardsLead}</p><p class="small">${texts.cardsNote}</p></div><div class="card-stage"><article class="result-card" aria-label="${texts.cardTitle}"><header><img src="${icons.get('reminder')}" alt="" width="28" height="28"><span class="card-app">${texts.cardApp}</span></header><p class="card-reason">${texts.cardReason}</p><h3>${texts.cardTitle}</h3><p class="card-meta">${texts.cardMeta}</p><p class="card-evidence">${texts.cardEvidence}</p><div class="card-actions"><span class="card-primary">${texts.cardOpen}</span><span class="card-quiet">${texts.cardLater}</span><span class="card-quiet">${texts.cardHide}</span></div></article></div></div></section>
 <section class="ownership wrap" aria-labelledby="own-heading"><h2 id="own-heading">${texts.ownHeading}</h2><div class="ownership-body">${texts.ownership.map(([heading, text]) => `<div><h3>${heading}</h3><p>${text}</p></div>`).join('')}</div></section>
-<section class="start-band" id="start" aria-labelledby="start-heading"><div class="wrap start-grid"><div class="start-copy"><h2 id="start-heading">${texts.startHeading}</h2><p>${texts.startLead}</p><a class="text-link" href="${loginUrl}">${texts.signIn}</a></div><div><div class="prompt"><p id="connection-prompt">${escapeHtml(prompt)}</p><button type="button" class="copy-button" data-copy="connection-prompt" data-done="${texts.copied}" data-error="${texts.copyFailed}" aria-label="${texts.copyPrompt}" title="${texts.copyPrompt}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></button></div><p class="small account-note">${texts.accountNote}</p><p class="first-task">${texts.firstTask}</p><span class="sr-only" role="status" aria-live="polite" id="copy-status"></span></div></div></section>
+<section class="start-band" id="start" aria-labelledby="start-heading"><div class="wrap start-grid"><div class="start-copy"><h2 id="start-heading">${texts.startHeading}</h2><p>${texts.startLead}</p><a class="text-link" href="${loginUrl}">${texts.signIn}</a></div><div><div class="prompt"><p id="connection-prompt">${escapeHtml(prompt)}</p><button type="button" class="copy-button" data-copy="connection-prompt" data-done="${texts.copied}" data-error="${texts.copyFailed}" aria-label="${texts.copyPrompt}" title="${texts.copyPrompt}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></button></div><p class="small account-note">${texts.accountNote} <a href="${o}/auth/register?lang=${texts.lang === 'zh-CN' ? 'zh' : 'en'}">${texts.register}</a></p><p class="first-task">${texts.firstTask}</p><span class="sr-only" role="status" aria-live="polite" id="copy-status"></span></div></div></section>
 <section class="self-host wrap" id="self-host" aria-labelledby="host-heading"><div><h2 id="host-heading">${texts.hostHeading}</h2><p>${texts.hostLead}</p><div class="docs-links"><a class="text-link" href="https://github.com/55aaseclab/praxis/blob/main/README.md#quickstart">${texts.setupGuide}</a><a class="text-link" href="https://github.com/55aaseclab/praxis/blob/main/docs/APP-STANDARD.md">${texts.buildApps}</a></div></div><div><pre aria-label="Start Praxis"><code>git clone --recurse-submodules \\
   https://github.com/55aaseclab/praxis.git
 cd praxis

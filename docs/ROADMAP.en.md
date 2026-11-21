@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.137
+Version: 0.1.138
 
 [简体中文](ROADMAP.md)
 
@@ -14,6 +14,10 @@ Version: 0.1.137
 ## Public product homepage design
 
 Define public-search intent, bilingual content, real product imagery and the try/self-host journeys. Deliver a responsive static prototype and SEO/interaction acceptance before changing routing. Confirm the public site's origin, implement crawlable language editions and metadata, then verify and deploy the public surface separately from the protected workbench. The public page is deployed on the existing canonical origin. Refine its compact sticky header, title/actions followed by a full-width example, and native result-card presentation while preserving the authorized entry and bilingual SEO contract.
+
+## Public self-service accounts
+
+Deliver public bilingual registration from the homepage and sign-in page, with JSON/form validation, same-origin writes and persistent peer/global rate limits. Keep identity creation separate from app/resource grants and administrator roles. Verify synthetic registration → sign-in → authorization-code/S256 PKCE consent → protected MCP token use, denial cases, restart persistence and both PRD reader languages. Advance the platform patch once with aligned bilingual release records; after source/browser checks and commit, build and deploy the affected web/core pair through the assigned managed blue/green environment. Read back public registration and homepage copy without creating live accounts; the independent business actor verifies its own result separately.
 
 ## External-client acceptance correction
 
@@ -259,6 +263,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.135 | 2026-11-20 | Preserve card text selection and restrict swipe navigation to primary touch gestures |
 | v0.1.136 | 2026-11-20 | Fit the card deck to the page viewport and keep paging controls stationary |
 | v0.1.137 | 2026-11-20 | Merge persistent AI-native campaigns and document version updates for cross-branch integration |
+| v0.1.138 | 2026-11-21 | Add public self-service account registration with bounded abuse protection |
 
 ### Public applications with private collections
 

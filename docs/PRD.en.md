@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.137 · [简体中文](PRD.md)
+Version: 0.1.138 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -39,13 +39,19 @@ Implementation and operations: [English](../tests/ai-native/README.md) · [简�
 
 ## Public product homepage
 
-Design an anonymous, indexable product homepage for people discovering Praxis through search. Explain the self-hosted platform, the user's chosen external agent, app-owned results and user-controlled authorization. Lead with a real product example and offer both trying the hosted service and running the complete local Compose stack. Present all fourteen published components, distinguishing Polaris runtime observations from app cards, and describe custom app development without claiming planned workflow execution or account registration is available. Keep technical setup below the product explanation.
+Design an anonymous, indexable product homepage for people discovering Praxis through search. Explain the self-hosted platform, the user's chosen external agent, app-owned results and user-controlled authorization. Lead with a real product example and offer both trying the hosted service and running the complete local Compose stack. Present all fourteen published components, distinguishing Polaris runtime observations from app cards, and describe custom app development without claiming planned workflow execution is available. Keep technical setup below the product explanation.
 
 Provide complete English and Simplified Chinese HTML editions with ordinary navigation links. Production acceptance requires readable content without JavaScript, explicit canonical/language URLs, truthful search/share metadata, accessible desktop/phone layouts and no private records. Implemented on the existing canonical workbench origin: anonymous visitors opening the origin root or `/zh-cn/` receive the public homepage while signed-in sessions keep the workbench at `/`; the pages carry canonical/hreflang/OG metadata, JSON-LD and a sitemap with a robots policy that permits only these public pages. The former workbench About Praxis link and its `/about/` pages are removed; the homepage replaces that content. The component directory renders from the reviewed app registry, not a separate app table. [Design](design/public-home.en.md)
 
 Keep the public page’s sticky navigation, title-only hero with two actions, full-width autoplaying example below it, Authorize → Ask → Review order and result-card design preview after the app directory. Preserve reduced-motion/no-JavaScript fallback and public SEO metadata while improving visual hierarchy. Homepage HTML must revalidate on navigation; CSS/JavaScript URLs include their content hash so deployments cannot combine new markup with an old cached asset.
 
 The public homepage describes cards as attention management: choose what to focus on, defer or hide, without treating reading as acceptance. Remove the two demo caption lines, keep only necessary motion controls, stack the app-directory title and description, and present the ownership heading on the left and two concise data/access and trace entries stacked on the right, collapsing to one column on phones. Include Documentation and Contribute in the sticky header in both languages. Replace the repeated footer tagline with a copyright notice linking 55AA Security Lab to https://www.55aaseclab.com/.
+
+## Public self-service accounts
+
+An anonymous visitor can follow **Create an account** from the public homepage or sign-in page to `GET /auth/register`. The English/Simplified Chinese form and `POST /auth/register` (JSON or form encoding) accept only `username`, `password` and an optional validated local `return_to`. Usernames contain 3–64 ASCII letters, numbers, dots, underscores or hyphens, starting with a letter or number; passwords contain 12–1024 characters. Reject invalid/unknown fields, duplicate usernames and cross-origin requests without creating an identity. Return only the new identity and sign-in path for JSON, or redirect the form to sign-in; never return a password, session or OAuth credential from registration.
+
+Persist a basic abuse limit of five registration attempts per transport peer and 100 globally per hour, including invalid attempts. Do not trust caller-supplied forwarding headers; proxied visitors share the peer limit. Return HTTP 429 with `Retry-After` on exhaustion. Registration creates no app-entry policy, membership, space, resource permission or administrator role. After a separate sign-in, preserve the validated OAuth return path. An authorized account may consent to the existing authorization-code + S256 PKCE flow for the protected MCP resource; an account with no matching permissions sees no available actions. Verification uses isolated synthetic identities, including restart persistence, rejected elevation/origin/redirect attempts, rate-limit expiry, bounded consent and MCP token use. Live business-client acceptance remains separate.
 
 ## External agent tools and authorization
 
@@ -260,6 +266,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.135 | 2026-11-20 | Preserve card text selection and restrict swipe navigation to primary touch gestures |
 | v0.1.136 | 2026-11-20 | Fit the card deck to the page viewport and keep paging controls stationary |
 | v0.1.137 | 2026-11-20 | Merge persistent AI-native campaigns and document version updates for cross-branch integration |
+| v0.1.138 | 2026-11-21 | Add public self-service account registration with bounded abuse protection |
 
 ### Letters and Profiles
 

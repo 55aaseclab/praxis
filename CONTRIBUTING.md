@@ -51,9 +51,9 @@ For external cross-app contributions, keep a tracking issue in Praxis and link t
 
 ## Merging branches and versions
 
-Every integration from another branch must advance the target branch's release version. This applies to merge commits, squash merges and fast-forward integration, including branches that already changed their own version. Resolve against the latest target branch; do not keep its unchanged version or copy an older feature-branch version over it.
+Every integration from another branch or worktree must advance the target branch's release version. This applies to merge commits, squash merges and fast-forward integration, including branches that already changed their own version. Resolve against the latest target branch; do not keep its unchanged version or copy an older feature-branch version over it.
 
-For an ordinary platform integration, assign the next PATCH after the latest target version, once for the completed merge. Synchronize `package.json`, both root versions in `package-lock.json`, and the English/Simplified Chinese PRD and roadmap declarations and release rows. Feature-branch draft version numbers do not become conflicting published release rows: preserve the target's existing release history and record the integrated work under the new target release. Preserve source commits through the chosen merge history.
+For an ordinary platform integration, assign the next PATCH after the latest target version, once for the completed merge. Update the release as one coordinated change: `package.json.version`, `package-lock.json.version`, `package-lock.json.packages[""].version`, and the English/Simplified Chinese PRD and roadmap declarations and release rows must all carry the new target version. Updating only PRD text or documentation release rows does not complete a branch/worktree integration or version bump. Feature-branch draft version numbers do not become conflicting published release rows: preserve the target's existing release history and record the integrated work under the new target release. Preserve source commits through the chosen merge history.
 
 For example, merging a branch based on 0.1.125 with a local draft version 0.1.128 into main 0.1.136 produces main 0.1.137. Resolve code and dependency/lockfile conflicts as well as the numbers, run `npm run version:check` and the combined applicable checks, then commit the resolved integration. Application repositories use their own version policy and the platform pins their released revisions separately.
 
@@ -151,9 +151,9 @@ Contributions use the [Apache 2.0 license](LICENSE). Follow the [code of conduct
 
 ### 合并分支与版本
 
-每次从其他分支整合到目标分支，都须推进目标分支的发行版本。适用于 merge commit、squash 和 fast-forward，也适用于源分支已经自行升级版本的情况。以目标分支最新版本为基线解决冲突，不能保留未变的目标版本，也不能把旧功能分支版本覆盖到主线。
+每次从其他分支或 worktree 整合到目标分支，都须推进目标分支的发行版本。适用于 merge commit、squash 和 fast-forward，也适用于源分支已经自行升级版本的情况。以目标分支最新版本为基线解决冲突，不能保留未变的目标版本，也不能把旧功能分支版本覆盖到主线。
 
-普通平台整合在目标最新版本上递增一次 PATCH，作为本次完成合并的版本；同步 `package.json`、`package-lock.json` 根对象及根 package 的两个版本，以及中英文 PRD/路线图的声明和发布记录。功能分支草稿版本不得混入为冲突的正式发布行：保留目标分支已有发布历史，将整合内容记录到新的目标发行版，源提交按选定合并方式保留。
+普通平台整合在目标最新版本上递增一次 PATCH，作为本次完成合并的版本；发行版本须作为同一变更整体更新：`package.json.version`、`package-lock.json.version`、`package-lock.json.packages[""].version`，以及中英文 PRD/路线图的声明和发布记录，必须全部使用新的目标版本。只修改 PRD 正文或文档发布行，不算完成分支/worktree 整合或版本升级。功能分支草稿版本不得混入为冲突的正式发布行：保留目标分支已有发布历史，将整合内容记录到新的目标发行版，源提交按选定合并方式保留。
 
 例如，源分支基于0.1.125、草稿版本0.1.128，合入0.1.136主线后使用0.1.137。除版本号外也要处理代码、依赖与 lockfile 冲突，运行 `npm run version:check` 及整合后的适用检查，再提交合并结果。各应用仓按自身版本策略发布，平台另行固定已发行提交。
 
