@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.141 · [简体中文](PRD.md)
+Version: 0.1.142 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -59,7 +59,7 @@ Keep external-agent permission checkboxes unchecked until the user selects them.
 
 ## Consistent Settings control rows
 
-All management views align controls to the main content’s left edge and actions to its right edge, including new-space, member, permission, user and password forms; forms must not introduce narrower competing right edges. Use one control-row pattern: related fields and their primary action share a horizontal row with a 12 px gap, stacking only at viewport widths of 390 px or less. Section notes have uniform 12 px spacing above and 20 px below, outside the control/action row. Use consistent field and section spacing, preserve native selects, visible focus, accessible names and touch targets, and reserve bottom clearance for controls and native select menus during desktop use. Do not change management operations, API payloads or authorization. Verify General, Spaces, App access, Agent delegations, Users, Data and MCP at 1440 px and 390 px with isolated synthetic fixtures, including space creation, enrollment, member and resource-permission forms, native select interaction and absence of horizontal overflow. Browser viewport checks and independent business acceptance remain separate.
+All management views align controls to the main content’s left edge and actions to its right edge, including new-space, member, permission, user and password forms; forms must not introduce narrower competing right edges. Use one control-row pattern: related fields and their primary action share a horizontal row with a 12 px gap, stacking only at viewport widths of 390 px or less. Section notes have uniform 12 px spacing above and 20 px below, outside the control/action row. Use consistent field and section spacing, preserve native selects, visible focus, accessible names and touch targets, and retain static bottom clearance for controls. Focusing, opening and closing any native select must preserve the page scroll offset and surrounding layout at desktop and phone widths, including fully visible controls near the viewport bottom; never scroll the page to reserve menu space. Keep the browser-owned popup adjacent to its control and verify its actual open appearance. Do not change management operations, API payloads or authorization. Verify General, Spaces, App access, Agent delegations, Users, Data, MCP and Overview at 1440 px and 390 px with isolated synthetic fixtures, including space creation, enrollment, member and resource-permission forms, native select interaction and absence of horizontal overflow. Browser viewport checks and independent business acceptance remain separate.
 
 ## Self-service business spaces and app enrollment
 
@@ -293,6 +293,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.139 | 2026-11-21 | Enable self-service spaces with owner-controlled app enrollment and consistent authorization |
 | v0.1.140 | 2026-11-21 | Allow verified OAuth callback redirects in consent CSP and show actionable empty-selection retries |
 | v0.1.141 | 2026-11-21 | Unify Settings control rows, note spacing and native select clearance across management views |
+| v0.1.142 | 2026-11-21 | Keep native Settings selects stationary on focus, opening and dismissal |
 
 ### Letters and Profiles
 

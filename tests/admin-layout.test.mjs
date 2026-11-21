@@ -10,6 +10,7 @@ import { createAccountHandler, createAdminHandler } from '../src/business/admin.
 // Use a separately provisioned browser dependency, as in business-auth.test.mjs:
 // PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs node --test tests/admin-layout.test.mjs
 // ADMIN_LAYOUT_ARTIFACTS optionally retains screenshots of synthetic pages only.
+// ADMIN_LAYOUT_HEADED=1 uses a real display (or Xvfb) for native-popup review.
 const browserEnabled = Boolean(process.env.PLAYWRIGHT_MODULE);
 const password = 'Synthetic-layout-password-2026';
 const publicRoot = new URL('../public/', import.meta.url);
@@ -25,14 +26,18 @@ async function fixture(t) {
       if (path === '/api/apps') return json(response, { apps });
       if (path === '/api/workbench/providers') return json(response, { schemaVersion: 1, providers: [] });
       // Read-only management DTOs are synthetic: no app or live store is contacted.
+      if (path === '/api/platform/status') return json(response, { schemaVersion: 1, generatedAt: new Date().toISOString(), sections: { permissions: { state: 'ready', platformAdmin: true, spaces: 0, resourcePermissions: 0, activeGrants: 0, revokedGrants: 0, managedApps: 1, unmanagedApps: 0 }, connections: { state: 'ready', apps: [] }, storage: { state: 'unknown' } } });
+      if (path === '/api/platform/observations') return json(response, { status: 'empty', generated_at: new Date().toISOString(), window: 'day', truncated: false });
+      if (path === '/api/platform/traces') return json(response, { schemaVersion: 1, state: 'empty', source: 'mcp', items: [], nextCursor: null });
       if (path === '/api/business/console/data') return json(response, { schemaVersion: 1, generatedAt: new Date().toISOString(), workspaceRoot: '/synthetic/workspace', apps: [{ id: 'reminder', name: 'Reminder', locations: [{ label: 'Synthetic tasks', kind: 'json', hostPath: '/synthetic/workspace/data/tasks.json' }] }] });
       if (path === '/api/business/admin/mcp') return json(response, { schemaVersion: 1, generatedAt: new Date().toISOString(), endpoints: [{ id: 'business', url: `${auth.issuer}/mcp`, registration: 'registered', authentication: 'oauth2-bearer', discovery: 'authorized-subset', toolCount: 1, apps: [{ name: 'Reminder', adapter: 'configured', activity: 'not_observed' }], tools: [{ name: 'synthetic_reminder_list', description: 'Synthetic read-only capability', action: 'read', readOnly: true, inputFields: ['spaceId'] }] }] });
       if (await handleAuth(request, response) || await handleAccount(request, response) || await handleAdmin(request, response)) return;
+      if (path === '/vendor/chartjs-4.6.1.umd.min.js') return response.writeHead(200, { 'Content-Type': 'text/javascript' }).end(readFileSync(new URL('../node_modules/chart.js/dist/chart.umd.min.js', import.meta.url)));
       const asset = path === '/admin/' ? 'admin.html' : path.slice(1);
-      if (!['admin.html', 'admin.js', 'admin.css', 'i18n.js', 'app-registry.js', 'app-providers.js', 'admin-data.js', 'admin-mcp.js', 'admin-mcp.css'].includes(asset)) return response.writeHead(404).end();
+      if (!['admin.html', 'admin.js', 'admin.css', 'i18n.js', 'app-registry.js', 'app-providers.js', 'admin-data.js', 'admin-mcp.js', 'admin-mcp.css', 'platform.js', 'platform.css', 'platform-charts.js', 'vendor/chartjs-4.6.1.umd.min.js'].includes(asset)) return response.writeHead(404).end();
       const type = asset.endsWith('.js') ? 'text/javascript' : asset.endsWith('.css') ? 'text/css' : 'text/html';
       response.writeHead(200, { 'Content-Type': type }).end(readFileSync(new URL(asset, publicRoot)));
-    } catch (error) { response.writeHead(500).end(error.message); }
+    } catch (error) { if (!response.headersSent) response.writeHead(500); response.end(error.message); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -102,11 +107,86 @@ async function inspectLayout(page, width, view) {
   return { view, width, rows: result.rows.length, forms: result.forms.length, accountRows: result.accountRows.length, edgesAligned: true, notes: result.notes.length, controls: result.controls.length, overflow: result.overflow };
 }
 
+async function inspectSelectStability(page, width, view, artifacts) {
+  const selects = page.locator('main select:visible'), evidence = [];
+  for (let index = 0; index < await selects.count(); index++) {
+    const select = selects.nth(index), original = await select.inputValue();
+    for (const placement of ['normal', 'low']) for (const method of ['pointer', 'keyboard']) {
+      // Prepare the viewport before taking the baseline. Use real mouse input,
+      // rather than locator.click(), which can hide a regression by scrolling.
+      await select.evaluate((node, placement) => {
+        document.activeElement?.blur();
+        node.scrollIntoView({ block: 'center', behavior: 'instant' });
+        if (placement === 'low') window.scrollBy({ top: node.getBoundingClientRect().bottom - innerHeight + 16, behavior: 'instant' });
+      }, placement);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const baseline = await select.evaluate(node => {
+        const rect = node.getBoundingClientRect();
+        const snapshot = () => ({
+          scroll: [scrollX, scrollY],
+          layout: [...document.querySelectorAll('main, .sidebar, main select, main input, main button, main .field, main .section-note')]
+            .filter(element => element.getClientRects().length).map(element => {
+              const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height];
+            }),
+        });
+        const initial = snapshot();
+        window.selectProbe = { initial, snapshot, changes: [], shifts: [] };
+        const probe = window.selectProbe;
+        probe.observer = new PerformanceObserver(list => probe.shifts.push(...list.getEntries().map(entry => entry.value)));
+        probe.observer.observe({ type: 'layout-shift' });
+        const tick = () => {
+          const current = snapshot();
+          if (JSON.stringify(current) !== JSON.stringify(initial)) probe.changes.push(current);
+          probe.frame = requestAnimationFrame(tick);
+        };
+        probe.frame = requestAnimationFrame(tick);
+        return { ...initial, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, bottom: rect.bottom };
+      });
+      const label = `${width}/${view}/${index}/${placement}/${method}`;
+      assert.ok(baseline.point.y > 0 && baseline.bottom <= 900, `${label}: control fully visible before opening`);
+      const unchanged = async phase => {
+        const current = await page.evaluate(() => window.selectProbe.snapshot());
+        assert.deepEqual(current.scroll, baseline.scroll, `${label}/${phase}: zero scroll delta`);
+        assert.deepEqual(current.layout, baseline.layout, `${label}/${phase}: zero layout movement`);
+      };
+      if (method === 'pointer') await page.mouse.click(baseline.point.x, baseline.point.y);
+      else {
+        await select.focus();
+        await unchanged('focus');
+        await page.keyboard.press('Space');
+      }
+      await page.waitForTimeout(80);
+      assert.equal(await select.evaluate(node => node.matches(':open')), true, `${label}: native popup is open`);
+      await unchanged('open');
+      if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-${view}-select-${index}-${placement}-${method}.png`) });
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(80);
+      assert.equal(await select.evaluate(node => node.matches(':open')), false, `${label}: native popup is closed`);
+      await unchanged('closed');
+      const probe = await page.evaluate(() => {
+        const probe = window.selectProbe;
+        cancelAnimationFrame(probe.frame); probe.observer.disconnect(); delete window.selectProbe;
+        return { changes: probe.changes, shifts: probe.shifts };
+      });
+      assert.deepEqual(probe.changes, [], `${label}: no transient scroll/layout movement`);
+      assert.deepEqual(probe.shifts, [], `${label}: no layout-shift entries, including recent input`);
+      assert.equal(await select.inputValue(), original, `${label}: Escape preserves selection`);
+      assert.equal(await select.evaluate(node => document.activeElement === node), true, `${label}: retains focus`);
+      if (method === 'keyboard') assert.ok(parseFloat(await select.evaluate(node => getComputedStyle(node).outlineWidth)) >= 2, `${label}: visible focus`);
+      evidence.push({ index, placement, method, scrollY: baseline.scroll[1], scrollDelta: 0, layoutShift: 0 });
+    }
+  }
+  return { width, view, selects: await selects.count(), interactions: evidence,
+    ...(await selects.count() === 0 ? { status: 'N/A', reason: 'No native selects in this view' } : { status: 'Pass' }) };
+}
+
 test('Chromium admin control rows and space actions remain usable at desktop and phone widths', { skip: !browserEnabled, timeout: 120000 }, async t => {
   const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
-  const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  // Native popups use the underlying screen, not Playwright's page viewport.
+  // Chromium's default 800px headless screen otherwise clips wide menus.
+  const browser = await chromium.launch({ headless: !process.env.ADMIN_LAYOUT_HEADED, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox', '--ozone-override-screen-size=1440,1000'] });
   t.after(() => browser.close());
-  const { origin, auth } = await fixture(t), evidence = [];
+  const { origin, auth } = await fixture(t), evidence = [], selectEvidence = [];
   const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
   if (artifacts) mkdirSync(artifacts, { recursive: true });
   for (const [width, language] of [[1440, 'en'], [391, 'en'], [390, 'zh']]) {
@@ -117,12 +197,14 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     const login = await context.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: 'synthetic-owner', password } });
     assert.equal(login.status(), 200);
     await page.goto(`${origin}/admin/`); await ready(page);
-    for (const view of ['general', 'spaces', 'access', 'grants', 'users', 'data', 'mcp']) {
+    for (const view of ['general', 'spaces', 'access', 'grants', 'users', 'data', 'mcp', 'overview']) {
       await page.locator(`#navigation [data-view=${view}]`).click(); await ready(page);
       if (view === 'data') await page.locator('.data-table').waitFor();
       if (view === 'mcp') await page.locator('.mcp-table').first().waitFor();
+      if (view === 'overview') { await page.locator('#platform-traces [data-scope=mcp-summary]').waitFor(); await page.locator('#platform-observations [data-scope=methodology]').waitFor(); }
       if (view === 'users') { await page.locator('[data-user="a-member"] button').click(); await page.locator('#create-user').click(); }
       evidence.push(await inspectLayout(page, width, view));
+      selectEvidence.push(await inspectSelectStability(page, width, view, artifacts));
       if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-${view}.png`), fullPage: true });
       if (view === 'access') {
         const save = page.locator('form button[type=submit]');
@@ -146,28 +228,7 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     await permission.locator('input[name=resources]').fill('synthetic-layout-record');
     await permission.locator('input[type=checkbox][name=read]').check();
     evidence.push(await inspectLayout(page, width, 'spaces-populated'));
-    // Native selects retain keyboard focus and values; menu placement itself is
-    // browser/OS owned and is not inferred from a DOM bounding box.
-    const selects = page.locator('main select');
-    for (let index = 0; index < await selects.count(); index++) {
-      const select = selects.nth(index), original = await select.inputValue();
-      await select.focus(); await select.press('Space');
-      if (width > 390) assert.ok(await select.evaluate(node => node.getBoundingClientRect().bottom <= innerHeight - Math.min(320, innerHeight * 0.4) + 1), 'native menu has desktop clearance');
-      if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-native-select-${index}.png`) });
-      await select.press('Escape');
-      assert.equal(await select.inputValue(), original);
-      assert.equal(await select.evaluate(node => node.tagName), 'SELECT');
-      const outline = await select.evaluate(node => getComputedStyle(node).outlineWidth);
-      assert.ok(parseFloat(outline) >= 2, 'keyboard focus remains visible');
-    }
-    if (width > 390) {
-      const lowSelect = permission.locator('select[name=appId]');
-      await lowSelect.evaluate(node => { node.blur(); window.scrollBy({ top: node.getBoundingClientRect().bottom - innerHeight + 12, behavior: 'instant' }); });
-      await lowSelect.click();
-      assert.ok(await lowSelect.evaluate(node => node.getBoundingClientRect().bottom <= innerHeight - 319), 'pointer opening reserves space below a low select');
-      if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-low-select-pointer.png`) });
-      await lowSelect.press('Escape');
-    }
+    selectEvidence.push(await inspectSelectStability(page, width, 'spaces-populated', artifacts));
     await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/permissions')), permission.locator('button[type=submit]').click()]); await ready(page);
     const saved = auth.db.prepare('SELECT actions,resources FROM auth_resources WHERE space_id=? AND user_id=?').get(spaceId, 'a-member');
     assert.deepEqual(JSON.parse(saved.actions), ['read']); assert.deepEqual(JSON.parse(saved.resources), ['synthetic-layout-record']);
@@ -194,5 +255,5 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     if (artifacts) await readerPage.screenshot({ path: join(artifacts, `prd-${language}.png`) });
   }
   await readerContext.close();
-  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic auth HTTP; synthetic read-only data/MCP projections', browser: browser.version(), evidence }));
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic auth HTTP; synthetic read-only data/MCP projections', browser: browser.version(), evidence, selectEvidence }));
 });

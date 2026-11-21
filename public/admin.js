@@ -480,14 +480,3 @@ setInterval(async () => { if (ended || writing || document.visibilityState === '
 void boot();
 
 document.querySelector('[data-language-preference]').addEventListener('change', () => location.reload());
-
-function reserveSelectSpace(event) {
-  const select = event.target;
-  if (!(select instanceof HTMLSelectElement) || window.innerWidth <= 390) return;
-  const clearance = Math.min(320, window.innerHeight * 0.4);
-  const bottom = select.getBoundingClientRect().bottom;
-  if (bottom > window.innerHeight - clearance) window.scrollBy({ top: bottom - window.innerHeight + clearance, behavior: 'instant' });
-}
-const main = document.querySelector('main');
-main.addEventListener('focusin', reserveSelectSpace);
-main.addEventListener('pointerdown', reserveSelectSpace);

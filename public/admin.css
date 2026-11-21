@@ -11,7 +11,7 @@
 .language-preference{max-width:20rem}.language-preference select{min-height:44px}
 
 /* Shared management rhythm: fields and their action stay together until phone width. */
-:root{--control-gap:12px;--field-gap:16px;--section-gap:24px;scroll-padding-block:24px 40vh}
+:root{--control-gap:12px;--field-gap:16px;--section-gap:24px}
 main{padding-bottom:max(160px,40vh)}
 .control-row{display:flex;justify-content:space-between;align-items:flex-end;width:100%;gap:var(--control-gap);min-width:0;margin:var(--field-gap) 0}
 .control-row>.field,.control-summary{flex:1;min-width:0}
@@ -27,7 +27,6 @@ main{padding-bottom:max(160px,40vh)}
 .user-row>.user-summary,.account-setting>div:not(.confirm-box){flex:1;min-width:0}
 .user-row>button,.account-setting>button{flex-shrink:0;max-width:100%}
 .user-row>.confirm-box,.account-setting>.confirm-box{flex-basis:100%;margin:0}
-.field select,.user-picker select{scroll-margin-block:24px 40vh}
 @media(min-width:391px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.user-picker{flex-direction:row;align-items:center;gap:var(--control-gap)}.user-picker select{flex:1;min-width:0}}
 @media(max-width:760px){.field input,.field select,.control-row>.field input,.control-row>.field select,.control-row>button{min-height:44px}.editor{margin-top:var(--section-gap);padding-top:var(--section-gap)}}
 @media(max-width:390px){.control-row{flex-direction:column;align-items:stretch}.control-row>.field{flex:auto}.form-grid{grid-template-columns:1fr}.user-row,.account-setting{align-items:stretch;flex-direction:column}.user-row>.confirm-box,.account-setting>.confirm-box{flex-basis:auto}}

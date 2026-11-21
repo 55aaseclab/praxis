@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.141
+Version: 0.1.142
 
 [简体中文](ROADMAP.md)
 
@@ -25,7 +25,7 @@ Handle a verified empty selection on the existing external-agent consent page wi
 
 ## Consistent Settings control rows
 
-Define a shared field/action row and uniform note/section rhythm before implementation. Align all form and list actions to the same main-content right edge, with controls on the left; remove competing form width limits. Apply it across every management view, retaining native controls and desktop bottom clearance; stack rows only at 390 px and below. Verify all seven management views in Chromium at 1440/390 px, keyboard focus and touch targets, original space/member/enrollment/grant submissions and both workbench PRD languages using synthetic fixtures. Run the platform suite, align one PATCH and bilingual release rows, commit checked source, then build and release the existing web/core pair through the authorized test blue/green controller. Read back public settings entry behavior and actual runtime version; business acceptance belongs to the independent client.
+Define a shared field/action row and uniform note/section rhythm before implementation. Align all form and list actions to the same main-content right edge, with controls on the left; remove competing form width limits. Apply it across every management view, retaining native controls and static bottom clearance. Remove select-triggered page scrolling and oversized focus scroll allowances; assert zero scroll delta and zero layout shift before/after pointer focus, keyboard opening and dismissal of every select, including low visible controls, and inspect the real popup; stack rows only at 390 px and below. Verify all eight management views in Chromium at 1440/390 px, keyboard focus and touch targets, original space/member/enrollment/grant submissions and both workbench PRD languages using synthetic fixtures. Run the platform suite, align one PATCH and bilingual release rows, commit checked source, then build and release the existing web/core pair through the authorized test blue/green controller. Read back public settings entry behavior and actual runtime version; business acceptance belongs to the independent client.
 
 ## Self-service business spaces
 
@@ -279,6 +279,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.139 | 2026-11-21 | Enable self-service spaces with owner-controlled app enrollment and consistent authorization |
 | v0.1.140 | 2026-11-21 | Allow verified OAuth callback redirects in consent CSP and show actionable empty-selection retries |
 | v0.1.141 | 2026-11-21 | Unify Settings control rows, note spacing and native select clearance across management views |
+| v0.1.142 | 2026-11-21 | Keep native Settings selects stationary on focus, opening and dismissal |
 
 ### Public applications with private collections
 
