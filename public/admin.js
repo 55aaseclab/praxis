@@ -519,7 +519,7 @@ async function renderSpaces(current, preserve) {
   let detail = selectedSpaceId ? await api(spacePath('') + (session.platformAdmin && contextUserId !== session.user.id ? `?contextUserId=${encodeURIComponent(contextUserId)}` : '')) : null;
   if (ended || current !== epoch || view !== 'spaces') return;
   // Keep the acting session's capabilities separate from the display projection.
-  const capabilities = { canDelete: Boolean(detail?.space.canDelete), canManage: detail?.space.ownerId === session.user.id };
+  const capabilities = { canDelete: Boolean(detail?.space.canDelete), canManage: detail?.space.ownerId === session.user.id, displayContext: session.platformAdmin && contextUserId !== session.user.id };
   content.replaceChildren();
   let displayedUserId = session.user.id;
   if (session.platformAdmin) {
@@ -540,14 +540,14 @@ async function renderSpaces(current, preserve) {
   });
   content.append(create);
   if (detail) {
-    const { space, apps, members } = detail, owner = space.ownerId === displayedUserId;
+    const { space, apps, members } = detail;
     const panel = el('section', 'space-overview'), context = el('div', 'space-section');
     const picker = selectField(t('Current space', '当前空间'), 'space', spaces.map(space => ({ value: space.id, label: spaceLabel(space) })));
     picker.input.value = selectedSpaceId;
     picker.input.addEventListener('change', () => { selectedSpaceId = picker.input.value; selectedAppId = null; history.pushState(null, '', spaceHref()); void render(); });
     const selection = controlRow(picker.root);
     if (capabilities.canDelete) selection.append(button(t('Delete space', '删除空间'), 'danger-button space-delete', () => confirmSpaceDeletion(context, space)));
-    context.append(selection, el('p', 'section-note', owner ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
+    context.append(selection, el('p', 'section-note', capabilities.canManage ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : capabilities.displayContext ? t('App enrollment and resource permissions are separate.', '应用启用状态与资源权限分开展示。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
     if (space.deletionProtected) context.append(el('p', 'section-note', t('Automatically created personal spaces cannot be deleted.', '自动创建的个人空间不能删除。')));
     panel.append(context);
     const memberSection = el('section', 'space-section'); memberSection.append(el('h2', '', t('Members', '成员')));
@@ -567,7 +567,7 @@ async function renderSpaces(current, preserve) {
     }
     panel.append(memberSection);
     const appSection = el('section', 'space-section'); appSection.append(el('h2', '', t('Space apps', '空间应用')));
-    appSection.append(el('p', 'section-note', t('All installed apps are listed. Manage each app’s enrollment and permissions separately.', '这里列出全部已安装应用。进入管理页，分别设置应用的启用状态与权限。')));
+    appSection.append(el('p', 'section-note', !capabilities.canManage && capabilities.displayContext ? t('All installed apps are listed. Open an app to view its enrollment and resource permissions.', '这里列出全部已安装应用。打开应用可查看启用状态与资源权限。') : t('All installed apps are listed. Manage each app’s enrollment and permissions separately.', '这里列出全部已安装应用。进入管理页，分别设置应用的启用状态与权限。')));
     for (const app of apps) {
       const row = el('div', 'account-setting space-app-row'), description = el('div'); row.dataset.app = app.id;
       description.append(el('strong', '', app.name || app.id), el('span', 'meta', app.enabled ? t('Enabled', '已启用') : t('Disabled', '未启用')), el('span', 'meta app-capability', app.supportsBusinessActions ? t('Agent business actions supported', '支持智能体业务操作') : t('Web entry only · No agent business actions', '仅网页入口 · 不支持智能体业务操作')));
@@ -580,7 +580,7 @@ async function renderSpaces(current, preserve) {
   }
   if (!detail) content.append(el('p', 'empty', t('No spaces yet.', '暂无空间。')));
 }
-function renderSpaceApp({ space, apps, members, permissions, delegations = [] }, { canManage }) {
+function renderSpaceApp({ space, apps, members, permissions, delegations = [] }, { canManage, displayContext }) {
   const app = apps.find(app => app.id === selectedAppId);
   const context = el('div', 'space-app-context'); context.append(spaceLink(t('Back to Spaces', '返回空间'), null, 'link-button space-back'), el('p', 'meta', spaceLabel(space))); content.append(context);
   if (!app) { content.append(el('p', 'empty', t('This app is no longer installed. Return to Spaces to choose another app.', '此应用已不再安装，请返回空间选择其他应用。'))); return; }
@@ -595,6 +595,7 @@ function renderSpaceApp({ space, apps, members, permissions, delegations = [] },
   }
   enrollment.append(row);
   let note = app.supportsBusinessActions ? t('Agent business actions supported. Enrollment and resource permissions are separate; grant only the required actions below.', '支持智能体业务操作。启用应用与资源授权分开进行，请在下方仅授予所需操作。') : t('Web entry only. Enabling this app lets space members open it; it grants no agent business actions.', '仅网页入口。启用后空间成员可打开此应用，不授予智能体业务操作。');
+  if (app.supportsBusinessActions && !canManage && displayContext) note = t('Agent business actions supported. App enrollment and resource permissions are shown separately.', '支持智能体业务操作。应用启用状态与资源权限分开展示。');
   if (app.enrollmentAllowed === false) note = app.entryPolicy === 'document-owner' ? t('Web entry only. This app is restricted to its configured document owner; space enrollment cannot grant entry.', '仅网页入口。此应用仅限配置的文档所有者，空间启用不能授予入口。') : app.entryPolicy === 'platform-admin' ? t('Web entry only. This app requires a platform administrator; space enrollment cannot grant entry.', '仅网页入口。此应用需要平台管理员身份，空间启用不能授予入口。') : t('Agent business actions are declared, but this installation has no configured business adapter. Enrollment is unavailable.', '应用声明支持智能体业务操作，但当前安装尚未配置业务适配，暂不能启用。');
   enrollment.append(el('p', 'section-note', note)); content.append(enrollment);
   if (!app.supportsBusinessActions) return;

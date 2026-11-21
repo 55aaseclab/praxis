@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.152 · [简体中文](PRD.md)
+Version: 0.1.153 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -137,6 +137,12 @@ For installed apps without agent business actions and with grant-based web entry
 Across every management view, adjacent sections have one separator, with nested editor sections and the first section adding no competing borders. Show success feedback in a separate browser `window.alert` dialog that closes only after user acknowledgment; add no page notice or text row and no auto-dismiss timer. The page layout and copy remain unchanged by this feedback. Display remaining error/loading notices as a fixed bottom-right overlay, above Home on phones, outside document flow: showing or clearing a notice must never insert a row or change content geometry. Error notices persist across view changes until addressed, retried or explicitly refreshed. If an operation succeeds but its follow-up read fails, keep the read error visible and do not show a success alert. During a same-view save and refresh, retain the existing controls until the refreshed result is ready; do not replace the content with an intermediate loading state that collapses its height or shifts scroll/focus. Verify actual geometry, scroll and focus stability during saves and when errors appear/clear, plus overview → app management → overview, enrollment, member add/remove and app-scoped grant/revoke with isolated synthetic fixtures in Chromium at 1440 px and 390 px, preserving accessible focus, native controls and zero horizontal overflow.
 
 ## Administrator display context in Settings
+
+Owner self-management hints and onboarding instructions use only the acting signed-in session’s ownership. When a non-owner administrator views another user’s personal, family or team space, keep the existing viewing-context notice and accurate app/permission read-model, use neutral explanatory copy, and expose no owner-only member/enrollment/permission controls. Preserve the actor’s existing Delete capability and automatic-personal protection. Ordinary owner and member sessions keep their existing copy and controls.
+
+| ID | Observable acceptance |
+| --- | --- |
+| BUC06 | Isolated synthetic Chromium at 1440/390 px in both languages verifies neutral non-owner administrator display contexts for personal/family/team spaces, actor-only owner hints and onboarding, unchanged owner/member sessions and administrator Delete rules, accurate app/permission projections, stable settled refresh geometry and no horizontal overflow. |
 
 Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer all registered users in a plain native dropdown, with pagination as needed and no search input or search interaction, retaining the signed-in administrator and selected account across pages. Selecting an account renders that user’s space read-model: enabled apps and resource permissions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Management affordances use the signed-in administrator’s capabilities, independently of the selected user’s projection. Delete remains available for every otherwise deletable space under any display context; owner-only enrollment, member and resource-permission controls remain available only when the signed-in administrator owns the space. Selecting another owner never lends that user’s authority. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
 
@@ -410,6 +416,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.150 | 2026-11-21 | Render persisted platform language before first paint |
 | v0.1.151 | 2026-11-21 | Audit MCP space discovery and simplify consent and Settings error surfaces. |
 | v0.1.152 | 2026-11-21 | Manage delegations across Settings surfaces and refresh Spaces user-context permissions. |
+| v0.1.153 | 2026-11-21 | Use acting-session ownership for Spaces guidance in administrator display contexts |
 
 ### Letters and Profiles
 

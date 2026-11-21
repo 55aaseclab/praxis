@@ -1247,3 +1247,100 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
   }
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic HTTP AuthStore', browser: browser.version(), evidence }));
 });
+
+test('Chromium Spaces owner guidance follows the acting owner, with neutral foreign display contexts', { skip: !browserEnabled, timeout: 90000 }, async t => {
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const { origin, auth } = await fixture(t), evidence = [];
+  auth.createUser({ id: 'synthetic-view-member', username: 'synthetic-view-member', password });
+  const automatic = auth.ensurePersonalSpace('a-member');
+  const spaces = ['personal', 'family', 'company'].map(type => auth.createSelfServiceSpace({ type, ownerId: 'a-member' }));
+  spaces.push({ ...automatic, deletionProtected: auth.spaceDeletionProtected(automatic.id) });
+  assert.equal(spaces.at(-1).deletionProtected, true, 'fixture includes a genuinely protected automatic personal space');
+  for (const space of spaces) {
+    if (space.type !== 'personal') auth.setMembership({ spaceId: space.id, userId: 'synthetic-view-member', role: 'member' });
+    auth.setSpaceAppEnrollment({ spaceId: space.id, appId: 'reminder', enabled: true });
+    auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: space.id, actions: ['read'], resources: ['synthetic-owner-framing-resource'] });
+  }
+  const ownerHint = /You own this space|你是此空间的所有者/;
+  const overviewInstruction = /Manage each app’s enrollment|分别设置应用的启用状态与权限/;
+  const appInstruction = /grant only the required actions below|请在下方仅授予所需操作/;
+  const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
+  if (artifacts) mkdirSync(artifacts, { recursive: true });
+  for (const width of [1440, 390]) for (const language of ['en', 'zh']) {
+    const contexts = await Promise.all([0, 1, 2].map(() => browser.newContext({ viewport: { width, height: 900 } })));
+    const [admin, owner, member] = contexts, pages = [];
+    for (const [index, context] of contexts.entries()) {
+      t.after(() => context.close());
+      await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+      assert.equal((await context.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: ['synthetic-owner', 'synthetic-member', 'synthetic-view-member'][index], password } })).status(), 200);
+      pages.push(await context.newPage());
+    }
+    const [page, ownerPage, memberPage] = pages, errors = [], writes = [];
+    for (const target of pages) target.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => { if (!['GET', 'HEAD'].includes(request.method())) writes.push(request.method()); });
+    const open = async (target, space) => { await target.goto(`${origin}/admin/?view=spaces&space=${space.id}`); await ready(target); };
+    const manage = async target => { await target.locator('.space-app-row[data-app=reminder] a').click(); await ready(target); };
+    const stableRefresh = async () => {
+      await page.evaluate(() => {
+        window.framingShifts = [];
+        window.framingObserver = new PerformanceObserver(list => { window.framingShifts.push(...list.getEntries().map(entry => entry.value)); });
+        window.framingObserver.observe({ type: 'layout-shift' });
+      });
+      const before = await layoutGeometry(page);
+      await page.locator('#refresh').click(); await ready(page);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.deepEqual(await layoutGeometry(page), before, 'refresh preserves geometry and scroll');
+      const shifts = await page.evaluate(() => { window.framingObserver.disconnect(); return window.framingShifts; });
+      assert.equal(shifts.reduce((total, value) => total + value, 0), 0, 'refresh produces zero layout shift');
+    };
+    for (const space of spaces) {
+      await open(page, space);
+      await page.locator('#selected-user').selectOption('a-member'); await ready(page);
+      assert.match(await page.locator('#content>.section-note').innerText(), /Viewing synthetic-member|正在查看 synthetic-member/);
+      assert.doesNotMatch(await page.locator('#content').innerText(), ownerHint);
+      assert.doesNotMatch(await page.locator('#content').innerText(), overviewInstruction);
+      assert.equal(await page.locator('input[name=username], .user-row button').count(), 0, 'foreign owner context has no member-management affordance');
+      assert.equal(await page.locator('.space-delete').count(), space.deletionProtected ? 0 : 1, 'actor Delete is independent of displayed ownership and respects automatic protection');
+      await open(ownerPage, space);
+      assert.match(await ownerPage.locator('#content').innerText(), ownerHint, 'ordinary owner keeps self-management hint');
+      assert.match(await ownerPage.locator('#content').innerText(), overviewInstruction, 'ordinary owner keeps onboarding');
+      assert.equal(await ownerPage.locator('input[name=username]').count(), space.type === 'personal' ? 0 : 1);
+      assert.equal(await ownerPage.locator('#selected-user').count(), 0, 'ordinary owner has no context switcher');
+      for (const selector of ['.user-row .user-summary', '.space-app-row>div']) assert.deepEqual(await page.locator(selector).allTextContents(), await ownerPage.locator(selector).allTextContents(), 'foreign owner read-model matches their native browser session');
+      await stableRefresh();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-${language}-${space.type}-${space.deletionProtected ? 'automatic' : 'created'}-neutral-overview.png`), fullPage: true });
+      await manage(page); await manage(ownerPage);
+      assert.doesNotMatch(await page.locator('#content').innerText(), appInstruction, 'foreign owner app context has no owner-onboarding imperative');
+      assert.match(await ownerPage.locator('#content').innerText(), appInstruction, 'owner app onboarding unchanged');
+      assert.equal(await page.locator('input[name=resources], [data-permission] button, .account-setting button').count(), 0, 'foreign context cannot expose enrollment or permission controls');
+      assert.equal(await ownerPage.locator('input[name=resources]').count(), 1, 'owner keeps resource grant form');
+      for (const selector of ['.app-user-access', '[data-permission] .control-summary']) assert.deepEqual(await page.locator(selector).allTextContents(), await ownerPage.locator(selector).allTextContents(), 'foreign owner app/resource read-model matches their native browser session');
+      await stableRefresh();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      if (space.type !== 'personal') {
+        await page.locator('#selected-user').selectOption('synthetic-view-member'); await ready(page);
+        await open(memberPage, space); await manage(memberPage);
+        assert.equal(await memberPage.locator('#selected-user, input[name=resources], [data-permission] button, .account-setting button').count(), 0);
+        assert.match(await memberPage.locator('#content').innerText(), appInstruction, 'existing ordinary-member app copy is unchanged');
+        for (const selector of ['.app-user-access', '[data-permission] .control-summary']) assert.deepEqual(await page.locator(selector).allTextContents(), await memberPage.locator(selector).allTextContents(), 'member projection matches native session');
+        await memberPage.locator('.space-back').click(); await ready(memberPage);
+        assert.doesNotMatch(await memberPage.locator('#content').innerText(), ownerHint);
+        assert.match(await memberPage.locator('#content').innerText(), /Ask the space owner|请联系空间所有者/, 'member overview copy unchanged');
+      }
+      evidence.push({ width, language, type: space.type, automaticPersonal: Boolean(space.deletionProtected), ownerHint: 'acting owner only', foreignContext: 'neutral overview/app; no owner controls', projection: 'equals native owner/member session', delete: space.deletionProtected ? 'protected' : 'actor retained', refreshLayoutShift: 0, overflow: 0, result: 'Pass' });
+    }
+    // An acting owner retains their hint even when the display user is not an owner.
+    await open(page, { id: 'synthetic-family' });
+    await page.locator('#selected-user').selectOption('a-member'); await ready(page);
+    assert.match(await page.locator('#content').innerText(), ownerHint);
+    assert.equal(await page.locator('input[name=username]').count(), 1);
+    assert.equal((await (await admin.request.get(`${origin}/api/business/account/session`)).json()).user.id, 'z-owner');
+    assert.deepEqual(writes, [], 'all context/read-model checks are mutation-free');
+    assert.deepEqual(errors, []);
+    for (const context of contexts) await context.close();
+  }
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers; no business service contacted', browser: browser.version(), evidence }));
+});

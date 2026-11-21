@@ -35,6 +35,8 @@ The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.m
 
 - MCP Settings keeps protocol endpoints and capability schemas; omit the app configuration/seven-day calls block, registry disclaimer and updated timestamp. Verify both languages at 1440/390 px.
 
+- Spaces owner self-management hints and onboarding use the acting session’s ownership. A non-owner administrator viewing another user sees neutral overview/app explanations alongside the existing viewing-context notice and that user’s app/permission projection; retain existing Manage links, actor-authorized Delete and automatic-personal protection. Owner/member sessions keep their copy and controls. Verify synthetic personal/family/team contexts in both languages at 1440/390 px, including stable settled refresh geometry and no horizontal overflow.
+
 ## 简体中文
 
 - 平台各界面在首屏前按已保存语言渲染，无有效 Cookie 时保持英文；认证显式语言优先，登录／注册语言链接保存 Cookie。仅翻译有标记的静态文案／无障碍标签，保留切回英文的原文元数据，客户端回退以已渲染语言初始化。保留公开 `/` 与 `/zh-cn/` 版本，显式语言链接保存偏好。在 Chromium 1440/390 px 阻止脚本检查初始 DOM，再放行脚本，断言刷新／导航无语言文案替换或语言导致的几何位移，英文与授权不变。
@@ -69,3 +71,5 @@ The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.m
 - OAuth 同意页在权限选项前直接显示有明确标签的原生空间下拉框，无额外选择按钮；切换值在同一 OAuth 请求中更新权限，仍须明确同意。存在本人的个人空间时默认选中；切换空间只展示该空间当前允许的应用／动作，权限仍须明确勾选。错误／重试保留选择。无空间时在同一 OAuth 请求中提供内联创建及清晰的继续路径；创建不授予应用／资源权限。在 1440/390 px 实际验证键盘／鼠标选择、内联创建、本地化空态／错误指引和回调／令牌完成，确保无横向溢出；PKCE、Origin、CSRF 及精确回调检查不变。
 
 - MCP 设置保留协议入口与能力清单，移除应用配置／近七天调用区块、注册清单免责声明及更新时间。在 1440/390 px 验证两种语言。
+
+- 空间所有者自主管理提示和引导按实际登录会话的所有权判断。非所有者管理员查看其他用户时，概览及应用页使用中性说明，保留既有查看上下文提示及该用户的应用／权限投影；保留既有「管理」链接、操作人获准的删除入口及自动个人空间保护。所有者／成员会话文案和控件保持不变。使用合成个人／家庭／团队上下文，在双语 1440/390 px 检查稳定刷新后几何不变及无横向溢出。
