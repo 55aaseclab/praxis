@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.149
+Version: 0.1.150
 
 [简体中文](ROADMAP.md)
 
@@ -10,6 +10,10 @@ Version: 0.1.149
 2. Deliver three campaign manifests, stable personas, repeatable scenario draws, a durable controller, coverage evidence and a Paseo adapter. Apply configured full access before the initial prompt (OpenCode auto_accept, Codex full-access), retaining interactive human questions. Route inter-agent assignments and reports through Paseo send message. Enforce one global worker slot and explicit human confirmation in Paseo for every technical-only Maintenance invocation.
 3. Verify restart, ambiguous dispatch, missing/denied/replayed confirmations and scope changes, original-actor repair retries, pause and truthful coverage with synthetic fixtures; open both PRD editions through the workbench reader. Deliver without creating campaign agents, schedules or business records.
 4. After explicit launch direction, provision isolated business identities/workspaces and a separate maintenance environment, verify public-only account/team/consent paths, choose the investor market/horizon and verify actual MCP capabilities. Start the coordinator and actors through Paseo, then collect actual client evidence. Recurrence, load acceptance and any production rollout remain separately assigned.
+
+## Language on first paint
+
+Render the persisted language in the owning platform HTML entry points, keeping English without a valid cookie and auth's explicit language priority. Preserve source metadata and client fallback, bilingual public SEO editions and language navigation. Verify initial DOM with scripts blocked, refresh/navigation and switching back to English on desktop/phone using isolated fixtures; assert zero locale swap/shift and unchanged authorization. Run the platform suite and bilingual PRD reader, advance one aligned PATCH, commit, then build and deploy the affected web/core pair through the authorized managed blue/green environment and read back its running version.
 
 ## Public product homepage design
 
@@ -311,6 +315,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.147 | 2026-11-21 | Clarify delegation IDs and status, use modal confirmations and plain user dropdowns in Settings. |
 | v0.1.148 | 2026-11-21 | Keep Spaces management capabilities tied to the signed-in session across display contexts |
 | v0.1.149 | 2026-11-21 | Separate Users creation and detail pages and add confirmed atomic administrator account deletion |
+| v0.1.150 | 2026-11-21 | Render persisted platform language before first paint |
 
 ### Public applications with private collections
 

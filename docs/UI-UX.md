@@ -2,6 +2,8 @@
 
 ## English
 
+- Render the persisted language before first paint on every platform surface; no valid cookie keeps English. Auth explicit language overrides; sign-in/registration language links persist the cookie. Translate only marked static text/accessibility labels, retain English metadata for switching back, and seed client fallback from the rendered locale. Keep public `/` and `/zh-cn/` editions and persist explicit language links. In Chromium at 1440/390 px, block scripts to inspect initial DOM, then release scripts: assert no locale text replacement or locale-induced geometry shift across refresh/navigation, with English and authorization unchanged.
+
 The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.md) includes the launcher, collection, reader and editor layouts, keyboard behavior and acceptance examples.
 
 - The workbench lists accessible apps and projects. The bottom bar switches between Apps and For you. Task previews and due-date notices belong to For you. Start both views at the top of the main area, including empty and sparse states. Each app should take the person directly to its main task. Give the main pane to the result and put navigation in the sidebar.
@@ -30,6 +32,8 @@ The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.m
 - The OAuth consent page uses a visibly labeled native space selector before its permission choices. Default to the user’s personal space when present; switching spaces shows only that space’s allowed app/actions and retains explicit unchecked consent. Preserve selection on errors/retry. With no spaces, show inline creation and a clear continuation in the same OAuth request. Creation grants no app/resource access. Verify actual keyboard/pointer selection, inline creation, localized empty/error guidance and callback/token completion at 1440/390 px without horizontal overflow; keep PKCE, Origin, CSRF and exact callback checks unchanged.
 
 ## 简体中文
+
+- 平台各界面在首屏前按已保存语言渲染，无有效 Cookie 时保持英文；认证显式语言优先，登录／注册语言链接保存 Cookie。仅翻译有标记的静态文案／无障碍标签，保留切回英文的原文元数据，客户端回退以已渲染语言初始化。保留公开 `/` 与 `/zh-cn/` 版本，显式语言链接保存偏好。在 Chromium 1440/390 px 阻止脚本检查初始 DOM，再放行脚本，断言刷新／导航无语言文案替换或语言导致的几何位移，英文与授权不变。
 
 [完整设计指南](../skills/praxis-operator/references/ui-style-guide.md)收录了启动台、集合、阅读器与编辑器布局，以及键盘行为和验收示例。
 

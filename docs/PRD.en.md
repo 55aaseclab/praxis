@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.149 · [简体中文](PRD.md)
+Version: 0.1.150 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -36,6 +36,12 @@ Account creation, team setup, consent, authorization and all live business actio
 | ANT10 | Synthetic controller/adapter checks and bilingual workbench PRD reads pass. Actual external-client business acceptance, periodic scheduling, production deployment and load claims are recorded separately and never inferred from those checks. |
 
 Implementation and operations: [English](../tests/ai-native/README.md) · [简体中文](../tests/ai-native/README.zh-CN.md).
+
+## Language on first paint
+
+Platform pages render the persisted `praxis_locale=en|zh` preference on the server before any script runs: workbench, standalone Settings, managed administration, authentication and the public homepage. Without a valid cookie, keep English. Authentication's explicit `lang` choice takes precedence; sign-in and registration language links persist the preference. Preserve public English `/` and Chinese `/zh-cn/` SEO editions; a Chinese preference at the anonymous root redirects to the Chinese edition, and explicit homepage language links persist that edition's preference.
+
+Translate only marked platform strings and accessible labels, preserve English source metadata for switching back, and initialize client language from the rendered locale. Client translation remains a fallback for new strings and explicit language changes. User content and authorization remain unchanged. Verify script-blocked initial Chinese/English DOM, refresh and navigation, no locale text swap or locale-induced layout shift at 1440/390 px, both PRD reader languages, existing authorization tests and the full version-gated suite. Report synthetic technical evidence and the managed deployed version separately from business acceptance.
 
 ## Public product homepage
 
@@ -379,6 +385,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.147 | 2026-11-21 | Clarify delegation IDs and status, use modal confirmations and plain user dropdowns in Settings. |
 | v0.1.148 | 2026-11-21 | Keep Spaces management capabilities tied to the signed-in session across display contexts |
 | v0.1.149 | 2026-11-21 | Separate Users creation and detail pages and add confirmed atomic administrator account deletion |
+| v0.1.150 | 2026-11-21 | Render persisted platform language before first paint |
 
 ### Letters and Profiles
 

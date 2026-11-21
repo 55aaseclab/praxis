@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readApps, resolveAppIcon } from './apps.mjs';
+import { requestLocale } from './web-gateway.mjs';
 
 const WORKSPACE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const sessionCookie = /(?:^|;\s*)praxis_business_session=[A-Za-z0-9_-]{16,512}(?:;|$)/;
@@ -143,7 +144,7 @@ function homeHtml({ texts, origin, apps, icons, icon, stylesHref, scriptHref }) 
 </head>
 <body>
 <a class="skip" href="#content">${texts.skip}</a>
-<header class="site-header"><div class="header-inner wrap"><a class="brand" href="${texts.home}" aria-label="Praxis"><img src="${icon}" width="34" height="34" alt="">Praxis</a><nav aria-label="${texts.mainNav}"><a href="#apps">${texts.apps}</a><a href="#start">${texts.start}</a><a href="https://github.com/55aaseclab/praxis/blob/main/docs/README.md">${texts.docs}</a><a href="https://github.com/55aaseclab/praxis/blob/main/CONTRIBUTING.md">${texts.contribute}</a><a href="https://github.com/55aaseclab/praxis">GitHub</a></nav><div class="header-actions"><a href="${texts.other}" lang="${texts.otherLang}" hreflang="${texts.otherLang}">${texts.otherLabel}</a><a class="workbench" href="${loginUrl}">${texts.openWorkbench}</a></div></div></header>
+<header class="site-header"><div class="header-inner wrap"><a class="brand" href="${texts.home}" aria-label="Praxis"><img src="${icon}" width="34" height="34" alt="">Praxis</a><nav aria-label="${texts.mainNav}"><a href="#apps">${texts.apps}</a><a href="#start">${texts.start}</a><a href="https://github.com/55aaseclab/praxis/blob/main/docs/README.md">${texts.docs}</a><a href="https://github.com/55aaseclab/praxis/blob/main/CONTRIBUTING.md">${texts.contribute}</a><a href="https://github.com/55aaseclab/praxis">GitHub</a></nav><div class="header-actions"><a href="${texts.other}?lang=${texts.otherLang === 'en' ? 'en' : 'zh'}" lang="${texts.otherLang}" hreflang="${texts.otherLang}">${texts.otherLabel}</a><a class="workbench" href="${loginUrl}">${texts.openWorkbench}</a></div></div></header>
 <main id="content">
 <section class="hero wrap" aria-labelledby="hero-title"><div class="hero-intro"><h1 id="hero-title">${texts.heroTitle}</h1><div class="hero-actions"><a class="button primary" href="#start">${texts.tryAgent}</a><a class="button secondary" href="#self-host">${texts.selfHost}</a></div></div><figure class="product-example hero-demo"><img id="product-demo" src="${texts.demoImage}" data-animation="${texts.demoAnimation}" width="2048" height="1233" alt="${escapeHtml(texts.demoAlt)}" fetchpriority="high"><figcaption class="demo-controls"><button class="demo-toggle" type="button" aria-pressed="false" data-play="${texts.play}" data-pause="${texts.pause}" data-poster="${texts.demoImage}" data-animation="${texts.demoAnimation}" hidden><span aria-hidden="true" class="play-symbol">▷</span><span data-demo-label>${texts.play}</span></button><noscript><a class="demo-toggle demo-fallback" href="${texts.demoAnimation}"><span aria-hidden="true" class="play-symbol">▷</span><span>${texts.play}</span></a></noscript></figcaption></figure></section>
 <section class="steps wrap" aria-labelledby="steps-heading"><h2 id="steps-heading">${texts.stepsHeading}</h2><ol>${texts.steps.map(([heading, text], index) => `<li><span class="step-number" aria-hidden="true">${index + 1}</span><h3>${heading}</h3><p>${text}</p></li>`).join('')}</ol></section>
@@ -223,7 +224,17 @@ export function createPublicHomeHandler({ canonicalUrl, root = WORKSPACE_ROOT })
     const asset = url.pathname === '/home.css' || url.pathname === '/home.js' || /^\/home\.[a-f0-9]{20}\.(?:css|js)$/.test(url.pathname) || url.pathname.startsWith('/home-images/')
       ? url.pathname : url.pathname === '/sitemap.xml' || url.pathname === '/robots.txt' ? url.pathname : null;
     if (!page && !asset) return false;
-    if (url.search || request.headers.host !== canonical.host) return false;
+    const choice = url.searchParams.get('lang');
+    const explicitLanguage = page && ['en', 'zh'].includes(choice) && [...url.searchParams.keys()].length === 1;
+    if (url.search && !explicitLanguage || request.headers.host !== canonical.host) return false;
+    const localeCookie = language => `praxis_locale=${language}; Path=/; SameSite=Lax; Max-Age=31536000${canonical.protocol === 'https:' ? '; Secure' : ''}`;
+    const redirect = (location, language) => {
+      response.writeHead(303, { Location: location, 'Cache-Control': 'no-store', Vary: 'Cookie', ...(language ? { 'Set-Cookie': localeCookie(language) } : {}) });
+      response.end();
+      return true;
+    };
+    if (explicitLanguage) return redirect(choice === 'zh' ? '/zh-cn/' : '/', choice);
+    if (page === '/' && !sessionCookie.test(request.headers.cookie || '') && requestLocale(request) === 'zh') return redirect('/zh-cn/');
     const { pages, assets } = await state();
     const cache = page ? 'private, no-cache, must-revalidate'
       : assets.get(asset)?.immutable ? 'public, max-age=31536000, immutable'
@@ -242,7 +253,7 @@ export function createPublicHomeHandler({ canonicalUrl, root = WORKSPACE_ROOT })
       if (url.pathname === '/zh-cn') { response.writeHead(308, { Location: '/zh-cn/', 'Cache-Control': 'no-store' }); response.end(); return true; }
       if (sessionCookie.test(request.headers.cookie || '')) return false;
       const target = pages.get(page);
-      return reply(200, target.type, target.body, { 'Content-Security-Policy': target.csp });
+      return reply(200, target.type, target.body, { 'Content-Security-Policy': target.csp, 'Set-Cookie': localeCookie(page === '/' ? 'en' : 'zh') });
     }
     const target = assets.get(asset);
     if (!target) return false;

@@ -1,9 +1,14 @@
 // English is the source locale. Add its Simplified Chinese translation in the same change.
 const key = 'praxis.locale';
 const eventName = 'praxis-locale-change';
+export function cookieLocale(cookie = '') {
+  return /(?:^|;\s*)praxis_locale=(en|zh)(?:;|$)/.exec(cookie)?.[1];
+}
 function readLocale() {
-  const cookie = typeof document !== 'undefined' && /(?:^|;\s*)praxis_locale=(en|zh)(?:;|$)/.exec(document.cookie || '');
-  if (cookie) return cookie[1];
+  const cookie = typeof document !== 'undefined' && cookieLocale(document.cookie || '');
+  if (cookie) return cookie;
+  const rendered = typeof document !== 'undefined' && document.documentElement.dataset.praxisLocale;
+  if (rendered === 'en' || rendered === 'zh') return rendered;
   try { return localStorage.getItem(key) === 'zh' ? 'zh' : 'en'; } catch { return 'en'; }
 }
 let current = readLocale();
@@ -32,11 +37,13 @@ function renderWorkbenchLanguage() {
   document.documentElement.lang = t('en', 'zh-CN');
   for (const node of document.querySelectorAll('[data-zh]')) {
     node.dataset.en ??= node.textContent;
-    node.textContent = t(node.dataset.en, node.dataset.zh);
+    const text = t(node.dataset.en, node.dataset.zh);
+    if (node.textContent !== text) node.textContent = text;
   }
   for (const node of document.querySelectorAll('[data-zh-label]')) {
     node.dataset.enLabel ??= node.getAttribute('aria-label');
-    node.setAttribute('aria-label', t(node.dataset.enLabel, node.dataset.zhLabel));
+    const label = t(node.dataset.enLabel, node.dataset.zhLabel);
+    if (node.getAttribute('aria-label') !== label) node.setAttribute('aria-label', label);
   }
   if (preference) preference.value = current;
 }

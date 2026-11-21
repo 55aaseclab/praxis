@@ -25,6 +25,7 @@ import { CardPreferences } from './card-preferences.mjs';
 import { createDataSourceResolver, readProviderRuntime, mergeProviderRuntime } from './provider-data.mjs';
 import { readDataInventory } from './data-inventory.mjs';
 import { createRuntimeTraceReader } from './runtime-traces.mjs';
+import { requestLocale, renderPlatformLocale } from '../web-gateway.mjs';
 
 const ADMIN_ASSETS = Object.freeze({ '/app-providers.js': ['app-providers.js', 'application/javascript'], '/admin.js': ['admin.js', 'application/javascript'], '/admin.css': ['admin.css', 'text/css'], '/admin-mcp.js': ['admin-mcp.js', 'application/javascript'], '/admin-data.js': ['admin-data.js', 'application/javascript'], '/admin-mcp.css': ['admin-mcp.css', 'text/css'], '/platform.js': ['platform.js', 'application/javascript'], '/platform.css': ['platform.css', 'text/css'], '/platform-charts.js': ['platform-charts.js', 'application/javascript'], '/vendor/chartjs-4.6.1.umd.min.js': [new URL('../../node_modules/chart.js/dist/chart.umd.min.js', import.meta.url), 'application/javascript'] });
 const APP_ASSETS = Object.freeze({ '/i18n.js': ['i18n.js','application/javascript'], '/app-transport.js':['app-transport.js','application/javascript'], '/app-registry.js':['app-registry.js','application/javascript'] });
@@ -136,7 +137,8 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
           }
           if (!['GET', 'HEAD'].includes(request.method)) return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET, HEAD' });
           const asset = ADMIN_ASSETS[url.pathname] || ['admin.html', 'text/html'];
-          const content = await readFile(asset[0] instanceof URL ? asset[0] : new URL(`../../public/${asset[0]}`, import.meta.url));
+          let content = await readFile(asset[0] instanceof URL ? asset[0] : new URL(`../../public/${asset[0]}`, import.meta.url));
+          if (asset[1] === 'text/html') content = renderPlatformLocale(content, requestLocale(request));
           authorizePage();
           response.writeHead(200, { 'Content-Type': `${asset[1]}; charset=utf-8`, 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', Vary: 'Cookie' });
           response.end(request.method === 'HEAD' ? undefined : content); return;

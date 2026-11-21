@@ -1096,3 +1096,20 @@ test('deleted spaces remain denied despite stale static app configuration and re
   }
   assert.deepEqual(f.store.availableRules('alice').filter(rule => rule.spaceId === 'family-a'), []);
 });
+
+test('authentication initial HTML honors persisted locale, explicit language and localized validation retries', async t => {
+  const f = await httpFixture(t);
+  for (const locale of ['en', 'zh']) for (const path of ['/auth/login', '/auth/register']) {
+    const response = await f.request(path, { headers: { Cookie: `praxis_locale=${locale}` } });
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, new RegExp(`<html lang="${locale === 'zh' ? 'zh-CN' : 'en'}">`));
+    const choice = locale === 'zh' ? 'en' : 'zh';
+    const explicit = await f.request(path + '?lang=' + choice, { headers: { Cookie: `praxis_locale=${locale}` } });
+    assert.match(await explicit.text(), new RegExp(`<html lang="${choice === 'zh' ? 'zh-CN' : 'en'}">`));
+    assert.match(explicit.headers.get('set-cookie'), new RegExp(`^praxis_locale=${choice};`));
+  }
+  const retry = await f.request('/auth/login', { method: 'POST', headers: { Origin: issuer, Cookie: 'praxis_locale=zh', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ username: 'unknown-synthetic', password, return_to: '/' }).toString() });
+  assert.equal(retry.status, 401);
+  assert.match(await retry.text(), /账号或密码不正确，请重新输入。/);
+});

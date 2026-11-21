@@ -13,7 +13,7 @@ import { renderPrdMarkdown } from './prd-renderer.mjs';
 import { catalogPage, documentPage } from './pages.mjs';
 import { ObservationStore, createBrowserIngress, observeResponse } from './observability.mjs';
 import { createPlatformProxy } from './platform-proxy.mjs';
-import { createWebGateway, canonicalRedirect, gatewayApps, canOpenApp, publicEntry } from './web-gateway.mjs';
+import { createWebGateway, canonicalRedirect, gatewayApps, canOpenApp, publicEntry, requestLocale, renderPlatformLocale } from './web-gateway.mjs';
 import { createPublicMcpHandler } from './public-mcp.mjs';
 import { injectSystemNavigation, navigationContext } from './system-navigation.mjs';
 import { createPrivateDocumentHandler } from './private-documents.mjs';
@@ -171,7 +171,9 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
       }
       let content = await readFile(actual);
       if (file === 'index.html' && !gateway) content = content.toString().replace('data-website-auth="managed"', 'data-website-auth="unmanaged"').replace(/<div id="account"[^>]*><\/div>/, '').replace('data-private-nav data-admin-nav hidden', 'data-private-nav data-admin-nav').replace('data-private-nav data-prd-nav hidden', 'data-private-nav data-prd-nav');
-      return send(request, response, 200, content, type, headers || {});
+      const platformHtml = ['index.html', 'settings.html'].includes(file);
+      if (platformHtml) content = renderPlatformLocale(content, requestLocale(request));
+      return send(request, response, 200, content, type, platformHtml ? { ...headers, Vary: 'Cookie' } : headers || {});
     } catch (error) {
       console.error('Praxis request failed.');
       if (!response.headersSent) send(request, response, 500, 'Request failed.', 'text/plain; charset=utf-8');

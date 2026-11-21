@@ -159,3 +159,19 @@ test('managed Settings admits an ordinary member and keeps admin APIs protected'
   const users = await fetch(new URL('/api/business/admin/users', settingsUrl), { headers });
   assert.equal(users.status, 403);
 });
+
+test('standalone workbench and Settings return the selected language before scripts run', async t => {
+  const request = await start(t);
+  for (const locale of ['en', 'zh']) for (const path of ['/', '/index.html', '/admin', '/admin/']) {
+    const reply = await request(path, { headers: { Cookie: `praxis_locale=${locale}` } });
+    assert.equal(reply.status, 200);
+    assert.equal(reply.headers.get('vary'), 'Cookie');
+    const html = await reply.text();
+    assert.match(html, new RegExp(`<html lang="${locale === 'zh' ? 'zh-CN' : 'en'}" data-praxis-locale="${locale}">`));
+    assert.match(html, locale === 'zh' ? /data-zh="设置" data-en="Settings">设置<\// : /data-zh="设置" data-en="Settings">Settings<\//);
+    assert.equal(Number(reply.headers.get('content-length')), Buffer.byteLength(html));
+    const head = await request(path, { method: 'HEAD', headers: { Cookie: `praxis_locale=${locale}` } });
+    assert.equal(head.headers.get('content-length'), reply.headers.get('content-length'));
+    assert.equal(await head.text(), '');
+  }
+});

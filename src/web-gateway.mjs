@@ -4,6 +4,51 @@ import { collectNavigationBody, injectSystemNavigation, isNavigationHtml, naviga
 import { fileURLToPath } from 'node:url';
 import { resolve, isAbsolute } from 'node:path';
 import { readApps, appIconEntry } from './apps.mjs';
+import { parse, serialize } from 'parse5';
+
+export function requestLocale(request, choice) {
+  return choice === 'en' || choice === 'zh' ? choice
+    : /(?:^|;\s*)praxis_locale=(en|zh)(?:;|$)/.exec(request.headers.cookie || '')?.[1] || 'en';
+}
+
+// Only platform-owned templates call this renderer. User content is never translated.
+export function renderPlatformLocale(html, locale) {
+  const document = parse(String(html));
+  const attribute = (node, name) => node.attrs?.find(attr => attr.name === name)?.value;
+  const set = (node, name, value) => {
+    const attr = node.attrs.find(attr => attr.name === name);
+    if (attr) attr.value = value;
+    else node.attrs.push({ name, value });
+  };
+  const textContent = node => node.nodeName === '#text' ? node.value : (node.childNodes || []).map(textContent).join('');
+  const visit = node => {
+    if (node.tagName === 'html') {
+      set(node, 'lang', locale === 'zh' ? 'zh-CN' : 'en');
+      set(node, 'data-praxis-locale', locale);
+    }
+    const chinese = attribute(node, 'data-zh');
+    if (chinese !== undefined) {
+      const english = attribute(node, 'data-en') ?? textContent(node);
+      set(node, 'data-en', english);
+      node.childNodes = [{ nodeName: '#text', value: locale === 'zh' ? chinese : english, parentNode: node }];
+    }
+    const chineseLabel = attribute(node, 'data-zh-label');
+    if (chineseLabel !== undefined) {
+      const english = attribute(node, 'data-en-label') ?? attribute(node, 'aria-label') ?? '';
+      set(node, 'data-en-label', english);
+      set(node, 'aria-label', locale === 'zh' ? chineseLabel : english);
+    }
+    if (node.tagName === 'select' && attribute(node, 'data-language-preference') !== undefined) {
+      for (const option of node.childNodes.filter(child => child.tagName === 'option')) {
+        option.attrs = option.attrs.filter(attr => attr.name !== 'selected');
+        if (attribute(option, 'value') === locale) set(option, 'selected', '');
+      }
+    }
+    for (const child of node.childNodes || []) visit(child);
+  };
+  visit(document);
+  return serialize(document);
+}
 
 export const WEB_APPS = Object.freeze(Object.fromEntries(DEFAULT_APP_REGISTRY.webApps.filter(app => app.kind === 'proxy').map(app => [app.id, { slug: app.slug, port: app.nativePort }])));
 const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
