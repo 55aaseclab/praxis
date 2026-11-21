@@ -109,6 +109,8 @@ export class AuthStore {
       CREATE TABLE IF NOT EXISTS auth_users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS auth_platform_admins (user_id TEXT PRIMARY KEY REFERENCES auth_users(id), granted_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS auth_spaces (id TEXT PRIMARY KEY, type TEXT NOT NULL, owner_id TEXT NOT NULL REFERENCES auth_users(id));
+      CREATE TABLE IF NOT EXISTS auth_auto_personal_spaces (space_id TEXT PRIMARY KEY REFERENCES auth_spaces(id), owner_id TEXT NOT NULL UNIQUE REFERENCES auth_users(id));
+      CREATE TABLE IF NOT EXISTS auth_grant_spaces (grant_id TEXT PRIMARY KEY REFERENCES auth_grants(id), space_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS auth_self_service_spaces (space_id TEXT PRIMARY KEY REFERENCES auth_spaces(id));
       CREATE TABLE IF NOT EXISTS auth_space_apps (space_id TEXT NOT NULL REFERENCES auth_spaces(id), app_id TEXT NOT NULL, enabled INTEGER NOT NULL CHECK(enabled IN (0,1)), PRIMARY KEY(space_id,app_id));
       CREATE TABLE IF NOT EXISTS auth_members (space_id TEXT NOT NULL REFERENCES auth_spaces(id), user_id TEXT NOT NULL REFERENCES auth_users(id), role TEXT NOT NULL, PRIMARY KEY(space_id,user_id));
@@ -264,10 +266,10 @@ export class AuthStore {
     if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['username', 'password', 'return_to'].includes(key))) fail('Registration contains unknown or invalid fields.');
     const username = typeof input.username === 'string' ? input.username.trim() : '';
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{2,63}$/.test(username)) fail('Username must contain 3 to 64 letters, numbers, dots, underscores or hyphens and start with a letter or number.');
-    // Registration creates an identity only. App, space, resource and platform
-    // privileges remain separately authorized, including for the first user.
+    // The empty personal space supplies a starting point, not app or resource access.
     return this.controlTransaction(() => {
       const user = this.createUser({ username, password: input.password });
+      this.ensurePersonalSpace(user.id);
       this.audit({ event: 'user.registered', userId: user.id, outcome: 'allowed' });
       this.changed({ type: 'user', userId: user.id });
       return user;
@@ -380,8 +382,19 @@ export class AuthStore {
       return { id, type, ownerId };
     });
   }
+  ensurePersonalSpace(ownerId) {
+    return this.controlTransaction(() => {
+      // Preserve operator-provisioned spaces; never infer origin from type.
+      const existing = this.db.prepare("SELECT id,type,owner_id AS ownerId FROM auth_spaces WHERE owner_id=? AND type='personal' ORDER BY EXISTS (SELECT 1 FROM auth_auto_personal_spaces a WHERE a.space_id=auth_spaces.id) DESC,id LIMIT 1").get(ownerId);
+      if (existing) return existing;
+      const space = this.createSelfServiceSpace({ type: 'personal', ownerId });
+      this.db.prepare('INSERT INTO auth_auto_personal_spaces VALUES(?,?)').run(space.id, ownerId);
+      return space;
+    });
+  }
+  spaceDeletionProtected(spaceId) { return Boolean(this.db.prepare('SELECT 1 FROM auth_auto_personal_spaces WHERE space_id=?').get(spaceId)); }
   canDeleteSpace(userId, space) {
-    return space.type !== 'personal' && (space.ownerId === userId || this.isPlatformAdmin(userId));
+    return !this.spaceDeletionProtected(space.id) && (space.ownerId === userId || this.isPlatformAdmin(userId));
   }
   deleteSpace({ spaceId, actorId, confirmSpaceId }) {
     identifier(spaceId, 'Space'); identifier(actorId, 'User');
@@ -389,7 +402,7 @@ export class AuthStore {
       const space = this.db.prepare('SELECT id,type,owner_id AS ownerId FROM auth_spaces WHERE id=?').get(spaceId);
       if (!space) fail('Space not found.', 404, 'NOT_FOUND');
       if (!this.db.prepare('SELECT 1 FROM auth_users WHERE id=? AND enabled=1').get(actorId) || space.ownerId !== actorId && !this.isPlatformAdmin(actorId)) fail('Only the space creator or a platform administrator can delete this space.', 403, 'FORBIDDEN');
-      if (space.type === 'personal') fail('Personal spaces cannot be deleted.', 409, 'PERSONAL_SPACE_REQUIRED');
+      if (this.spaceDeletionProtected(spaceId)) fail('The automatically created personal space cannot be deleted.', 409, 'PERSONAL_SPACE_REQUIRED');
       if (confirmSpaceId !== spaceId) fail('Type the exact space ID to confirm deletion.', 400, 'CONFIRMATION_REQUIRED');
       // Include expired/revoked delegations: retained history must not contain
       // reusable space scopes. Multi-space credentials keep their other rules.
@@ -402,6 +415,7 @@ export class AuthStore {
           this.db.prepare('DELETE FROM auth_codes WHERE grant_id=?').run(grant.id);
         }
       }
+      this.db.prepare('DELETE FROM auth_grant_spaces WHERE space_id=?').run(spaceId);
       for (const table of ['auth_resources', 'auth_members', 'auth_space_apps', 'auth_self_service_spaces']) {
         this.db.prepare(`DELETE FROM ${table} WHERE space_id=?`).run(spaceId);
       }
@@ -759,11 +773,13 @@ export class AuthStore {
     if (state !== null && state.length > 2048) fail('OAuth state is too long.');
     return { clientId, clientName: client.name, redirectUri, challenge: parameters.get('code_challenge'), resource: this.resource, scopes, requested, state };
   }
-  createAuthorizationCode({ request, userId, rules }) {
+  createAuthorizationCode({ request, userId, rules, spaceId }) {
     const allowedActions = request.requested;
     const normalized = this.normalizeRules(rules);
     if (normalized.some(rule => rule.actions.some(action => !allowedActions[rule.appId]?.includes(action)))) fail('Consent cannot expand requested OAuth scopes.', 403, 'FORBIDDEN');
+    if (spaceId !== undefined && normalized.some(rule => rule.spaceId !== spaceId)) fail('Consent cannot expand the designated space.', 403, 'FORBIDDEN');
     const grant = this.createGrant({ userId, clientId: request.clientId, rules: normalized });
+    if (spaceId !== undefined) this.db.prepare('INSERT INTO auth_grant_spaces VALUES(?,?)').run(grant.id, spaceId);
     const code = randomToken('pxc');
     this.db.prepare('INSERT INTO auth_codes VALUES(?,?,?,?,?,?,?,NULL)').run(hash(code), grant.id, request.clientId, request.redirectUri, request.challenge, request.resource, this.clock() + 120000);
     return { code, grantId: grant.id };
@@ -783,7 +799,8 @@ export class AuthStore {
     const refresh = this.issueToken({ grantId, ttlSeconds: 7 * 86400, type: 'refresh', family });
     const grant = this.getGrant(grantId);
     const scopes = Object.entries(this.scopes).filter(([, definition]) => grant.rules.some(rule => rule.appId === definition.appId && rule.actions.some(action => definition.actions.includes(action)))).map(([scope]) => scope);
-    return { access_token: access.accessToken, token_type: 'Bearer', expires_in: access.expiresIn, refresh_token: refresh.accessToken, scope: scopes.join(' ') };
+    const designation = this.db.prepare('SELECT space_id FROM auth_grant_spaces WHERE grant_id=?').get(grantId);
+    return { ...(designation ? { space_id: designation.space_id } : {}), access_token: access.accessToken, token_type: 'Bearer', expires_in: access.expiresIn, refresh_token: refresh.accessToken, scope: scopes.join(' ') };
   }
   refresh({ refreshToken, clientId, resource }) {
     if (typeof refreshToken !== 'string' || refreshToken.length > 200) fail('Refresh token is invalid.', 400, 'INVALID_GRANT');
@@ -822,7 +839,7 @@ function send(response, status, value, type = 'application/json; charset=utf-8',
   response.end(type.startsWith('application/json') ? JSON.stringify(value) : value);
 }
 function page(title, content, language = 'zh') {
-  return `<!doctype html><html lang="${language === 'zh' ? 'zh-CN' : 'en'}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · Praxis</title><link rel="icon" href="/praxis-192.png?v=pine-6b4ddbd951" type="image/png"><link rel="apple-touch-icon" href="/praxis-180.png?v=pine-6b4ddbd951" sizes="180x180"><link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-title" content="Praxis"><style>body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f7;color:#1d1d1f;margin:0;padding:48px 20px}main{max-width:560px;margin:auto;background:#fff;border-radius:20px;padding:32px}h1{font-size:24px;margin:0 0 16px}label{display:block;margin:14px 0}input:not([type=checkbox]),button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:10px}button.language{width:auto;margin:12px 0 0;padding:6px 0;min-height:44px;background:transparent;color:#075db4}button{background:#075db4;color:white;border:0;margin-top:20px;cursor:pointer}small{color:#6e6e73}a{color:#075db4}label{overflow-wrap:anywhere}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #075db4;outline-offset:2px}</style><main><h1>${escapeHtml(title)}</h1>${content}</main></html>`;
+  return `<!doctype html><html lang="${language === 'zh' ? 'zh-CN' : 'en'}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · Praxis</title><link rel="icon" href="/praxis-192.png?v=pine-6b4ddbd951" type="image/png"><link rel="apple-touch-icon" href="/praxis-180.png?v=pine-6b4ddbd951" sizes="180x180"><link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-title" content="Praxis"><style>body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f7;color:#1d1d1f;margin:0;padding:48px 20px}main{max-width:560px;margin:auto;background:#fff;border-radius:20px;padding:32px}h1{font-size:24px;margin:0 0 16px}label{display:block;margin:14px 0}input:not([type=checkbox]),select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #d2d2d7;border-radius:10px}button.language{width:auto;margin:12px 0 0;padding:6px 0;min-height:44px;background:transparent;color:#075db4}button{background:#075db4;color:white;border:0;margin-top:20px;cursor:pointer}small{color:#6e6e73}a{color:#075db4}label{overflow-wrap:anywhere}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #075db4;outline-offset:2px}</style><main><h1>${escapeHtml(title)}</h1>${content}</main></html>`;
 }
 const loginErrors = {
   INVALID_CREDENTIALS: ['Incorrect username or password. Try again.', '账号或密码不正确，请重新输入。'],
@@ -897,7 +914,8 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
       if (/^\/api\/business\/account\/spaces(?:\/|$)/.test(path)) {
         if (request.headers.authorization !== undefined) fail('Native browser login is required.', 401, 'UNAUTHENTICATED');
         if (request.headers.origin && request.headers.origin !== store.issuer || request.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(request.headers['sec-fetch-site'])) fail('The browser request origin is not allowed.', 403, 'ORIGIN_REJECTED');
-        if (url.search || /%(?:2f|5c|25)/i.test(request.url) || /[\\\x00-\x20\x7f]/.test(request.url)) fail('Space route is invalid.');
+        const displayQuery = request.method === 'GET' && /^\/api\/business\/account\/spaces\/[^/]+$/.test(path) && [...url.searchParams.keys()].every(key => key === 'contextUserId') && url.searchParams.getAll('contextUserId').length === 1;
+        if (url.search && !displayQuery || /%(?:2f|5c|25)/i.test(request.url) || /[\\\x00-\x20\x7f]/.test(request.url)) fail('Space route is invalid.');
         const token = parseCookie(request);
         store.requireNativeSession(token);
         const writing = !['GET', 'HEAD'].includes(request.method);
@@ -919,7 +937,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
           if (path === '/api/business/account/spaces') {
             if (request.method === 'GET') {
               const spaces = store.db.prepare('SELECT s.id,s.type,s.owner_id AS ownerId,m.role FROM auth_spaces s LEFT JOIN auth_members m ON m.space_id=s.id AND m.user_id=? WHERE m.user_id IS NOT NULL OR s.owner_id=? OR ?=1 ORDER BY s.id').all(userId, userId, Number(platformAdmin));
-              return { status: 200, value: { spaces: spaces.map(space => ({ ...space, canDelete: store.canDeleteSpace(userId, space) })), catalog } };
+              return { status: 200, value: { spaces: spaces.map(space => ({ ...space, deletionProtected: store.spaceDeletionProtected(space.id), canDelete: store.canDeleteSpace(userId, space) })), catalog } };
             }
             if (request.method === 'POST') { fields(['type']); return { status: 201, value: store.createSelfServiceSpace({ type: input.type, ownerId: userId }) }; }
             fail('Space method is not supported.', 405, 'METHOD_NOT_ALLOWED');
@@ -941,7 +959,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
             const scopedApps = catalog.map(app => ({ ...app, enabled: store.appSpaceEnabled(app.id, spaceId, apps) }));
             // Display projections never supply an actor to the write paths above/below.
             const projection = subjectId => ({
-              space: { ...space, role: store.membershipRole(subjectId, spaceId), canDelete: store.canDeleteSpace(subjectId, space) },
+              space: { ...space, role: store.membershipRole(subjectId, spaceId), deletionProtected: store.spaceDeletionProtected(spaceId), canDelete: store.canDeleteSpace(subjectId, space) },
               apps: scopedApps, members,
               permissions: permissions.filter(row => space.ownerId === subjectId || row.userId === subjectId)
                 .map(row => ({ ...row, resources: JSON.parse(row.resources), actions: JSON.parse(row.actions) })),
@@ -949,6 +967,13 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
             const value = projection(userId);
             if (platformAdmin) value.userContexts = [session.user, ...members.filter(member => member.userId !== userId).map(member => ({ id: member.userId, username: member.username }))]
               .map(user => ({ user: { id: user.id, username: user.username }, ...projection(user.id) }));
+            if (url.searchParams.has('contextUserId')) {
+              const subjectId = url.searchParams.get('contextUserId');
+              if (!platformAdmin) fail('Platform administrator display context is required.', 403, 'FORBIDDEN');
+              const user = store.db.prepare('SELECT id,username FROM auth_users WHERE id=?').get(subjectId);
+              if (!user) fail('User not found.', 404, 'NOT_FOUND');
+              value.userContext = { user, ...projection(user.id) };
+            }
             return { status: 200, value };
           }
           let value;
@@ -1181,29 +1206,58 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         const oauth = store.authorizationRequest(url.searchParams);
         let session;
         try { session = store.getSession(parseCookie(request)); } catch (error) { if (error.status !== 401) throw error; send(response, 303, '', 'text/plain', { Location: `/auth/login?return_to=${encodeURIComponent(`${url.pathname}${url.search}`)}` }); return true; }
-        const available = store.availableRules(session.user.id, oauth.requested);
+        const allAvailable = store.availableRules(session.user.id, oauth.requested);
+        // Include empty member spaces as well as explicitly shared guest scopes.
+        const spaces = store.db.prepare('SELECT s.id,s.type FROM auth_spaces s WHERE s.owner_id=? OR EXISTS (SELECT 1 FROM auth_members m WHERE m.space_id=s.id AND m.user_id=?) ORDER BY s.id').all(session.user.id, session.user.id);
+        for (const rule of store.availableRules(session.user.id)) if (!spaces.some(space => space.id === rule.spaceId)) {
+          const space = store.db.prepare('SELECT id,type FROM auth_spaces WHERE id=?').get(rule.spaceId);
+          if (space) spaces.push(space);
+        }
+        let input = {};
+        if (request.method === 'POST') {
+          requireOrigin(request, store);
+          input = await readBody(request);
+          store.verifyCsrf(parseCookie(request), input.csrf ?? request.headers['x-csrf-token']);
+          if (input.intent === 'create_space') {
+            if (Object.keys(input).some(key => !['intent', 'csrf', 'type'].includes(key))) fail('Space request contains unknown fields.');
+            const space = store.controlTransaction(() => {
+              if (store.db.prepare('SELECT 1 FROM auth_spaces s WHERE s.owner_id=? OR EXISTS (SELECT 1 FROM auth_members m WHERE m.space_id=s.id AND m.user_id=?) LIMIT 1').get(session.user.id, session.user.id) || store.availableRules(session.user.id).length) fail('Choose an existing space before continuing.', 409, 'CONFLICT');
+              return store.createSelfServiceSpace({ type: input.type, ownerId: session.user.id });
+            });
+            const next = new URL(url); next.searchParams.set('space_id', space.id);
+            send(response, 303, '', 'text/plain', { Location: next.pathname + next.search });
+            return true;
+          }
+        }
+        const explicitSpace = input.space_id ?? url.searchParams.get('space_id');
+        const automatic = store.db.prepare('SELECT space_id FROM auth_auto_personal_spaces WHERE owner_id=?').get(session.user.id)?.space_id;
+        const selectedSpace = explicitSpace ?? automatic ?? spaces.find(space => space.type === 'personal')?.id ?? spaces[0]?.id;
+        if (selectedSpace !== undefined && !spaces.some(space => space.id === selectedSpace)) fail('The designated space is not accessible.', 403, 'FORBIDDEN');
+        const available = allAvailable.filter(rule => rule.spaceId === selectedSpace);
         const sendConsent = (status, error = false) => {
-          // Chromium applies the submitting document's form-action to the 303
-          // destination too. Only this verified request's callback may be added.
+          // Chromium applies form-action to the POST's 303 destination too.
           const origin = new URL(oauth.redirectUri).origin;
           if (!/^https?:\/\/(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::[0-9]+)?$/i.test(origin)) fail('Registered callback origin is not a safe CSP source.', 400, 'INVALID_CLIENT');
-          send(response, status, renderConsent(error), 'text/html; charset=utf-8', {
+          send(response, status, renderConsent(error), 'text/html; charset=utf-8', available.length ? {
             'Content-Security-Policy': contentSecurityPolicy.replace("form-action 'self'", `form-action 'self' ${origin}`),
-          });
+          } : {});
         };
         const renderConsent = (error = false) => {
-          const consent = store.createConsent(parseCookie(request), available, `${url.pathname}${url.search}`);
+          const action = escapeHtml(`${url.pathname}${url.search}`);
           const message = error ? `<p role="alert">${translate('Select at least one permission, then choose Authorize selected actions.', '请至少勾选一项权限，再点击「确认授权」。')}</p>` : '';
-          return renderPage('Authorize external agent', '授权外部智能体', `<p><strong>${escapeHtml(oauth.clientName)}</strong>${translate(' is requesting access to act on your behalf. Select the allowed actions. This grant can be revoked at any time during its seven-day term.', ' 请求代表你操作以下业务。请选择获准范围，七天内可随时撤销。')}</p>${message}<form method="post" action="${escapeHtml(`${url.pathname}${url.search}`)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}">${choices(available, language, store.registry)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`);
+          const description = `<p><strong>${escapeHtml(oauth.clientName)}</strong>${translate(' is requesting access to act on your behalf. Select the allowed actions. This grant can be revoked at any time during its seven-day term.', ' 请求代表你操作以下业务。请选择获准范围，七天内可随时撤销。')}</p>`;
+          if (!spaces.length) return renderPage('Authorize external agent', '授权外部智能体', `${description}<p>${translate('Create a space to continue. App access and agent permissions are granted separately.', '请先创建一个空间。应用访问和智能体操作权限需要分别授权。')}</p><form method="post" action="${action}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="intent" value="create_space"><label>${translate('Space type', '空间类型')}<select name="type"><option value="personal">${translate('Personal', '个人')}</option><option value="family">${translate('Family', '家庭')}</option><option value="company">${translate('Team', '团队')}</option></select></label><button>${translate('Create space and continue', '创建空间并继续')}</button></form>`);
+          const parameters = [...url.searchParams].filter(([key]) => key !== 'space_id').map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}">`).join('');
+          const selector = `<form method="get" action="/oauth/authorize">${parameters}<label>${translate('Authorized space', '授权空间')}<select name="space_id">${spaces.map(space => `<option value="${escapeHtml(space.id)}"${space.id === selectedSpace ? ' selected' : ''}>${escapeHtml(({ personal: translate('Personal', '个人'), family: translate('Family', '家庭'), company: translate('Team', '团队') })[space.type])} · ${escapeHtml(space.id)}</option>`).join('')}</select></label><button>${translate('Choose space', '选择空间')}</button></form>`;
+          if (!available.length) return renderPage('No actions available', '暂无可授权操作', `${description}${selector}<p>${translate('No requested operations are available in this space. Choose another space, or enable an app and obtain its resource permissions in Settings → Spaces, then return here.', '此空间暂无可授权的请求操作。请选择其他空间，或前往设置 → 空间启用应用并取得资源权限后，再返回授权。')}</p><a href="/admin/?view=spaces">${translate('Open Spaces', '打开空间设置')}</a>`);
+          const consent = store.createConsent(parseCookie(request), available, `${url.pathname}${url.search}`);
+          return renderPage('Authorize external agent', '授权外部智能体', `${description}${selector}${message}<form method="post" action="${action}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}"><input type="hidden" name="space_id" value="${escapeHtml(selectedSpace)}">${choices(available, language, store.registry)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`);
         };
-        if (request.method === 'GET') {
-          if (!available.length) { send(response, 200, renderPage('No actions available', '暂无可授权操作', `<p>${escapeHtml(oauth.clientName)}${translate(' requested actions that are unavailable for your account.', ' 请求的操作没有与你当前权限及已接入的业务能力相交。')}</p><p>${translate('App access and agent permissions are granted separately.', '应用访问权限不会自动产生智能体操作能力。')}</p><a href="/">${translate('Back to workbench', '返回工作台')}</a>`), 'text/html; charset=utf-8'); return true; }
-          sendConsent(200);
-        } else {
-          requireOrigin(request, store);
-          const input = await readBody(request);
-          store.verifyCsrf(parseCookie(request), input.csrf ?? request.headers['x-csrf-token']);
-          if (!available.length) fail('No requested operations are currently available.', 400, 'INVALID_SCOPE');
+        if (request.method === 'GET') sendConsent(200);
+        else {
+          // Legacy programmatic clients may still submit multi-space rules.
+          const legacy = input.space_id === undefined && !url.searchParams.has('space_id');
+          if (!(legacy ? allAvailable : available).length) fail('No requested operations are currently available.', 400, 'INVALID_SCOPE');
           let rules;
           try { rules = store.consentRules(parseCookie(request), input, `${url.pathname}${url.search}`); }
           catch (error) {
@@ -1211,7 +1265,7 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
             sendConsent(400, true);
             return true;
           }
-          const { code } = store.createAuthorizationCode({ request: oauth, userId: session.user.id, rules });
+          const { code } = store.createAuthorizationCode({ request: oauth, userId: session.user.id, rules, ...(!legacy ? { spaceId: selectedSpace } : {}) });
           const destination = new URL(oauth.redirectUri); destination.searchParams.set('code', code); destination.searchParams.set('iss', store.issuer); if (oauth.state !== null) destination.searchParams.set('state', oauth.state);
           send(response, 303, '', 'text/plain', { Location: destination.href });
         }

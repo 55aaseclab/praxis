@@ -8,6 +8,8 @@ Platform maintenance and business use have separate identities. The business ide
 
 `src/business/auth.mjs` exports `AuthStore` and `createAuthHandler`. It uses Node's built-in SQLite. Keep the mode-600 database outside Git. It holds derived passwords, authorization rules, credential digests and redacted audit records. Construct the store with `{ file, issuer, clock? }`; the optional clock supports isolated testing. Production uses a configured HTTPS issuer, with HTTP allowed only on loopback for development. Host, proxy headers and model input cannot select a different issuer, audience or browser origin.
 
+Public `POST /auth/register` atomically provisions exactly one personal space owned by the new identity and records its automatic origin at creation. Provisioning is idempotent and retains an operator-provisioned personal space without duplication. The automatic space starts with no enrolled apps or resource grants and cannot be deleted by its user or platform administrators. Additional user-created personal spaces have no automatic-origin protection. Registration validation, abuse limits, response fields and separate sign-in remain unchanged.
+
 The MCP resource identifier is `${issuer}/mcp`. The proxy routes sign-in and protocol endpoints to the same authorization service. Public metadata describes the protocol. Each MCP client uses its own user-approved delegation.
 
 ## 2. Effective authority
@@ -30,7 +32,7 @@ Early app actions include Reminder `read/create/update/complete/delete`, TingPro
 | --- | --- |
 | `createUser({id?, username, password})` | Create an identity with a randomly salted scrypt password derivation. Minimum password length is 12. |
 | `createSpace({id?, type, ownerId})` | Create a personal, family or company space and owner relationship. |
-| `deleteSpace({spaceId, actorId, confirmSpaceId})` | Atomically delete a non-personal space created by this actor, or by any actor when the caller is a platform administrator; require exact-ID confirmation and preserve unrelated access. |
+| `deleteSpace({spaceId, actorId, confirmSpaceId})` | Atomically delete a space without automatic-personal origin protection created by this actor, or by any actor when the caller is a platform administrator; require exact-ID confirmation and preserve unrelated access. |
 | `setMembership({spaceId, userId, role})` | Set admin/member or remove with null. Preserve the owner. |
 | `grantResource({userId, spaceId, appId, resources, actions, expiresAt?})` | Grant explicit resource authority. Guest grants default to seven days and require concrete resources. |
 | `revokeResource(id)` | Revoke a resource permission. |
@@ -77,25 +79,27 @@ Membership management, sharing and delegated management are individually authori
 
 ### Public self-service space lifecycle
 
-Settings → Spaces and the workbench space entry are available to every signed-in native user. Creation assigns ownership from the session, accepts a personal/family/team type (`company` is the stored team type), and establishes no resource permission or delegation. The owner alone edits enrollment, members and permissions through these account endpoints. The creator can delete their non-personal space without an additional role gate, and platform administrators can delete any non-personal space through the same endpoint. Members can read their own space details without receiving unrelated accounts or permissions; platform administrators can list and inspect all spaces for deletion without receiving owner-only mutation rights. No endpoint grants platform administration or issues credentials for another user.
+Settings → Spaces and the workbench space entry are available to every signed-in native user. Creation assigns ownership from the session, accepts a personal/family/team type (`company` is the stored team type), and establishes no resource permission or delegation. The owner alone edits enrollment, members and permissions through these account endpoints. The creator can delete any of their spaces without automatic-personal origin protection and without an additional role gate; platform administrators can delete any such space through the same endpoint, including a user-created personal space. Members can read their own space details without receiving unrelated accounts or permissions; platform administrators can list and inspect all spaces for deletion without receiving owner-only mutation rights. No endpoint grants platform administration or issues credentials for another user.
 
 Paths below are relative to `/api/business/account/spaces`:
 
 | Request | Body or result |
 | --- | --- |
-| `GET /` | Own spaces (all spaces for a platform administrator) and the deployment's reviewed installed app catalog: `{spaces,catalog}`. Each space includes `canDelete`; a nonmember administrator has `role:null`. |
+| `GET /` | Own spaces (all spaces for a platform administrator) and the deployment's reviewed installed app catalog: `{spaces,catalog}`. Each space includes `canDelete` and the origin-based `deletionProtected` flag; a nonmember administrator has `role:null`. |
 | `POST /` | `{type}`; create a space owned by the current native session. |
-| `GET /:spaceId` | Scoped `{space,apps,members,permissions}` with `space.canDelete`; members receive only their permitted details. Platform administrators may inspect spaces for deletion. |
-| `DELETE /:spaceId` | `{confirmSpaceId}` equal to the exact path ID; the creator or a platform administrator deletes a non-personal space. Missing/wrong confirmation, unknown fields and joined-member attempts are refused. |
+| `GET /:spaceId` | Scoped `{space,apps,members,permissions}` with `space.canDelete` and `space.deletionProtected`; members receive only their permitted details. Platform administrators may inspect spaces for deletion. |
+| `DELETE /:spaceId` | `{confirmSpaceId}` equal to the exact path ID; the creator or a platform administrator deletes a space without automatic-personal origin protection. Missing/wrong confirmation, unknown fields and joined-member attempts are refused. |
 | `PUT /:spaceId/apps/:appId` | `{enabled}`; owner enables/disables a catalog app for this space. |
 | `POST /:spaceId/members` | `{username,role:'member'}`; owner adds an existing account. Personal spaces reject other members. |
 | `DELETE /:spaceId/members/:userId` | Owner removes membership and its dependent permissions/delegation slice, preserving the owner. |
 | `POST /:spaceId/permissions` | `{userId,appId,resources,actions,expiresAt?}`; explicit grant within this space and the installed operation ceiling. |
 | `DELETE /:spaceId/permissions/:permissionId` | Owner revokes a permission belonging to this space. |
 
+For administrator display only, `GET /:spaceId?contextUserId=<registered-user-id>` adds that user’s `userContext` projection. It grants no write authority, rejects non-administrator selection and preserves the existing response when omitted.
+
 These first-party endpoints require the native browser cookie, reject Authorization headers and require same-origin CSRF on writes. Unknown fields, foreign-space targets and elevation attempts are refused. Existing delegated space-management endpoints above retain their separate role/delegation contract.
 
-All personal spaces are protected, including the automatically provisioned personal space. Space deletion follows creation (`ownerId` records the creator); membership or a space administrator role alone gives no deletion authority. Before deletion, Settings displays a warning listing memberships, resource permissions, agent delegation rules and consent scopes referring to the space, per-space app enrollments and their derived web entries. It requires the exact opaque space ID to be typed and explicitly confirmed; cancel makes no request.
+Protection is determined by the automatic-personal origin marker recorded at creation, rather than the `personal` type. The automatically provisioned personal space cannot be deleted by any caller, including platform administrators. Every other space, including an additional user-created personal space, remains deletable under the creator/platform-administrator rule. Space deletion follows creation (`ownerId` records the creator); membership or a space administrator role alone gives no deletion authority. Before deletion, Settings displays a warning listing memberships, resource permissions, agent delegation rules and consent scopes referring to the space, per-space app enrollments and their derived web entries. It requires the exact opaque space ID to be typed and explicitly confirmed; cancel makes no request.
 
 Deletion commits atomically under `controlTransaction` and the existing policy serialization boundary. It removes the space, its memberships, resource permissions, self-service marker and app-enrollment rows; removes that space's stored delegation rules and therefore pending authorization-code scopes, preserving rules for other spaces, and revokes credentials/codes when their delegation has no rules left. Signed consent forms are stateless: submitting an old form rechecks current authority and cannot establish deleted-space scopes. Existing credentials cannot recover deleted-space access. The policy notification makes subsequent authorization consult the committed deletion. Enrollment-derived web entries disappear with their membership/enrollment source; independent administrator entry policies, other spaces, accounts and unrelated authorization remain unchanged. Lists/pickers refresh and clear the deleted selection.
 
@@ -111,7 +115,7 @@ Enrollment is durable identity-store policy, initialized with no apps for a newl
 
 A website login starts an eight-hour native session. The browser uses the person's current app and resource permissions. `authorizationMode` is `native` for ordinary users and `administrator` for platform administrators. The account menu contains account information and sign-out. All signed-in users can open Settings at `/admin/`. Ordinary accounts see their own access and agent delegations and can create or manage their own business spaces. Administrators also see global status, user management and entry policies.
 
-An external client starts the OAuth grant. Consent identifies the client and offers only currently permitted, implemented operations. The existence of a grant does not establish that the client connected or used a tool. In standalone mode, `/auth/delegate` still offers explicit first-party delegation when applicable. An empty capability set yields an empty state rather than a submittable empty scope.
+An external client starts the OAuth grant. Consent identifies the client and explicitly selects one of the current user’s accessible spaces, defaulting to their personal space when present. The selected space filters the currently permitted, implemented operations. A user without spaces can create one inline before continuing the same request; creation grants no app/resource access. Keep selection through retries and bind the designation to consent, authorization code and grant. The existence of a grant does not establish that the client connected or used a tool. In standalone mode, `/auth/delegate` still offers explicit first-party delegation when applicable. An empty capability set yields an empty state rather than a submittable empty scope.
 
 `GET /auth/grants` and `DELETE /auth/grants/:id` handle the signed-in person's delegations. `POST /auth/logout` ends the current session. The cookie is `praxis_business_session` with HttpOnly, SameSite=Lax and Secure for an HTTPS issuer. `/auth/session` omits passwords, access tokens and session tokens. `delegated` refers to a real stored delegation. Bind consent to the session and request for ten minutes. Sensitive responses are uncached. The persistent login limiter allows at most ten failures in 15 minutes. Internal errors and protocol codes use English.
 
@@ -141,7 +145,7 @@ Login defaults to the workbench root. A validated `return_to` preserves an app d
 
 Relative to `/api/business/admin`:
 
-- `GET /session` reads the current administrative session. `GET /users` lists paginated users and `POST /users` creates an identity.
+- `GET /session` reads the current administrative session. `GET /users` lists paginated users and `POST /users` creates an identity. The administrator-only Spaces Current user selector reuses Agent delegations’ complete registered-user listing with paginated search, preserves the selected account across pages and changes display context only; all requests retain the signed-in administrator’s authorization.
 - `PATCH /users/:id` enables or disables an account. `POST /users/:id/password` resets its password. Existing passwords cannot be read. Reset invalidates old sessions, codes and delegated credentials.
 - `PUT /users/:id/platform-admin` changes the platform role. Disabling or demoting the last enabled administrator returns 409; a database transaction protects concurrent changes.
 - `GET/PUT /users/:id/web-access` reads or updates website entry policy. `GET /users/:id/grants` is paginated and redacted. `DELETE /grants/:id` revokes the grant. Administrative calls create no implicit business space or resource grant.
@@ -155,9 +159,11 @@ Relative to `/api/business/admin`:
 | `GET /.well-known/oauth-protected-resource` or its `/mcp` suffix | Resource and authorization metadata |
 | `GET /.well-known/oauth-authorization-server` | Issuer, endpoints, scopes, S256 and client types |
 | `POST /oauth/register` | Bounded public client registration; no arbitrary metadata fetch |
-| `GET/POST /oauth/authorize` | Login, explicit scope selection and two-minute single-use code |
-| `POST /oauth/token` | Code/PKCE exchange or refresh rotation |
+| `GET/POST /oauth/authorize` | Login, explicit space and scope selection, inline space creation when needed, and two-minute single-use code |
+| `POST /oauth/token` | Code/PKCE exchange or refresh rotation; additive `space_id` for designated authorizations |
 | `POST /oauth/revoke` | Revoke the client's delegation using the corresponding credential |
+
+For new designated authorizations, `space_id` accompanies the existing access-token, token-type, expiry, refresh-token and scope fields on code exchange and refresh. A designation narrows consent to that space’s allowed app/actions; it adds no grant. Existing clients, stored grants and legacy flows remain compatible, and legacy credentials without a designation retain their previous scope semantics. Preserve Origin/CSRF, signed-consent, PKCE, exact callback/resource, code lifetime/single-use and refresh rotation/reuse checks.
 
 The code flow requires `response_type=code`, registered `client_id`, exact `redirect_uri`, `code_challenge_method=S256`, challenge and exact `resource=${issuer}/mcp`. Exchange rechecks client, redirect, audience and verifier. The authorization response includes `iss` and the original `state`. Consent can grant only the overlap of current user permissions and requested scope.
 
@@ -167,10 +173,12 @@ Public protocol discovery accepts credential-free cross-origin requests. Login, 
 
 ## 7. Verification and deployment
 
+BSA01–BSA04 and the updated BUC01 additionally require isolated synthetic registration/provisioning persistence and idempotency, automatic-origin deletion refusals for user/admin versus extra-personal-space deletion, explicit consent selection/default/inline creation, designated token `space_id` and legacy/PKCE/Origin/CSRF regression. Real Chromium at 1440/390 px checks these consent states and the administrator’s complete paginated user search and selected-user read-model; ordinary users retain their own context. These are maintenance technical checks, separate from an independent client’s business acceptance.
+
 - `node --test tests/business-auth.test.mjs` covers synthetic permission intersections, guest limits, personal isolation, revocation and restart, credential digests, CSRF, single-use code binding and refresh-token rotation.
 - `node --test tests/app-transport.test.mjs` checks the shared enrollment boundary in execution, discovery, app HTTP and job authorization. The business authorization suite additionally covers self-service creation, member grants, code/PKCE consent, revocation, restart and elevation refusals.
 - `node --test tests/business-auth.test.mjs tests/admin-layout.test.mjs` covers the complete installed catalog, capability metadata and bounded non-business enrollment. The opt-in real Chromium layout checks use isolated synthetic HTTP fixtures at 1440/390 px for overview/Manage/return, enable/disable, member add/remove, app-scoped grant/revoke, single separators, browser `window.alert` success dialogs acknowledged by the user without page rows, layout/copy changes or auto-dismiss timers, and persistent errors including failed follow-up reads after successful operations (which suppress success alerts), no horizontal overflow, and both workbench PRD languages. Set `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to run the browser checks; an unconfigured skip is not browser evidence.
-- The authorization/layout checks additionally cover BSD01–BSD04: exact-ID confirmation/cancellation, creator and platform-administrator deletion, joined-member/personal-space refusal, atomic rollback, scoped delegation/consent/enrollment removal, immediate re-access refusal and unrelated-space/user preservation. Real Chromium at 1440/390 px verifies the warning and refreshed lists/pickers with isolated fixtures; retained adapter files are documented rather than cleaned up.
+- The authorization/layout checks additionally cover BSD01–BSD04: exact-ID confirmation/cancellation, creator and platform-administrator deletion, joined-member/automatic-personal-space refusal, user-created personal-space deletion, atomic rollback, scoped delegation/consent/enrollment removal, immediate re-access refusal and unrelated-space/user preservation. Real Chromium at 1440/390 px verifies the warning and refreshed lists/pickers with isolated fixtures; retained adapter files are documented rather than cleaned up.
 - The pre-migration authorization suite also checked login rate limiting, space management and cross-process policy leases.
 - The earlier web-access and administration suites exercised entry grants, persistence, withdrawal, cookie/client boundaries and configuration validation. In this checkout run `node --test tests/private-document-access.test.mjs tests/app-launcher.test.mjs` for owner access, revocation during a read and grant-filtered launchers.
 - The historical browser smoke exercised Chromium against a temporary service with isolated credentials. It selected the browser via `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. Check login and return, scope selection, mobile-width consent, code exchange, revocation and cross-space/action rejection.

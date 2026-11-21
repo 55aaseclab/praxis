@@ -6,7 +6,7 @@ const actionNames = { read: t("Read", "读取"), create: t("Create", "新增"), 
 const titles = { spaces: t('Spaces', '空间'), general: t('General', '通用'), overview: t("Overview", "状态概览"), data: t("Data management", "数据管理"), mcp: 'MCP', users: t("Users", "用户"), access: t("App access", "入口权限"), grants: t("Agent delegations", "智能体委托") };
 const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入内容。"), READ_TIMEOUT: t("Read timed out. Try again.", "读取超时，请重试。"), WRITE_TIMEOUT: t("Request timed out. Refresh to check whether it was saved.", "请求超时，尚未确认是否保存。请先刷新核对结果。"), INVALID_REQUEST: t("Check the form fields.", "请检查输入内容。"), NOT_FOUND: t("This record no longer exists. Refresh to continue.", "这条记录已不存在，请刷新。"), FORBIDDEN: t("This action is no longer permitted. Refresh to check your space access.", "当前无权执行此操作，请刷新核对空间权限。"), CONFLICT: t("Account already exists or its state changed. Check and try again.", "账号已存在或状态已变化，请检查后重试。"), LAST_ADMIN_REQUIRED: t("Keep at least one active platform administrator.", "至少需要保留一名启用的平台管理员。"), POLICY_BUSY: t("Authorization is being updated. Try again shortly.", "授权正在更新，请稍后重试。"), CSRF_REJECTED: t("Session changed. Sign in again.", "登录状态已变化，请重新登录。"), UNAVAILABLE: t("Service unavailable. Try again later.", "服务暂时不可用，请稍后重试。"), DATA_INVENTORY_UNAVAILABLE: t("Could not load data locations. Refresh to retry.", "暂时无法读取数据位置，请稍后刷新。"), ADMIN_DEFAULT_ACCESS: t("Platform administrators have access to all app entries.", "平台管理员默认拥有全部入口，无需单独授权。") };
 errorNames.CONFIRMATION_REQUIRED = t('Type the full space ID exactly to confirm deletion.', '请输入完整且一致的空间 ID 以确认删除。');
-errorNames.PERSONAL_SPACE_REQUIRED = t('Personal spaces cannot be deleted.', '个人空间不能删除。');
+errorNames.PERSONAL_SPACE_REQUIRED = t('Automatically created personal spaces cannot be deleted.', '自动创建的个人空间不能删除。');
 const content = document.querySelector('#content'), notice = document.querySelector('#notice');
 let session = null, users = [], nextCursor = null, selectedId = null, selectedGrantId = null, view = Object.hasOwn(titles, new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : null, epoch = 0, ended = false, writing = false, createOpen = false;
 const initialRoute = new URLSearchParams(location.search);
@@ -18,7 +18,15 @@ document.querySelector('#navigation').append(spacesNavigation);
 let expiryTimer, accessTimer, overview, overviewLoading, mcpView, mcpLoading, dataView, dataLoading, dataController, booting = false, bootRevision = 0, usersLoaded = false;
 const controllers = new Set();
 let writeFocus;
-const pickerUsers = () => session ? [users.find(user => user.id === session.user.id) || { ...session.user, enabled: true }, ...users.filter(user => user.id !== session.user.id)] : [];
+const knownUsers = new Map(), pickerQueries = { spaces: '', grants: '' };
+let pickerLoading = false;
+const contextSelectionId = () => view === 'spaces' ? selectedSpaceUserId : selectionId();
+const pickerUsers = () => {
+  if (!session) return [];
+  const own = users.find(user => user.id === session.user.id) || { ...session.user, enabled: true };
+  const chosen = knownUsers.get(contextSelectionId());
+  return [own, ...(chosen && chosen.id !== own.id && !users.some(user => user.id === chosen.id) ? [chosen] : []), ...users.filter(user => user.id !== own.id)];
+};
 const selectionId = () => view === 'grants' ? selectedGrantId : selectedId;
 const selected = () => pickerUsers().find(user => user.id === selectionId());
 function loadOverviewAsset(path, kind) {
@@ -69,7 +77,7 @@ function setSession(value) {
     clearAppFacts();
     if (session.user.id !== value.user.id) view = null;
     epoch++; for (const controller of controllers) controller.abort(); overview?.clear();
-    users = []; nextCursor = null; selectedId = null; selectedGrantId = null; selectedSpaceId = null; selectedAppId = null; selectedSpaceUserId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
+    users = []; knownUsers.clear(); pickerQueries.spaces = ''; pickerQueries.grants = ''; nextCursor = null; selectedId = null; selectedGrantId = null; selectedSpaceId = null; selectedAppId = null; selectedSpaceUserId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
   }
   session = value; clearTimeout(expiryTimer); clearTimeout(accessTimer);
   if (!view || !value.platformAdmin && !['general', 'spaces', 'access', 'grants'].includes(view)) view = 'general';
@@ -112,7 +120,7 @@ function time(value) { if (value === null || value === undefined) return t("No e
 function terminal(status, text) {
   if (ended) return;
   clearAppFacts();
-  ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; nextCursor = null; selectedId = null; selectedGrantId = null;
+  ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; knownUsers.clear(); nextCursor = null; selectedId = null; selectedGrantId = null;
   for (const controller of controllers) controller.abort();
   overview?.clear(); dataController?.destroy(); dataController = null; document.querySelector('#overview-controls').hidden = true;
   document.querySelector('#general-view').hidden = true;
@@ -182,13 +190,46 @@ function confirmAction(parent, text, action) {
   box.append(el('p', '', text), actions); parent.append(box); cancelButton.focus();
 }
 function userPath(user, suffix = '') { return `/users/${encodeURIComponent(user.id)}${suffix}`; }
-function updateUser(user) { const index = users.findIndex(value => value.id === user.id); if (index >= 0) users[index] = user; else users.push(user); }
+function updateUser(user) { knownUsers.set(user.id, user); const index = users.findIndex(value => value.id === user.id); if (index >= 0) users[index] = user; else users.push(user); }
 function picker(options = pickerUsers(), value = selectionId(), change = id => { if (view === 'grants') selectedGrantId = id; else selectedId = id; void render(); }) {
-  const root = el('label', 'user-picker'), select = el('select'); select.id = 'selected-user';
-  root.append(el('span', '', t("Current user", "当前用户")), select);
-  for (const user of options) { const option = el('option', '', `${user.username}${user.enabled === false ? t(" (disabled)", "（已停用）") : ''}`); option.value = user.id; select.append(option); }
+  const searchable = Object.hasOwn(pickerQueries, view), query = searchable ? pickerQueries[view] : '';
+  const matches = user => user.username.toLocaleLowerCase().includes(query.toLocaleLowerCase()) || user.id.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+  const root = el('div', 'user-context'), label = el('label', 'user-picker'), select = el('select'); select.id = 'selected-user';
+  label.append(el('span', '', t("Current user", "当前用户")), select); root.append(label);
+  for (const user of options.filter(user => !query || matches(user) || user.id === value || user.id === session.user.id)) {
+    const option = el('option', '', `${user.username}${user.enabled === false ? t(" (disabled)", "（已停用）") : ''}`); option.value = user.id; select.append(option);
+  }
   select.value = value;
-  select.addEventListener('change', () => { if (!writing && !booting && !ended) change(select.value); else select.value = value; }); return root;
+  select.addEventListener('change', () => { if (!writing && !booting && !ended && !pickerLoading) change(select.value); else select.value = value; });
+  if (searchable) {
+    const form = el('form', 'user-search'), search = field(t('Search users', '搜索用户'), 'userSearch', 'search');
+    search.input.value = query; search.input.maxLength = 200;
+    const submit = el('button', 'quiet-button', t('Search', '搜索')); submit.type = 'submit';
+    form.append(controlRow(search.root, submit));
+    const load = async searching => {
+      if (writing || booting || ended || pickerLoading) return;
+      const current = epoch, activeView = view, nextQuery = searching ? search.input.value.trim() : pickerQueries[view];
+      pickerQueries[view] = nextQuery; pickerLoading = true; content.setAttribute('aria-busy', 'true');
+      for (const control of root.querySelectorAll('button,input,select')) control.disabled = true;
+      const match = user => user.username.toLocaleLowerCase().includes(nextQuery.toLocaleLowerCase()) || user.id.toLocaleLowerCase().includes(nextQuery.toLocaleLowerCase());
+      const target = searching ? 50 : users.filter(match).length + 50;
+      try {
+        // Search the same paginated catalog without changing the management API or acting identity.
+        do {
+          if (!nextCursor || searching && users.filter(match).length >= target) break;
+          const result = await api(`/users?limit=50&after=${encodeURIComponent(nextCursor)}`);
+          if (ended || current !== epoch || activeView !== view) return;
+          for (const user of result.users) updateUser(user); nextCursor = result.nextCursor;
+        } while (nextCursor && users.filter(match).length < target);
+        if (!ended && current === epoch && activeView === view) await render();
+      } catch (error) { report(error); }
+      finally { pickerLoading = false; for (const control of root.querySelectorAll('button,input,select')) control.disabled = writing; if (current === epoch) content.setAttribute('aria-busy', 'false'); }
+    };
+    form.addEventListener('submit', event => { event.preventDefault(); void load(true); }); root.append(form);
+    if (nextCursor) root.append(button(t('Load more users', '加载更多用户'), 'quiet-button pagination', () => void load(false)));
+    if (query && !users.some(matches)) root.append(el('p', 'section-note', t('No matching users.', '没有匹配的用户。')));
+  }
+  return root;
 }
 function createForm() {
   const panel = el('section', 'editor form-panel'); panel.setAttribute('aria-label', t("New user", "新增用户"));
@@ -367,18 +408,18 @@ async function renderSpaces(current, preserve) {
     selectedSpaceId = spaces[0]?.id || null; selectedAppId = null;
     history.replaceState(null, '', spaceHref());
   }
-  let detail = selectedSpaceId ? await api(spacePath('')) : null;
+  if (session.platformAdmin && !selectedSpaceUserId) selectedSpaceUserId = session.user.id;
+  let detail = selectedSpaceId ? await api(spacePath('') + (session.platformAdmin && selectedSpaceUserId !== session.user.id ? `?contextUserId=${encodeURIComponent(selectedSpaceUserId)}` : '')) : null;
   if (ended || current !== epoch || view !== 'spaces') return;
   content.replaceChildren();
   let displayedUserId = session.user.id;
   if (session.platformAdmin) {
-    const contexts = detail?.userContexts || [];
-    if (!contexts.some(context => context.user.id === selectedSpaceUserId)) selectedSpaceUserId = session.user.id;
-    const context = contexts.find(context => context.user.id === selectedSpaceUserId);
-    displayedUserId = context?.user.id || session.user.id;
+    const context = detail?.userContext || detail?.userContexts?.find(context => context.user.id === selectedSpaceUserId);
+    displayedUserId = selectedSpaceUserId;
+    if (detail && displayedUserId !== session.user.id && context?.user.id !== displayedUserId) throw Object.assign(new Error('Display context unavailable.'), { code: 'UNAVAILABLE' });
     if (context) detail = context;
-    content.append(picker(contexts.length ? contexts.map(context => context.user) : [session.user], displayedUserId, id => { selectedSpaceUserId = id; void render(); }));
-    if (displayedUserId !== session.user.id) content.append(el('p', 'section-note', t('Viewing {0}. Actions still use your signed-in account’s permissions.', '正在查看 {0} 的视图。操作仍使用你登录账号的权限。', context.user.username)));
+    content.append(picker(pickerUsers(), displayedUserId, id => { selectedSpaceUserId = id; void render(); }));
+    if (displayedUserId !== session.user.id) content.append(el('p', 'section-note', t('Viewing {0}. Actions still use your signed-in account’s permissions.', '正在查看 {0} 的视图。操作仍使用你登录账号的权限。', context?.user.username || knownUsers.get(displayedUserId)?.username || displayedUserId)));
   }
   if (detail && selectedAppId) { renderSpaceApp(detail, displayedUserId); return; }
   const create = el('form', 'editor form-panel'), type = selectField(t('Space type', '空间类型'), 'type', ['personal', 'family', 'company'].map(value => ({ value, label: spaceTypeName(value) })));
@@ -398,7 +439,7 @@ async function renderSpaces(current, preserve) {
     const selection = controlRow(picker.root);
     if (space.canDelete) selection.append(button(t('Delete space', '删除空间'), 'danger-button space-delete', () => confirmSpaceDeletion(context, space)));
     context.append(selection, el('p', 'section-note', owner ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
-    if (space.type === 'personal') context.append(el('p', 'section-note', t('Personal spaces cannot be deleted.', '个人空间不能删除。')));
+    if (space.deletionProtected) context.append(el('p', 'section-note', t('Automatically created personal spaces cannot be deleted.', '自动创建的个人空间不能删除。')));
     panel.append(context);
     const memberSection = el('section', 'space-section'); memberSection.append(el('h2', '', t('Members', '成员')));
     const memberList = el('ul', 'user-list');
@@ -552,9 +593,9 @@ async function boot() {
     if (!setSession(metadata)) return; current = epoch;
     await loadAppFacts(); if (ended || current !== epoch) return;
     document.querySelector('#account-name').textContent = session.user.username;
-    if (session.platformAdmin && ['users', 'access', 'grants'].includes(view)) {
+    if (session.platformAdmin && ['users', 'access', 'grants', 'spaces'].includes(view)) {
       const result = await api('/users?limit=50'); if (ended || current !== epoch) return;
-      users = result.users; nextCursor = result.nextCursor; usersLoaded = true; if (!selected()) { if (view === 'grants') selectedGrantId = null; else selectedId = null; }
+      users = result.users; for (const user of users) knownUsers.set(user.id, user); nextCursor = result.nextCursor; usersLoaded = true; if (!selected()) { if (view === 'grants') selectedGrantId = null; else selectedId = null; }
     }
     if (!notice.classList.contains('error')) message(); await render({ preserve: content.childElementCount > 0 });
   } catch (error) { if ([401, 403].includes(error.status)) terminal(error.status); else report(error); if (!ended) content.setAttribute('aria-busy', 'false'); }
@@ -565,7 +606,7 @@ async function boot() {
     }
   }
 }
-for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => { if (booting || writing || ended || !session || ['overview', 'users', 'mcp', 'data'].includes(node.dataset.view) && !session.platformAdmin) return; view = node.dataset.view; createOpen = false; selectedAppId = null; history.pushState(null, '', `/admin/?view=${view}`); if (session.platformAdmin && ['users', 'access', 'grants'].includes(view) && !usersLoaded) void boot(); else void render(); });
+for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => { if (booting || writing || ended || !session || ['overview', 'users', 'mcp', 'data'].includes(node.dataset.view) && !session.platformAdmin) return; view = node.dataset.view; createOpen = false; selectedAppId = null; history.pushState(null, '', `/admin/?view=${view}`); if (session.platformAdmin && ['users', 'access', 'grants', 'spaces'].includes(view) && !usersLoaded) void boot(); else void render(); });
 document.querySelector('#create-user').addEventListener('click', () => { if (booting || writing || ended || !session?.platformAdmin) return; createOpen = !createOpen; renderUsers(); content.querySelector('input')?.focus(); });
 document.querySelector('#refresh').addEventListener('click', () => { message(); void boot(); });
 addEventListener('popstate', () => {
@@ -573,7 +614,7 @@ addEventListener('popstate', () => {
   const route = new URLSearchParams(location.search);
   view = Object.hasOwn(titles, route.get('view')) ? route.get('view') : 'general';
   selectedSpaceId = route.get('space'); selectedAppId = route.get('app'); createOpen = false;
-  if (session.platformAdmin && ['users', 'access', 'grants'].includes(view) && !usersLoaded) void boot(); else void render();
+  if (session.platformAdmin && ['users', 'access', 'grants', 'spaces'].includes(view) && !usersLoaded) void boot(); else void render();
 });
 content.addEventListener('input', event => {
   if (event.target.form) event.target.form.dataset.edited = 'true';

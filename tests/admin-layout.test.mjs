@@ -471,7 +471,8 @@ test('Chromium space deletion requires typed confirmation and clears revoked spa
     auth.createUser({ id: creator, username: creator, password });
     const space = auth.createSelfServiceSpace({ type: 'company', ownerId: creator });
     const other = auth.createSelfServiceSpace({ type: 'family', ownerId: creator });
-    const personal = auth.createSelfServiceSpace({ type: 'personal', ownerId: creator });
+    const personal = auth.ensurePersonalSpace(creator);
+    const extraPersonal = auth.createSelfServiceSpace({ type: 'personal', ownerId: creator });
     auth.setMembership({ spaceId: space.id, userId: 'a-member', role: 'member' });
     auth.setMembership({ spaceId: other.id, userId: 'a-member', role: 'member' });
     for (const appId of ['finance', 'reminder']) auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
@@ -494,8 +495,19 @@ test('Chromium space deletion requires typed confirmation and clears revoked spa
     assert.ok(memberAccess.apps.includes('finance'));
     assert.equal((await member.request.delete(`${origin}/api/business/account/spaces/${space.id}`, { headers: { Origin: origin, 'X-CSRF-Token': memberAccess.csrfToken }, data: { confirmSpaceId: space.id } })).status(), 403, 'joined member direct delete is refused');
     await login(context, creator); await open(page, personal.id);
-    assert.equal(await page.locator('.space-delete').count(), 0, 'personal spaces have no delete action');
-    assert.match(await page.locator('.space-overview').innerText(), /Personal spaces cannot be deleted|个人空间不能删除/);
+    assert.equal(await page.locator('.space-delete').count(), 0, 'automatically created personal spaces have no delete action');
+    assert.match(await page.locator('.space-overview').innerText(), /Automatically created personal spaces cannot be deleted|自动创建的个人空间不能删除/);
+    const deleteProtected = async () => {
+      const access = await (await context.request.get(`${origin}/api/business/account/session`)).json();
+      assert.equal((await context.request.delete(`${origin}/api/business/account/spaces/${personal.id}`, { headers: { Origin: origin, 'X-CSRF-Token': access.csrfToken }, data: { confirmSpaceId: personal.id } })).status(), 409, 'automatic personal protection is enforced at the service boundary');
+    };
+    await deleteProtected();
+    await open(page, extraPersonal.id);
+    assert.equal(await page.locator('.space-delete').count(), 1, 'user-created personal spaces offer deletion');
+    assert.doesNotMatch(await page.locator('.space-overview').innerText(), /cannot be deleted|不能删除/);
+    await page.locator('.space-delete').click(); await page.locator('.space-delete-confirm input').fill(extraPersonal.id);
+    await Promise.all([page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/spaces/${extraPersonal.id}`)), page.locator('.space-delete-confirm button[type=submit]').click()]); await ready(page);
+    assert.equal(auth.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(extraPersonal.id), undefined, 'creator deletes an extra personal space');
     await open(page, space.id);
     const trigger = page.locator('.space-delete'); await trigger.click();
     const confirmation = page.locator('.space-delete-confirm'), input = confirmation.locator('input[name=confirmSpaceId]'), submit = confirmation.locator('button[type=submit]');
@@ -541,11 +553,14 @@ test('Chromium space deletion requires typed confirmation and clears revoked spa
     await page.locator('.space-delete').click(); await page.locator('.space-delete-confirm input').fill(other.id);
     await Promise.all([page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/spaces/${other.id}`)), page.locator('.space-delete-confirm button[type=submit]').click()]); await ready(page);
     assert.equal(auth.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(other.id), undefined, 'administrator deletes another creator space');
+    await open(page, personal.id);
+    assert.equal(await page.locator('.space-delete').count(), 0, 'administrator has no automatic-personal deletion action');
+    await deleteProtected();
     assert.ok(auth.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(personal.id));
     assert.ok(auth.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get('synthetic-family'), 'unrelated space remains');
     assert.ok(auth.db.prepare('SELECT 1 FROM auth_users WHERE id=?').get(creator), 'creator account remains');
     assert.deepEqual(errors, []);
-    evidence.push({ width, language, creatorDeletion: 'Pass', typedWarningAndCancellation: 'Pass', cascadeAndImmediateRevocation: 'Pass', joinedMemberDenied: 'Pass', personalProtected: 'Pass', administratorForeignDeletion: 'Pass', unrelatedSpaceAndUsersPreserved: 'Pass', stalePickerAndRouteCleared: 'Pass' });
+    evidence.push({ width, language, creatorDeletion: 'Pass', typedWarningAndCancellation: 'Pass', cascadeAndImmediateRevocation: 'Pass', joinedMemberDenied: 'Pass', automaticPersonalProtectedForOwnerAndAdmin: 'Pass', extraPersonalCreatorDeletion: 'Pass', administratorForeignDeletion: 'Pass', unrelatedSpaceAndUsersPreserved: 'Pass', stalePickerAndRouteCleared: 'Pass' });
     await context.close(); await member.close();
   }
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers', browser: browser.version(), evidence }));
@@ -582,7 +597,25 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     await open(page, 'view=spaces&space=synthetic-family');
     assert.equal(await page.locator('#content>:first-child #selected-user').count(), 1, 'Current user is the first row');
     assert.equal(await page.locator('#selected-user').inputValue(), 'z-owner', 'space context defaults to signed-in administrator');
-    assert.deepEqual(await page.locator('#selected-user option').evaluateAll(nodes => nodes.map(node => node.value)), ['z-owner', 'a-member'], 'only the administrator and selected space members are offered');
+    const firstSpaceUsers = await (await context.request.get(`${origin}/api/business/admin/users?limit=50`)).json();
+    assert.deepEqual(await page.locator('#selected-user option').evaluateAll(nodes => nodes.map(node => node.value)), ['z-owner', ...firstSpaceUsers.users.filter(user => user.id !== 'z-owner').map(user => user.id)], 'Spaces offers the same all-user catalog as delegations');
+    assert.equal(await page.locator('#selected-user option[value="b-context-50"]').count(), 0, 'later catalog users require pagination');
+    await page.getByRole('button', { name: text('Load more users', '加载更多用户'), exact: true }).click(); await ready(page);
+    assert.equal(await page.locator('#selected-user option[value="b-context-50"]').count(), 1, 'pagination includes registered nonmembers');
+    await switchUser('b-context-50');
+    assert.equal(await page.locator('input[name=username]').count(), 0, 'a nonmember context has no owner controls');
+    assert.equal(await sessionId(), 'z-owner');
+    await page.locator('#refresh').click(); await ready(page);
+    assert.equal(await page.locator('#selected-user').inputValue(), 'b-context-50', 'refresh retains selected users outside the first catalog page');
+    await switchUser('z-owner');
+    await page.getByRole('searchbox', { name: text('Search users', '搜索用户'), exact: true }).fill('synthetic-context-50');
+    await page.getByRole('button', { name: text('Search', '搜索'), exact: true }).click(); await ready(page);
+    assert.deepEqual(await page.locator('#selected-user option').evaluateAll(nodes => nodes.map(node => node.value)), ['z-owner', 'b-context-50'], 'search traverses catalog pages and retains the signed-in account');
+    await switchUser('b-context-50');
+    assert.equal(await sessionId(), 'z-owner');
+    await page.getByRole('searchbox', { name: text('Search users', '搜索用户'), exact: true }).fill('');
+    await page.getByRole('button', { name: text('Search', '搜索'), exact: true }).click(); await ready(page);
+    await switchUser('z-owner');
     assert.equal(await page.locator('input[name=username]').count(), 1, 'administrator owner sees member actions in own context');
     if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-spaces-own-overview.png`), fullPage: true });
     // Exercise the actual native select with the keyboard.
@@ -651,7 +684,7 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     assert.ok(await memberPage.evaluate(() => document.documentElement.scrollWidth - innerWidth <= 1));
     if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-delegations-own-context.png`), fullPage: true });
     assert.deepEqual(errors, []);
-    evidence.push({ width, language, spaceDefault: 'administrator', memberProjection: 'matches actual member browser', foreignOwnerWrite: 403, nativeSession: 'unchanged', delegations: 'own default outside first catalog page; selection, pagination, refresh, stale read', ordinaryUser: 'own only, no switcher', overflow: 0, status: 'Pass' });
+    evidence.push({ width, language, spaceUserCatalog: 'all registered users; page traversal, search and selection beyond first page survive refresh', spaceDefault: 'administrator', memberProjection: 'matches actual member browser', foreignOwnerWrite: 403, nativeSession: 'unchanged', delegations: 'own default outside first catalog page; selection, pagination, refresh, stale read', ordinaryUser: 'own only, no switcher', overflow: 0, status: 'Pass' });
     await context.close(); await memberContext.close();
   }
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers', browser: browser.version(), evidence }));

@@ -315,7 +315,7 @@ for (const language of ['en', 'zh']) test(`empty OAuth consent shows an actionab
   assert.equal(registration.status, 201);
   const { client_id: clientId } = await registration.json();
   const login = await f.login('consent-visitor');
-  const path = '/oauth/authorize?' + new URLSearchParams({ client_id: clientId, redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read', state: 'empty-selection-retry', lang: language });
+  const path = '/oauth/authorize?' + new URLSearchParams({ client_id: clientId, redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read', state: 'empty-selection-retry', space_id: 'family-a', lang: language });
   const form = await f.request(path, { headers: { Cookie: login.cookie } });
   assert.equal(form.status, 200);
   assert.equal(form.headers.get('content-security-policy'), consentCsp);
@@ -444,12 +444,14 @@ test('Chromium follows consent POST to a cross-origin callback and completes PKC
     assert.equal(await page.locator('input[name=rule_0]').count(), 0, 'a new account has no implicit permissions');
     const userId = store.db.prepare('SELECT id FROM auth_users WHERE username=?').get(`synthetic-browser-${language}`).id;
     // Only the isolated synthetic store is bootstrapped; no business service runs.
-    const spaceId = store.createSpace({ type: 'personal', ownerId: userId }).id;
+    const spaceId = store.ensurePersonalSpace(userId).id;
     store.grantResource({ userId, ...rule(spaceId, ['read'], ['synthetic-record']) });
     const form = await page.reload();
     const expectedCsp = defaultCsp.replace("form-action 'self'", `form-action 'self' ${new URL(redirectUri).origin}`);
     assert.equal(form.headers()['content-security-policy'], expectedCsp);
     assert.equal(await page.locator('input[name=rule_0]').isChecked(), false);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.equal(await page.locator('select[name=space_id]').inputValue(), spaceId);
     const counts = () => ['auth_codes', 'auth_grants', 'auth_tokens'].map(table => store.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n);
     const before = counts(), callbackCount = callbacks.length;
     const [empty] = await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/oauth/authorize'), page.locator('form[method=post] button').click()]);
@@ -475,6 +477,8 @@ test('Chromium follows consent POST to a cross-origin callback and completes PKC
     assert.equal(tokens.status(), 200);
     const token = await tokens.json();
     assert.equal(token.scope, 'reminder:read');
+    assert.equal(token.space_id, spaceId);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(store.authorize(token.access_token, { appId: 'reminder', spaceId, action: 'read', resourceId: 'synthetic-record' }).userId, userId);
     assert.equal((await context.request.post(`${origin}/oauth/token`, { data: exchange })).status(), 400);
     assert.deepEqual(violations, []);
@@ -509,7 +513,7 @@ test('public registration is reachable in both languages and preserves a validat
   assert.ok(!loginUrl.href.includes('evil.example'));
 });
 
-test('public JSON registration creates only a durable ordinary identity and never returns credentials', async t => {
+test('public JSON registration creates a durable ordinary identity and empty personal space without credentials', async t => {
   const f = await httpFixture(t);
   const response = await f.json('/auth/register', { username: ' new-visitor ', password, return_to: '/oauth/authorize?state=synthetic' });
   assert.equal(response.status, 201);
@@ -522,15 +526,15 @@ test('public JSON registration creates only a durable ordinary identity and neve
   assert.equal(new URL(body.loginUrl, issuer).searchParams.get('return_to'), '/oauth/authorize?state=synthetic');
   assert.equal(f.store.isPlatformAdmin(body.user.id), false);
   assert.equal(f.store.getWebEntryPolicy(body.user.id), null);
-  assert.deepEqual(f.store.availableRules(body.user.id), []);
-  assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_members WHERE user_id=?').get(body.user.id).n, 0);
+  assert.deepEqual(f.store.availableRules(body.user.id).filter(rule => rule.appId !== 'spaces'), []);
+  assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_members WHERE user_id=?').get(body.user.id).n, 1);
   assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_resources WHERE user_id=?').get(body.user.id).n, 0);
   for (const secret of [password, 'password_hash', 'sessionToken', 'access_token']) assert.ok(!JSON.stringify(body).includes(secret));
   f.restartAuth();
   const login = await f.login('new-visitor');
   assert.equal(login.body.user.id, body.user.id);
   assert.equal(login.body.delegated, false);
-  assert.deepEqual(f.store.availableRules(body.user.id), []);
+  assert.deepEqual(f.store.availableRules(body.user.id).filter(rule => rule.appId !== 'spaces'), []);
 });
 
 test('public registration rejects invalid input, duplicate identities and origin attacks without side effects', async t => {
@@ -612,13 +616,13 @@ test('a publicly registered identity can sign in, consent with PKCE and authenti
   const registered = await f.json('/auth/register', { username: 'oauth-visitor', password });
   assert.equal(registered.status, 201);
   const { user } = await registered.json();
-  assert.deepEqual(f.store.availableRules(user.id), [], 'registration confers no business rights');
+  assert.deepEqual(f.store.availableRules(user.id).filter(rule => rule.appId !== 'spaces'), [], 'registration confers no app resource rights');
   const login = await f.login('oauth-visitor');
   const verifier = 'public-registration-pkce-verifier-'.repeat(2);
-  const path = '/oauth/authorize?' + new URLSearchParams({ client_id: 'agent-a', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read', state: 'public-registration' });
-  assert.match(await (await f.request(path, { headers: { Cookie: login.cookie } })).text(), /No actions available/);
+  const path = '/oauth/authorize?' + new URLSearchParams({ client_id: 'agent-a', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read', state: 'public-registration', space_id: 'family-a' });
+  assert.match(await (await f.request(path.replace('&space_id=family-a', ''), { headers: { Cookie: login.cookie } })).text(), /No actions available/);
   // Only this isolated fixture supplies pre-existing business permission. The
-  // public registration path creates neither this permission nor a membership.
+  // public registration path creates no permission for this shared space.
   f.store.configureWebAccessBoundary({ enabled: true, apps: { reminder: { spaces: ['family-a'] } } });
   f.store.setWebAccess({ userId: user.id, apps: ['reminder'], prds: false });
   f.store.grantResource({ userId: user.id, ...rule('family-a', ['read'], ['synthetic-register-record']) });
@@ -678,7 +682,7 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   const read = (actor, path = '') => f.request(prefix + path, { headers: { Cookie: actor.cookie } });
   const created = await call(owner, '', { type: 'family' }); assert.equal(created.status, 201);
   const space = await created.json(), path = `/${space.id}`;
-  assert.deepEqual(f.store.availableRules(member.user.id), []);
+  assert.deepEqual(f.store.availableRules(member.user.id).filter(rule => rule.appId !== 'spaces'), []);
   assert.equal(f.store.isPlatformAdmin(owner.user.id), false);
   assert.equal(f.store.getWebEntryPolicy(owner.user.id), null);
   const details = await (await read(owner, path)).json();
@@ -687,7 +691,7 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   assert.equal((await call(owner, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 200);
   assert.deepEqual(f.store.userPermissions(owner.user.id, space.id, 'reminder', 'read'), [], 'owner enrollment is not a resource grant');
   assert.equal((await call(owner, path + '/members', { username: member.user.username, role: 'member' })).status, 201);
-  assert.deepEqual(f.store.availableRules(member.user.id), [], 'membership alone grants nothing');
+  assert.deepEqual(f.store.availableRules(member.user.id).filter(rule => rule.appId !== 'spaces'), [], 'membership alone grants nothing');
   const granted = { userId: member.user.id, appId: 'reminder', actions: ['read'], resources: ['synthetic-space-record'] };
   assert.equal((await call(owner, path + '/permissions', granted)).status, 201);
   assert.deepEqual(f.store.getWebAccess(member.cookie.split('=')[1]).apps, ['reminder']);
@@ -697,7 +701,7 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   const { BUSINESS_TOOLS, MCP_CONTROL_TOOLS } = await import('../src/business/mcp.mjs');
   async function consent() {
     const verifier = 'synthetic-space-member-pkce-'.repeat(3);
-    const oauthPath = '/oauth/authorize?' + new URLSearchParams({ client_id: 'agent-a', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read tingproof:read', state: 'space-lifecycle' });
+    const oauthPath = '/oauth/authorize?' + new URLSearchParams({ client_id: 'agent-a', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read tingproof:read', state: 'space-lifecycle', space_id: space.id });
     const html = await (await f.request(oauthPath, { headers: { Cookie: member.cookie } })).text();
     assert.match(html, /Authorize external agent/); assert.doesNotMatch(html, /TingProof/);
     const snapshot = html.match(/name="consent" value="([^"]+)"/)[1];
@@ -728,14 +732,14 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   assert.throws(() => f.store.authenticate(first.token.access_token), { status: 401 });
   assert.equal((await f.request('/mcp', { method: 'POST', headers: { Authorization: `Bearer ${first.token.access_token}`, 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
   assert.equal((await call(owner, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 200);
-  assert.deepEqual(f.store.availableRules(member.user.id), [], 'reenrollment cannot revive permissions or delegation');
+  assert.deepEqual(f.store.availableRules(member.user.id).filter(rule => rule.appId !== 'spaces'), [], 'reenrollment cannot revive permissions or delegation');
   assert.equal((await call(owner, path + '/permissions', granted)).status, 201);
   const second = await consent();
   assert.equal((await call(owner, path + `/members/${member.user.id}`, undefined, 'DELETE')).status, 200);
   assert.throws(() => f.store.authenticate(second.token.access_token), { status: 401 });
-  assert.match(await (await f.request(second.oauthPath, { headers: { Cookie: member.cookie } })).text(), /No actions available/);
+  assert.equal((await f.request(second.oauthPath, { headers: { Cookie: member.cookie } })).status, 403);
   assert.equal((await call(owner, path + '/members', { username: member.user.username, role: 'member' })).status, 201);
-  assert.deepEqual(f.store.availableRules(member.user.id), [], 'rejoining cannot revive permissions');
+  assert.deepEqual(f.store.availableRules(member.user.id).filter(rule => rule.appId !== 'spaces'), [], 'rejoining cannot revive permissions');
   assert.equal((await read(outsider, path)).status, 404);
   assert.equal((await f.request('/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
 });
@@ -936,6 +940,9 @@ test('space deletion requires exact confirmation and creator or platform adminis
   const remove = (actor, id, input = { confirmSpaceId: id }, headers = {}) => f.json(`${prefix}/${id}`, input, {
     method: 'DELETE', headers: { Cookie: actor.cookie, 'X-CSRF-Token': actor.body.csrfToken, ...headers },
   });
+  const autoUser = f.store.registerUser({ username: 'protected-personal-owner', password });
+  const autoSpace = f.store.ensurePersonalSpace(autoUser.id);
+  const autoOwner = await f.login(autoUser.username);
   const before = f.store.db.prepare('SELECT * FROM auth_spaces ORDER BY id').all();
   for (const input of [{}, { confirmSpaceId: 'company-a' }, { confirmSpaceId: true }, { confirmSpaceId: 'family-a', ownerId: 'alice' }]) {
     assert.equal((await remove(owner, 'family-a', input)).status, 400);
@@ -948,12 +955,12 @@ test('space deletion requires exact confirmation and creator or platform adminis
   assert.equal((await remove(owner, 'family-a', undefined, { Origin: 'https://attacker.example' })).status, 403);
   assert.equal((await remove(owner, 'family-a', undefined, { Authorization: `Bearer pxa_${'a'.repeat(43)}` })).status, 401);
   assert.equal((await f.json(`${prefix}/family-a`, { confirmSpaceId: 'family-a' }, { method: 'DELETE' })).status, 401);
-  const personal = await remove(owner, 'personal-a');
+  const personal = await remove(autoOwner, autoSpace.id);
   assert.equal(personal.status, 409); assert.equal((await personal.json()).error, 'PERSONAL_SPACE_REQUIRED');
   assert.deepEqual(f.store.db.prepare('SELECT * FROM auth_spaces ORDER BY id').all(), before, 'rejected requests leave every space intact');
   assert.equal((await (await read(owner)).json()).spaces.find(space => space.id === 'family-a').canDelete, true);
   assert.equal((await (await read(member)).json()).spaces.find(space => space.id === 'family-a').canDelete, false);
-  assert.equal((await (await read(owner)).json()).spaces.find(space => space.id === 'personal-a').canDelete, false);
+  assert.equal((await (await read(owner)).json()).spaces.find(space => space.id === 'personal-a').canDelete, true);
   // Synthetic compatibility fixture: ownership, rather than a second role gate,
   // determines who created this space.
   f.store.db.prepare("UPDATE auth_members SET role='member' WHERE space_id='family-a' AND user_id='alice'").run();
@@ -963,12 +970,13 @@ test('space deletion requires exact confirmation and creator or platform adminis
   f.store.setPlatformAdmin({ userId: 'guest', enabled: true });
   const listed = (await (await read(outsider)).json()).spaces;
   assert.equal(listed.find(space => space.id === 'company-a').canDelete, true);
-  assert.equal(listed.find(space => space.id === 'personal-b').canDelete, false);
+  assert.equal(listed.find(space => space.id === 'personal-b').canDelete, true);
   assert.equal((await read(outsider, '/company-a')).status, 200);
-  assert.equal((await remove(outsider, 'personal-b')).status, 409);
+  assert.equal((await remove(outsider, autoSpace.id)).status, 409);
+  assert.equal((await remove(outsider, 'personal-b')).status, 200);
   assert.equal((await remove(outsider, 'company-a')).status, 200, 'platform administrator can delete a foreign space');
   assert.equal((await remove(outsider, 'company-a')).status, 404);
-  assert.ok(f.store.db.prepare("SELECT 1 FROM auth_spaces WHERE id='personal-b'").get());
+  assert.ok(f.store.db.prepare("SELECT 1 FROM auth_spaces WHERE id=?").get(autoSpace.id));
 });
 
 test('space deletion atomically removes all authorization slices and derived entries while preserving other spaces and users', t => {

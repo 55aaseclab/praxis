@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.145 · [简体中文](PRD.md)
+Version: 0.1.146 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -51,11 +51,20 @@ The public homepage describes cards as attention management: choose what to focu
 
 An anonymous visitor can follow **Create an account** from the public homepage or sign-in page to `GET /auth/register`. The English/Simplified Chinese form and `POST /auth/register` (JSON or form encoding) accept only `username`, `password` and an optional validated local `return_to`. Usernames contain 3–64 ASCII letters, numbers, dots, underscores or hyphens, starting with a letter or number; passwords contain 12–1024 characters. Reject invalid/unknown fields, duplicate usernames and cross-origin requests without creating an identity. Return only the new identity and sign-in path for JSON, or redirect the form to sign-in; never return a password, session or OAuth credential from registration.
 
-Persist a basic abuse limit of five registration attempts per transport peer and 100 globally per hour, including invalid attempts. Do not trust caller-supplied forwarding headers; proxied visitors share the peer limit. Return HTTP 429 with `Retry-After` on exhaustion. Registration creates no app-entry policy, membership, space, resource permission or administrator role. After a separate sign-in, preserve the validated OAuth return path. An authorized account may consent to the existing authorization-code + S256 PKCE flow for the protected MCP resource; an account with no matching permissions sees no available actions. Verification uses isolated synthetic identities, including restart persistence, rejected elevation/origin/redirect attempts, rate-limit expiry, bounded consent and MCP token use. Live business-client acceptance remains separate.
+Persist a basic abuse limit of five registration attempts per transport peer and 100 globally per hour, including invalid attempts. Do not trust caller-supplied forwarding headers; proxied visitors share the peer limit. Return HTTP 429 with `Retry-After` on exhaustion. Registration atomically creates exactly one personal space owned by the new user, marked at creation as the automatically provisioned personal space and protected from deletion by every caller. Provisioning is idempotent: an operator-provisioned user keeps their existing personal space without duplication. Registration creates no app-entry policy, resource permission, client delegation or administrator role; the personal space starts with no enrolled apps. After a separate sign-in, preserve the validated OAuth return path. An authorized account may consent to the existing authorization-code + S256 PKCE flow for the protected MCP resource; an account with no matching permissions sees no available actions. Verification uses isolated synthetic identities, including restart persistence, rejected elevation/origin/redirect attempts, rate-limit expiry, bounded consent and MCP token use. Live business-client acceptance remains separate.
 
 ### OAuth consent selection and callback redirects
 
+The consent page explicitly designates one of the signed-in user’s accessible spaces for this authorization. Default to their personal space when present, retain the user’s selection through retries, and show only currently permitted app/action choices for the selected space. When no space exists, offer inline space creation before continuing the same authorization request. Creation uses the current native identity and existing space-creation rules; it grants no app or resource access. Bind the selected space to consent and the resulting authorization code/grant. Code exchange and refresh responses add `space_id` for a designated authorization while preserving all existing token fields. Existing clients, grants and legacy flows remain compatible; permissions remain per space × app × action and PKCE, Origin, CSRF, callback and expiration checks remain unchanged.
+
 Keep external-agent permission checkboxes unchecked until the user selects them. Submitting a valid consent form with no permissions selected returns HTTP 400 with an explicit, localized instruction to select at least one permission, on the same consent page with its selectable actions and retry button. Issue no authorization code or delegation and do not redirect. Preserve session, Origin, CSRF, signed-consent and requested-scope checks. Selecting a permission and retrying continues the existing authorization-code/S256 PKCE flow. On the verified, authenticated consent document and its empty-selection retry, allow only the exact registered callback origin alongside `'self'` in CSP `form-action`, so a real browser can follow the POST’s 303 cross-origin callback and complete PKCE. Serialize the callback as a safe HTTP(S) CSP origin; never interpolate its path/query or permit policy injection or wildcard sources. All other pages retain their existing CSP restrictions. Verify the actual browser callback hit and token exchange, not only a server-side HTTP redirect.
+
+| ID | Observable acceptance |
+| --- | --- |
+| BSA01 | Synthetic public registration creates exactly one owned, marked personal space atomically; retries and operator provisioning do not duplicate it, and restart preserves the origin marker. |
+| BSA02 | User and platform administrator cannot delete the automatic personal space; creators/admins can delete every other space, including user-created personal spaces, with exact-ID confirmation and the existing atomic cascade. |
+| BSA03 | Consent selects one accessible space, defaults to the user’s personal space and offers inline creation for a user without spaces; only the selected space’s currently allowed app/actions can be granted. |
+| BSA04 | Actual browser consent and code/S256 PKCE exchange at 1440/390 px produce the designated `space_id` with existing token fields unchanged; refresh retains designation, legacy flows remain usable and Origin/CSRF/scope rejection still passes. |
 
 ## Consistent Settings control rows
 
@@ -71,20 +80,20 @@ Across every management view, adjacent sections have one separator, with nested 
 
 ## Administrator display context in Settings
 
-Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer the selected space’s members and keep the administrator’s own account available. Selecting a member renders that member’s space read-model: enabled apps, resource permissions and available actions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
+Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer all registered users through the same paginated search listing as Agent delegations, retaining the signed-in administrator and selected account across pages. Selecting an account renders that user’s space read-model: enabled apps, resource permissions and available actions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
 
 Agent delegations’ **Current user** must name the actual user whose delegations are rendered, including after selection, pagination and refresh; its initial selection is the signed-in administrator. Ordinary users receive no switcher and see only their own context in both views. Ignore obsolete responses after a context change so the label and displayed data remain aligned.
 
 | ID | Observable acceptance |
 | --- | --- |
-| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can select a current space member to render that member’s enabled apps, resource permissions and available actions. |
+| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can find any registered user through the Agent delegations paginated search listing to render that user’s enabled apps, resource permissions and available actions, including a nonmember’s empty permission state. |
 | BUC02 | Switching display context leaves native session identity and server-side authorization unchanged; synthetic permitted and denied action requests retain the administrator’s own grants. |
 | BUC03 | Agent delegations initially shows the signed-in administrator and keeps Current user aligned with the actual displayed delegations across user changes, refresh and pagination. |
 | BUC04 | Ordinary users have no user-context switcher and cannot select another user’s read-model. Synthetic API and Chromium checks at 1440/390 px cover these boundaries, existing flows, keyboard/native-select operation and zero horizontal overflow. |
 
 ## Self-service business spaces and app enrollment
 
-After signing in, any registered user can create a personal, family or team space through the public workbench and Settings flow. The creator becomes its owner; creation grants no app, resource permission, client delegation or platform role. A personal space cannot contain another member. Existing company spaces retain their team meaning and existing administrator-managed spaces keep their configured access unless an owner explicitly changes enrollment.
+Public registration first provisions one owned, protected personal space. After signing in, any registered user can create additional personal, family or team spaces through the public workbench and Settings flow. The creator becomes its owner; creation grants no app, resource permission, client delegation or platform role. A personal space cannot contain another member. Existing company spaces retain their team meaning and existing administrator-managed spaces keep their configured access unless an owner explicitly changes enrollment.
 
 A space owner can enable or disable apps for that space, selecting only from the deployment's already-installed, reviewed app catalog. Persist the selection as runtime policy in the identity store. An explicit enrollment policy replaces the installation's static space list for that space, while the installed catalog and implemented operation limits remain configuration ceilings. Enrollment cannot install an app, widen its supported operations or authorize an unavailable backend. Enrolled spaces do not also require an administrator-created per-user app-entry policy: business-capable app access still requires current space membership or explicit bounded sharing and the relevant resource/action grant; apps without agent business actions provide member web entry as described above. Self-service space creation never auto-grants app data access to owners or new members; existing administrator-managed space role behavior remains compatible. The owner can manage their space even before enabling any app.
 
@@ -92,7 +101,7 @@ Owners add existing accounts through the product member flow and explicitly gran
 
 | ID | Observable acceptance |
 | --- | --- |
-| BSP01 | A self-registered signed-in user creates a space from the public UI; personal spaces reject other members and all spaces start without implicit app/resource grants. |
+| BSP01 | Public registration creates exactly one owned personal space without duplicate provisioning; the signed-in user can create additional spaces through the public UI. Personal spaces reject other members and all spaces start without implicit app/resource grants. |
 | BSP02 | Only the owner changes durable app enrollment; unknown, uninstalled or unsupported apps/operations and cross-space or platform elevation are rejected. Existing static spaces remain compatible. |
 | BSP03 | An explicitly granted synthetic member completes code/PKCE authorization and MCP discovery exposes exactly the granted app tools without a separate administrator entry policy. |
 | BSP04 | Enrollment and membership revocation remove subsequent consent and tool access consistently across web, execution, discovery, app HTTP and jobs; restart retains policy and revocation. |
@@ -103,14 +112,14 @@ Owners add existing accounts through the product member flow and explicitly gran
 
 ## Creator-initiated space deletion
 
-The signed-in user who created a space can delete it from Settings → Spaces and the documented account API; deletion follows creation and requires no additional owner/admin role. Platform administrators can delete any otherwise deletable space. A member who only joined cannot delete it. All personal spaces, including the automatically provisioned personal space, are protected from deletion. Before sending a deletion, show an explicit warning and require the exact space ID to be typed and confirmed. The warning lists memberships, resource permissions, agent delegation rules and consent scopes referencing the space, per-space app enrollments and their granted web entries.
+The signed-in user who created a space can delete it from Settings → Spaces and the documented account API; deletion follows creation and requires no additional owner/admin role. Platform administrators can delete any otherwise deletable space. A member who only joined cannot delete it. Deletion protection follows the automatically provisioned personal-space origin marker, not the `personal` type. The automatic personal space cannot be deleted by its user or any platform administrator; every other space, including an additional user-created personal space, remains deletable by its creator or a platform administrator. Before sending a deletion, show an explicit warning and require the exact space ID to be typed and confirmed. The warning lists memberships, resource permissions, agent delegation rules and consent scopes referencing the space, per-space app enrollments and their granted web entries.
 
 Commit the platform cascade atomically under the current policy serialization boundary: remove the space and all listed references, withdraw its access immediately, and preserve all other spaces, users and independent authorizations. Refresh lists and pickers, clear a deleted selection and show the remaining spaces or the existing empty state without stale references. App-adapter provisioned data files are outside this platform deletion operation; retain them for separately authorized operator cleanup and document that boundary.
 
 | ID | Observable acceptance |
 | --- | --- |
 | BSD01 | A creator sees Delete, types the exact space ID and explicitly confirms; missing/wrong confirmation and a joined member's deletion attempt are refused without changes. No extra role gate is required. |
-| BSD02 | A platform administrator deletes an otherwise deletable space; all personal spaces, including the automatically provisioned personal space, remain protected for every caller. |
+| BSD02 | A platform administrator deletes an otherwise deletable space; the marked automatic personal space remains protected for every caller. An additional user-created personal space is deletable by its creator or a platform administrator with the same confirmed cascade. |
 | BSD03 | Synthetic deletion removes memberships, permissions, delegation rules/consent scopes, enrollments and enrollment-derived web entries atomically; immediate re-access is refused and other spaces/users/authorizations remain unchanged. App-owned files are retained. |
 | BSD04 | Real Chromium flows at 1440/390 px verify warning/confirmation, cancellation, success, refreshed pickers/lists and no stale selection or horizontal overflow; both workbench PRD languages render. Source checks and test deployment evidence remain separate from independent business acceptance. |
 
@@ -335,6 +344,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.143 | 2026-11-21 | Separate Spaces overview and per-app management with complete app catalog, bounded web enrollment, single separators and browser success alerts |
 | v0.1.144 | 2026-11-21 | Add creator-confirmed atomic space deletion with personal-space protection and immediate scoped revocation |
 | v0.1.145 | 2026-11-21 | Add administrator display-context switching in Spaces and correct Agent delegations current-user semantics |
+| v0.1.146 | 2026-11-21 | Provision protected personal spaces, designate OAuth space and offer all-user administrator display context. |
 
 ### Letters and Profiles
 
