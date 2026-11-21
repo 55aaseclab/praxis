@@ -138,9 +138,34 @@ async function loadRegistry() {
   }
 }
 globalThis.addEventListener?.('praxis-locale-change', () => { if (registry) renderRegistry(); });
-document.addEventListener('praxis-identity-change', () => { identityTriggered = true; void loadRegistry(); });
-document.addEventListener('praxis-session-ended', () => { revision++; registryController?.abort(); collectionController?.abort(); collectionController = undefined; clearRegistry(); });
+document.addEventListener('praxis-identity-change', () => { identityTriggered = true; void loadRegistry(); connectLiveUpdates(); });
+document.addEventListener('praxis-session-ended', () => { revision++; registryController?.abort(); collectionController?.abort(); collectionController = undefined; clearRegistry(); closeLiveUpdates(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'hidden') void refreshCollections(true); });
 if (typeof globalThis.addEventListener === 'function') globalThis.addEventListener('focus', () => void refreshCollections(true));
 if (typeof setInterval === 'function') setInterval(() => void refreshCollections(), 30000);
+let liveTimer, liveSource, liveAttempts = 0, liveConnected = false;
+function scheduleLiveRefresh(action) {
+  if (liveTimer) clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => { liveTimer = undefined; if (hasIdentity() && document.visibilityState !== 'hidden') action(); }, 250);
+}
+function connectLiveUpdates() {
+  if (liveSource || typeof EventSource !== 'function') return;
+  const source = new EventSource('/api/business/session-events');
+  liveSource = source;
+  source.addEventListener('ready', () => {
+    liveAttempts = 0;
+    if (liveConnected) scheduleLiveRefresh(() => void loadRegistry());
+    liveConnected = true;
+  });
+  source.addEventListener('policy', () => scheduleLiveRefresh(() => void loadRegistry()));
+  source.addEventListener('change', () => scheduleLiveRefresh(() => void refreshCollections(true)));
+  source.onerror = () => {
+    if (liveSource !== source) return;
+    source.close(); liveSource = undefined; liveConnected = false;
+    liveAttempts = Math.min(liveAttempts + 1, 5);
+    setTimeout(() => { if (hasIdentity()) connectLiveUpdates(); }, Math.min(30000, 1000 * 2 ** liveAttempts) + Math.floor(Math.random() * 500));
+  };
+}
+function closeLiveUpdates() { liveSource?.close(); liveSource = undefined; liveConnected = false; }
+connectLiveUpdates();
 if (await identityReady && !identityTriggered) await loadRegistry();

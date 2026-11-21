@@ -268,6 +268,38 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
         const close = () => { clearInterval(timer); streams.delete(response); }; streams.add(response); response.on('close', close);
         return;
       }
+      if (url.pathname === '/api/business/session-events' && request.method === 'GET') {
+        if (url.search) throw businessError(400, 'INVALID_REQUEST');
+        const token = credentialFromRequest(request), session = requireAccountSession(request, { auth });
+        const userId = session.user.id, watched = auth.watchedSpaces(userId);
+        let cursor = events.cursor(), policyVersion = auth.policyVersion;
+        response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no', 'X-Content-Type-Options': 'nosniff' });
+        response.write(`event: ready\ndata: ${JSON.stringify({ policyVersion, cursor })}\n\n`);
+        observed.openStream();
+        const deliver = (name, payload) => { if (!response.destroyed) response.write(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`); };
+        const offChange = auth.onChange(event => {
+          if (response.destroyed || event.type === 'session') return;
+          if (event.userId !== userId && !(event.spaceId && (watched.has(event.spaceId) || auth.spaceInterest(userId, event.spaceId)))) return;
+          deliver('policy', { version: event.version, type: event.type });
+        });
+        const timer = setInterval(() => {
+          if (response.destroyed) return;
+          try {
+            auth.requireNativeSession(token);
+            const version = auth.policyVersion;
+            if (version !== policyVersion) { policyVersion = version; deliver('policy', { version, type: 'policy' }); }
+            const access = auth.getWebAccess(token);
+            for (const event of events.changes(cursor)) {
+              cursor = event.cursor;
+              if (!canReadAppCards(access, event.appId, config, registry) || !auth.spaceInterest(userId, event.spaceId)) continue;
+              deliver('change', { appId: event.appId, spaceId: event.spaceId });
+            }
+            response.write(': keepalive\n\n');
+          } catch { deliver('revoked', {}); response.end(); }
+        }, pollMs);
+        const close = () => { clearInterval(timer); offChange(); streams.delete(response); }; streams.add(response); response.on('close', close);
+        return;
+      }
       return json(response, 404, { code: 'NOT_FOUND' });
     } catch (error) {
       if (response.headersSent) return response.end();

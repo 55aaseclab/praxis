@@ -1,8 +1,12 @@
 # Praxis roadmap
 
-Version: 0.1.155
+Version: 0.1.156
 
 [简体中文](ROADMAP.md)
+
+## Workbench live updates
+
+Deliver WLU01–WLU03: add the authenticated `GET /api/business/session-events` SSE stream on the existing policy-change emitter and app event pipeline, filtered to the signed-in session's user and watched spaces, with app data triggers gated by the workbench's own read visibility; carry identifiers only. Subscribe the workbench and Settings views with the established epoch/stale-discard pattern, debounced refreshes, automatic reconnection with capped backoff and silent degradation. Verify delivery, filtering, session loss and refusals with isolated synthetic APIs plus bilingual Chromium at 1440/390 px including no-reload updates, preserved geometry and reconnection after a core restart. Open both PRDs, pass the full suite and one aligned PATCH, commit, then build/deploy only the affected web/core pair through the authorized managed test blue/green environment and read back the running version. Also republish the Knowledge app so the deployed surface follows the workbench language preference without an in-app toggle and the overview renders its content directory without the stray literal contents label, verified with the served-UI regression assertions.
 
 ## Member self-service leave-space
 
@@ -339,6 +343,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.153 | 2026-11-21 | Use acting-session ownership for Spaces guidance in administrator display contexts |
 | v0.1.154 | 2026-11-21 | Make Spaces lists follow administrator display context and remove filler hints |
 | v0.1.155 | 2026-11-21 | Members can leave non-personal spaces through confirmed Settings and native-session API with atomic scoped access cleanup. |
+| v0.1.156 | 2026-11-21 | Workbench and Settings subscribe to the authenticated session-events SSE stream with epoch-based refresh, automatic reconnection and silent degradation; Knowledge republished to follow the workbench language preference and render its overview without a stray contents label. |
 
 ### Public applications with private collections
 

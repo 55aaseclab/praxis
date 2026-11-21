@@ -127,6 +127,7 @@ function terminal(status, text) {
   clearAppFacts();
   closeConfirmation();
   ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; knownUsers.clear(); nextCursor = null; selectedId = null; selectedGrantId = null;
+  closeLiveUpdates();
   for (const controller of controllers) controller.abort();
   overview?.clear(); dataController?.destroy(); dataController = null; document.querySelector('#overview-controls').hidden = true;
   document.querySelector('#general-view').hidden = true;
@@ -802,3 +803,33 @@ setInterval(async () => { if (ended || writing || document.visibilityState === '
 void boot();
 
 document.querySelector('[data-language-preference]').addEventListener('change', () => location.reload());
+
+let liveTimer, liveSource, liveAttempts = 0, liveConnected = false;
+function scheduleLiveRefresh() {
+  if (liveTimer) clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => {
+    liveTimer = undefined;
+    if (ended || writing || booting || !session || document.visibilityState === 'hidden') return;
+    if (content.querySelector('form[data-edited="true"]')) return;
+    void boot();
+  }, 300);
+}
+function connectLiveUpdates() {
+  if (liveSource || typeof EventSource !== 'function') return;
+  const source = new EventSource('/api/business/session-events');
+  liveSource = source;
+  source.addEventListener('ready', () => {
+    liveAttempts = 0;
+    if (liveConnected) scheduleLiveRefresh();
+    liveConnected = true;
+  });
+  source.addEventListener('policy', () => scheduleLiveRefresh());
+  source.onerror = () => {
+    if (liveSource !== source) return;
+    source.close(); liveSource = undefined; liveConnected = false;
+    liveAttempts = Math.min(liveAttempts + 1, 5);
+    setTimeout(() => { if (!ended) connectLiveUpdates(); }, Math.min(30000, 1000 * 2 ** liveAttempts) + Math.floor(Math.random() * 500));
+  };
+}
+function closeLiveUpdates() { liveSource?.close(); liveSource = undefined; liveConnected = false; }
+connectLiveUpdates();

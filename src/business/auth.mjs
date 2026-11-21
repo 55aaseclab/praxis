@@ -547,8 +547,9 @@ export class AuthStore {
     return { id, userId, ...rule, expiresAt: expiry };
   }
   revokeResource(id) {
+    const row = this.db.prepare('SELECT user_id,space_id FROM auth_resources WHERE id=?').get(id);
     this.db.prepare('DELETE FROM auth_resources WHERE id=?').run(id);
-    this.changed({ type: 'resource', id });
+    this.changed({ type: 'resource', id, ...(row ? { userId: row.user_id, spaceId: row.space_id } : {}) });
   }
   createClient({ id = randomUUID(), name, redirectUris }) {
     identifier(id); identifier(name, 'Client name');
@@ -671,11 +672,12 @@ export class AuthStore {
     return { ...actor, appId, spaceId, resources, actions: [action], expiresAt: Math.min(actor.expiresAt, ...permissionExpiries) };
   }
   revokeGrant(id) {
+    const owner = this.db.prepare('SELECT user_id FROM auth_grants WHERE id=?').get(id);
     this.controlTransaction(() => {
       this.db.prepare('UPDATE auth_grants SET revoked_at=COALESCE(revoked_at,?) WHERE id=?').run(this.clock(), id);
       this.db.prepare('UPDATE auth_tokens SET revoked_at=COALESCE(revoked_at,?) WHERE grant_id=?').run(this.clock(), id);
       this.audit({ event: 'grant.revoked', grantId: id, outcome: 'allowed' });
-      this.changed({ type: 'revoke', grantId: id });
+      this.changed({ type: 'revoke', grantId: id, ...(owner ? { userId: owner.user_id } : {}) });
     });
   }
   revokeGrantSpace(id, spaceId) {
@@ -686,8 +688,20 @@ export class AuthStore {
     else {
       this.db.prepare('UPDATE auth_grants SET rules=? WHERE id=?').run(JSON.stringify(retained), id);
       this.audit({ event: 'grant.space_revoked', grantId: id, spaceId, outcome: 'allowed' });
-      this.changed({ type: 'revoke', grantId: id, spaceId });
+      this.changed({ type: 'revoke', grantId: id, spaceId, userId: grant.userId });
     }
+  }
+  spaceInterest(userId, spaceId) {
+    identifier(userId, 'Subject'); identifier(spaceId, 'Space');
+    return Boolean(this.db.prepare('SELECT 1 FROM auth_members WHERE user_id=? AND space_id=?').get(userId, spaceId) ||
+      this.db.prepare('SELECT 1 FROM auth_resources WHERE user_id=? AND space_id=?').get(userId, spaceId));
+  }
+  watchedSpaces(userId) {
+    identifier(userId, 'Subject');
+    return new Set([
+      ...this.db.prepare('SELECT space_id FROM auth_members WHERE user_id=?').all(userId).map(row => row.space_id),
+      ...this.db.prepare('SELECT DISTINCT space_id FROM auth_resources WHERE user_id=?').all(userId).map(row => row.space_id),
+    ]);
   }
   listSpaces(token) {
     const actor = this.authenticate(token);

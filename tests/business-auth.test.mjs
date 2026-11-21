@@ -46,11 +46,11 @@ function fixture(t) {
   };
 }
 
-async function httpFixture(t, { core = false, gateway = false, apps = {} } = {}) {
+async function httpFixture(t, { core = false, gateway = false, apps = {}, pollMs = 60000 } = {}) {
   const f = fixture(t);
   let handler = createAuthHandler({ store: f.store, apps, webGateway: { enabled: gateway } });
   const config = { issuer, database: f.file, eventsDatabase: join(dirname(f.file), 'events.db'), observationsFile: join(dirname(f.file), 'observations.db'), allowedHosts: [], apps, ...(gateway ? { webGateway: { enabled: true } } : {}) };
-  const server = core ? (await import('../src/business/server.mjs')).createBusinessServer({ config, auth: f.store, pollMs: 60000 }) : createServer(async (request, response) => {
+  const server = core ? (await import('../src/business/server.mjs')).createBusinessServer({ config, auth: f.store, pollMs }) : createServer(async (request, response) => {
     if (!(await handler(request, response))) { response.writeHead(404); response.end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -94,6 +94,7 @@ async function httpFixture(t, { core = false, gateway = false, apps = {} } = {})
     return { cookie: response.headers.get('set-cookie').split(';')[0], body: await response.json(), response };
   }
   return { ...f, get store() { return f.store; }, request, json, login, base,
+    events: core ? server.core.events : null,
     restartAuth() { assert.equal(core, false); f.reopen(); handler = createAuthHandler({ store: f.store }); },
   };
 }
@@ -1278,4 +1279,90 @@ test('authentication initial HTML honors persisted locale, explicit language and
   const retry = await f.request('/auth/login', { method: 'POST', headers: { Origin: issuer, Cookie: 'praxis_locale=zh', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ username: 'unknown-synthetic', password, return_to: '/' }).toString() });
   assert.equal(retry.status, 401);
   assert.match(await retry.text(), /账号或密码不正确，请重新输入。/);
+});
+
+const sseStreams = new WeakMap();
+function sseStream(response) {
+  let stream = sseStreams.get(response);
+  if (stream) return stream;
+  stream = { events: [], reader: response.body.getReader(), done: false };
+  sseStreams.set(response, stream);
+  (async () => {
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await stream.reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index;
+      while ((index = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, index); buffer = buffer.slice(index + 2);
+        const event = {};
+        for (const line of frame.split('\n')) {
+          if (line.startsWith(':')) continue;
+          const separator = line.indexOf(': ');
+          if (separator < 0) continue;
+          const key = line.slice(0, separator), value = line.slice(separator + 2);
+          if (key === 'event') event.type = value;
+          else if (key === 'data') event.data = JSON.parse(value);
+        }
+        if (event.type) stream.events.push(event);
+      }
+    }
+  })().catch(() => {}).finally(() => { stream.done = true; });
+  return stream;
+}
+async function readSseEvents(response, { until, timeoutMs = 4000 } = {}) {
+  const stream = sseStream(response);
+  const deadline = Date.now() + timeoutMs, collected = [];
+  const matched = () => !until || collected.some(event => event.type === until);
+  while (Date.now() < deadline && !stream.done && !matched()) {
+    const pending = stream.events.length;
+    if (pending) collected.push(...stream.events.splice(0, pending));
+    else await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  collected.push(...stream.events.splice(0, stream.events.length));
+  return collected;
+}
+
+test('session events stream relevant policy and app changes and stop on session loss', async t => {
+  const f = await httpFixture(t, { core: true, pollMs: 40 });
+  f.store.setWebAccess({ userId: 'alice', apps: ['reminder'], prds: true });
+  const login = await f.login();
+  const outsider = await f.login('guest');
+  const response = await f.request('/api/business/session-events', { headers: { Cookie: login.cookie } });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /^text\/event-stream/);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  const [ready] = await readSseEvents(response, { until: 'ready' });
+  assert.equal(ready.type, 'ready');
+  assert.equal(ready.data.policyVersion, f.store.policyVersion);
+  assert.equal(ready.data.cursor, f.events.cursor());
+  assert.equal(typeof ready.data.cursor, 'number');
+  // Policy change in a watched space reaches the session; unrelated spaces stay private.
+  f.store.grantResource({ userId: 'bob', ...rule('personal-b', ['read'], ['personal-record']) });
+  f.store.grantResource({ userId: 'bob', ...rule('family-a', ['read'], ['shared-record']) });
+  const policyEvents = await readSseEvents(response, { until: 'policy' });
+  assert.equal(policyEvents.filter(event => event.type === 'policy').length, 1, 'unrelated space events are filtered');
+  assert.equal(policyEvents.at(-1).data.type, 'resource');
+  assert.equal(policyEvents.at(-1).data.version, f.store.policyVersion);
+  // App data events reach readers of the app and space, and omit record-level detail.
+  f.events.ingest('reminder', 'personal-b', { cursor: 3, events: [{ id: 'p1', resourceId: 'personal-record', revision: '1', operation: 'change', cursor: 3 }] });
+  f.events.ingest('reminder', 'family-a', { cursor: 5, events: [{ id: 'f1', resourceId: 'shared-record', revision: '1', operation: 'change', cursor: 5 }] });
+  const changeEvents = await readSseEvents(response, { until: 'change' });
+  assert.deepEqual(changeEvents.filter(event => event.type === 'change').map(event => event.data), [{ appId: 'reminder', spaceId: 'family-a' }]);
+  // A second session for a guest without family access receives no typed event
+  // for it; the anonymous version catch-up carries no identifiers.
+  const guestResponse = await f.request('/api/business/session-events', { headers: { Cookie: outsider.cookie } });
+  await readSseEvents(guestResponse, { until: 'ready' });
+  f.store.grantResource({ userId: 'bob', ...rule('family-a', ['update'], ['shared-record']) });
+  const guestEvents = await readSseEvents(guestResponse, { timeoutMs: 400 });
+  assert.deepEqual(guestEvents.filter(event => event.type === 'policy' && event.data.type !== 'policy'), []);
+  assert.deepEqual(guestEvents.filter(event => event.type === 'change'), []);
+  // Session loss degrades the stream to a final revoked event.
+  f.store.resetPassword({ userId: 'alice', password });
+  const revoked = await readSseEvents(response, { until: 'revoked', timeoutMs: 3000 });
+  assert.equal(revoked.at(-1).type, 'revoked');
+  assert.equal((await f.request('/api/business/session-events')).status, 401);
+  assert.equal((await f.request('/api/business/session-events?after=1', { headers: { Cookie: login.cookie } })).status, 400);
 });

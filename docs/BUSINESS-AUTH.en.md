@@ -55,7 +55,7 @@ Return raw tokens only at issuance. Store SHA-256 digests, and keep passwords an
 | `authorize(credential, {appId, spaceId, action, resourceId?})` | Identity plus allowed `{appId, spaceId, resources, actions}`. A refusal provides `AuthError.status/code`. |
 | `listSpaces(credential)` | Currently accessible spaces and relationships. |
 | `requireRequestCsrf(request)` | Cookie writes require both Origin and `X-CSRF-Token`. A Bearer request must still pass business authorization. |
-| `onChange(listener)`, `policyVersion` | In-process policy notifications and durable version. Across processes, poll the version or reauthorize every delivery. |
+| `onChange(listener)`, `policyVersion` | In-process policy notifications and durable version. Policy events carry their subject references; resource revocations include the affected user and space. Across processes, poll the version or reauthorize every delivery. |
 | `audit(metadata)` | Action, outcome, reason category and keyed pseudonyms. Omit raw IDs, headers, credentials and business content. |
 | `withPolicyLease(async callback)` | SQLite `BEGIN IMMEDIATE` holds a cross-connection policy lock until asynchronous work finishes. A timeout returns HTTP 503 `POLICY_BUSY`. |
 
@@ -123,6 +123,10 @@ A website login starts an eight-hour native session. The browser uses the person
 An external client starts the OAuth grant. Consent identifies the client and explicitly selects one of the current user’s accessible spaces, defaulting to their personal space when present. The selected space filters the currently permitted, implemented operations. A user without spaces can create one inline before continuing the same request; creation grants no app/resource access. Keep selection through retries and bind the designation to consent, authorization code and grant. The existence of a grant does not establish that the client connected or used a tool. In standalone mode, `/auth/delegate` still offers explicit first-party delegation when applicable. An empty capability set yields an empty state rather than a submittable empty scope.
 
 `GET /auth/grants` and `DELETE /auth/grants/:id` handle the signed-in person's delegations. `POST /auth/logout` ends the current session. The cookie is `praxis_business_session` with HttpOnly, SameSite=Lax and Secure for an HTTPS issuer. `/auth/session` omits passwords, access tokens and session tokens. `delegated` refers to a real stored delegation. Bind consent to the session and request for ten minutes. Sensitive responses are uncached. The persistent login limiter allows at most ten failures in 15 minutes. Internal errors and protocol codes use English.
+
+### Session change events
+
+`GET /api/business/session-events` streams Server-Sent Events to the signed-in native browser session. It rejects Authorization headers, cross-origin requests and query strings, and delivers `ready`, `policy` and `change` events: policy notifications filtered to the session's own user and currently watched spaces (membership or any resource rows), app data triggers only for apps the workbench can open in a space the session watches, and a final `revoked` event when revalidation fails before the stream ends. Events carry version, type and app/space identifiers only — never business content or resource-level detail. Each tick revalidates the session and announces a version bump observed across processes. Clients treat events as refresh triggers under their own epoch pattern and reconnect with backoff; a failed or expired session degrades to the existing manual-refresh behavior.
 
 ### Website entry and single sign-on
 

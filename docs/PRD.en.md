@@ -1,8 +1,20 @@
 # Praxis product requirements
 
-Version: 0.1.155 · [简体中文](PRD.md)
+Version: 0.1.156 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
+
+## Workbench live updates
+
+An authenticated Server-Sent Events stream at `GET /api/business/session-events` delivers the platform's existing change signals to the signed-in native session: authorization policy notifications (space, membership, resource permission, delegation, enrollment, entry policy and account changes) filtered to the session's own user and currently watched spaces, plus app data change triggers from the existing event pipeline for apps the workbench can read with the current web entry and space interest. Events carry only version, type and app/space identifiers — never business content, resource-level detail or identifiers outside the session's reach. The stream revalidates the session on every tick, ends with a `revoked` event when the session expires or is withdrawn, refuses unauthenticated, cross-origin and query-bearing requests, and leaves existing authorization semantics, PKCE, CSRF and APIs unchanged. The gateway keeps its transport checks and cannot be used to bypass app or data permissions.
+
+The workbench and Settings views subscribe and re-render affected data through the established epoch and stale-response-discard pattern: no full-page reloads, no duplicated renders and zero layout shift from the refresh itself, preserving scroll, focus and unsaved form input. Reconnection is automatic with capped exponential backoff and jitter; a reconnecting session refreshes once to cover missed events, and failures degrade silently to the existing manual-refresh behavior.
+
+| ID | Observable acceptance |
+| --- | --- |
+| WLU01 | Isolated synthetic API checks cover the ready handshake, relevant policy delivery, filtered unrelated spaces and apps, session loss through a final revoked event and unauthenticated/origin refusals; the stream carries no business record content. |
+| WLU02 | Real Chromium at 1440/390 px in both languages verifies the open workbench and Settings views updating within the event round-trip after an out-of-session change, with no page reload, no duplicated renders, preserved scroll and geometry, and successful reconnection and refresh after a core restart. |
+| WLU03 | Both workbench PRD readers and the full version-gated suite pass with one aligned PATCH. Commit verified source before building/deploying only the affected web/core pair through the authorized managed test blue/green environment; report technical running version and public readback separately from independent business acceptance. |
 
 ## Member self-service leave-space
 
@@ -443,6 +455,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.153 | 2026-11-21 | Use acting-session ownership for Spaces guidance in administrator display contexts |
 | v0.1.154 | 2026-11-21 | Make Spaces lists follow administrator display context and remove filler hints |
 | v0.1.155 | 2026-11-21 | Members can leave non-personal spaces through confirmed Settings and native-session API with atomic scoped access cleanup. |
+| v0.1.156 | 2026-11-21 | Workbench and Settings subscribe to the authenticated session-events SSE stream with epoch-based refresh, automatic reconnection and silent degradation; Knowledge republished to follow the workbench language preference and render its overview without a stray contents label. |
 
 ### Letters and Profiles
 

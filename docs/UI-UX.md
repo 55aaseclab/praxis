@@ -2,7 +2,9 @@
 
 ## English
 
-- Render the persisted language before first paint on every platform surface; no valid cookie keeps English. Auth explicit language overrides; sign-in/registration language links persist the cookie. Translate only marked static text/accessibility labels, retain English metadata for switching back, and seed client fallback from the rendered locale. Keep public `/` and `/zh-cn/` editions and persist explicit language links. In Chromium at 1440/390 px, block scripts to inspect initial DOM, then release scripts: assert no locale text replacement or locale-induced geometry shift across refresh/navigation, with English and authorization unchanged.
+- The workbench and Settings subscribe to the authenticated `GET /api/business/session-events` SSE stream and re-render affected data through the established epoch/stale-discard pattern. A live refresh must not reload the page, duplicate renders or move layout: keep scroll, focus and unsaved form input; skip refreshes while a write is in flight, the page is hidden or a form has unsaved edits. Reconnection is automatic with capped exponential backoff and jitter, one refresh after reconnection, and silent degradation to the existing manual-refresh behavior on failure. Verify with real Chromium at 1440/390 px that out-of-session changes appear within the event round-trip without reload, duplicate renders or geometry shift, and that the stream reconnects and refreshes after a server restart.
+
+- Render the persisted language before first paint on every platform surface; no valid cookie keeps English. Auth explicit language overrides; sign-in/registration language links persist the cookie. Translate only marked static text/accessibility labels, retain English metadata for switching back, and seed client fallback from the rendered locale. Keep public `/` and `/zh-cn/` editions and persist explicit language links. In Chromium at 1440/390 px, block scripts to inspect initial DOM, then release scripts: assert no locale text replacement or locale-induced geometry shift across refresh/navigation, with English and authorization unchanged. Apps follow the workbench language preference exclusively and render no in-app language setting; the Knowledge overview lists its content directory without a literal contents label while the reading view keeps its page outline.
 
 The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.md) includes the launcher, collection, reader and editor layouts, keyboard behavior and acceptance examples.
 
@@ -41,7 +43,9 @@ The [full design guide](../skills/praxis-operator/references/ui-style-guide.en.m
 
 ## 简体中文
 
-- 平台各界面在首屏前按已保存语言渲染，无有效 Cookie 时保持英文；认证显式语言优先，登录／注册语言链接保存 Cookie。仅翻译有标记的静态文案／无障碍标签，保留切回英文的原文元数据，客户端回退以已渲染语言初始化。保留公开 `/` 与 `/zh-cn/` 版本，显式语言链接保存偏好。在 Chromium 1440/390 px 阻止脚本检查初始 DOM，再放行脚本，断言刷新／导航无语言文案替换或语言导致的几何位移，英文与授权不变。
+- 工作台与设置订阅已认证的 `GET /api/business/session-events` SSE 流，并沿用既有 epoch／过期丢弃模式重渲染受影响数据。实时刷新不得整页刷新、重复渲染或移动布局：保留滚动、焦点及未提交的表单输入；写入进行中、页面隐藏或表单有未保存修改时跳过刷新。重连自动进行，使用有上限的指数退避加抖动，重连后刷新一次，失败时静默降级为既有手动刷新。以真实 Chromium 1440/390 px 验证会话外变更在事件往返内出现且无刷新、无重复渲染、无几何位移，并验证服务重启后流重连并刷新。
+
+- 平台各界面在首屏前按已保存语言渲染，无有效 Cookie 时保持英文；认证显式语言优先，登录／注册语言链接保存 Cookie。仅翻译有标记的静态文案／无障碍标签，保留切回英文的原文元数据，客户端回退以已渲染语言初始化。保留公开 `/` 与 `/zh-cn/` 版本，显式语言链接保存偏好。在 Chromium 1440/390 px 阻止脚本检查初始 DOM，再放行脚本，断言刷新／导航无语言文案替换或语言导致的几何位移，英文与授权不变。各应用仅跟随工作台语言偏好，不渲染应用内语言设置；Knowledge 概览列出内容目录时不显示字面目录标签，阅读视图保留本页目录。
 
 [完整设计指南](../skills/praxis-operator/references/ui-style-guide.md)收录了启动台、集合、阅读器与编辑器布局，以及键盘行为和验收示例。
 

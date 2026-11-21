@@ -68,7 +68,7 @@ token 原值只在签发返回中出现，数据库保存 SHA-256 摘要；密�
 - `authorize(credential, {appId, spaceId, action, resourceId?})`：返回上述身份及 `{appId, spaceId, resources, actions}`；拒绝使用英文 `AuthError` 的 `status/code`。
 - `listSpaces(credential)`：只返回该委托当前仍可访问的空间及关系。
 - `requireRequestCsrf(request)`：浏览器 cookie 写请求同时检查 Origin 和 `X-CSRF-Token`；独立 Bearer 客户端仍须业务验权。
-- `onChange(listener)` 与 `policyVersion`：提供当前进程的权限变化通知及持久版本。跨进程订阅须轮询版本或在每次交付时重新验权。
+- `onChange(listener)` 与 `policyVersion`：提供当前进程的权限变化通知及持久版本。策略事件携带主体引用，资源撤销包含受影响的用户与空间。跨进程订阅须轮询版本或在每次交付时重新验权。
 - `audit(metadata)`：只保存动作、结果、原因类别和带密钥伪名，不保存业务正文、原始标识、请求头和凭据。
 - `withPolicyLease(async callback)`：取得 SQLite `BEGIN IMMEDIATE` 策略锁，待异步业务执行真正结束后提交或回滚。其他连接的权限变更须等待，锁超时明确返回503 `POLICY_BUSY`，不能假报撤销成功。
 
@@ -141,6 +141,10 @@ token 原值只在签发返回中出现，数据库保存 SHA-256 摘要；密�
 独立业务服务未启用Praxis网关时，保留已有`/auth/delegate`显式第一方业务委托；没有可选能力时显示准确空态，不出现可提交的空表单。该入口不再出现在正式工作台的账号菜单。
 
 session cookie名为`praxis_business_session`，设置HttpOnly、SameSite=Lax，HTTPS issuer下同时设置Secure。`/auth/session`不返回密码、访问token或session token；`delegated`只表示真实存储的委托。OAuth确认规则绑定会话、请求及十分钟期限；敏感响应不缓存。十五分钟内最多十次登录失败，计数持久化；界面提供英文与简体中文，内部错误及协议代码使用英文。
+
+### 会话变更事件
+
+`GET /api/business/session-events` 向已登录的原生浏览器会话推送 Server-Sent Events。接口拒绝 Authorization 头、跨源请求及查询参数，投递 `ready`、`policy` 与 `change` 事件：策略通知按会话用户及其当前关注空间（成员关系或任意资源记录）过滤；应用数据触发仅限工作台可打开且会话关注空间内的应用；会话重校验失败时以最终 `revoked` 事件结束。事件只携带版本、类型及应用／空间标识，不携带业务内容或资源级明细。每个周期重新校验会话，并发布跨进程观察到的版本提升。客户端将事件作为自身 epoch 模式下的刷新触发，自动退避重连；会话失效或连接失败时静默降级为既有手动刷新。
 
 ## 5.1 网页入口权限与一次登录
 
