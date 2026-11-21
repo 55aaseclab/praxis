@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.147
+Version: 0.1.148
 
 [简体中文](ROADMAP.md)
 
@@ -41,7 +41,7 @@ Define BSP05–BSP08 before implementation. Separate the space overview (members
 
 ## Administrator display context in Settings
 
-Define BUC01–BUC04 before implementation. Reuse the Agent delegations first-row Current user pattern in Spaces for platform administrators, defaulting to their own signed-in account and offering all registered users in plain native dropdowns in both Spaces and Agent delegations, with pagination as needed and no search input or search interaction, retaining the current and selected accounts across pages. Render the selected user’s enabled apps, resource permissions and available actions as a display read-model without changing session identity, grants, action authorization or existing API/management flows. Correct Agent delegations to identify its actual displayed user, default to the administrator and keep label/data aligned through refresh, pagination and context changes. Ordinary users retain only their own context with no switcher. Verify isolated synthetic API allowed/denied cases and real Chromium 1440/390 px flows, native selects and no horizontal overflow. Run the full platform suite and one aligned PATCH version gate, open both PRDs through the workbench reader, commit verified source, then build and deploy the affected web/core pair through the authorized test blue/green environment. Report technical evidence, actual runtime version and public readback separately from independent business acceptance.
+Define BUC01–BUC05 before implementation. Reuse the Agent delegations first-row Current user pattern in Spaces for platform administrators, defaulting to their own signed-in account and offering all registered users in plain native dropdowns in both Spaces and Agent delegations, with pagination as needed and no search input or search interaction, retaining the current and selected accounts across pages. Render the selected user’s enabled apps and resource permissions as a display read-model, while deriving management affordances from the signed-in administrator’s capabilities. Preserve Delete for otherwise deletable spaces across member/nonmember context switches and preserve owner controls when the administrator owns the space; selecting a foreign owner supplies no owner authority. Keep session identity, grants, owner-only API rules, exact-ID confirmation/cascade and existing API/management flows unchanged. Correct Agent delegations to identify its actual displayed user, default to the administrator and keep label/data aligned through refresh, pagination and context changes. Ordinary users retain only their own context with no switcher. Verify isolated synthetic API allowed/denied cases and real Chromium 1440/390 px flows, native selects and no horizontal overflow. Run the full platform suite and one aligned PATCH version gate, open both PRDs through the workbench reader, commit verified source, then build and deploy the affected web/core pair through the authorized test blue/green environment. Report technical evidence, actual runtime version and public readback separately from independent business acceptance.
 
 ## Self-service business spaces
 
@@ -305,6 +305,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.145 | 2026-11-21 | Add administrator display-context switching in Spaces and correct Agent delegations current-user semantics |
 | v0.1.146 | 2026-11-21 | Provision protected personal spaces, designate OAuth space and offer all-user administrator display context. |
 | v0.1.147 | 2026-11-21 | Clarify delegation IDs and status, use modal confirmations and plain user dropdowns in Settings. |
+| v0.1.148 | 2026-11-21 | Keep Spaces management capabilities tied to the signed-in session across display contexts |
 
 ### Public applications with private collections
 

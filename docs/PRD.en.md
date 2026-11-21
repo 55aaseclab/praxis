@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.147 · [简体中文](PRD.md)
+Version: 0.1.148 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -93,16 +93,17 @@ Across every management view, adjacent sections have one separator, with nested 
 
 ## Administrator display context in Settings
 
-Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer all registered users in a plain native dropdown, with pagination as needed and no search input or search interaction, retaining the signed-in administrator and selected account across pages. Selecting an account renders that user’s space read-model: enabled apps, resource permissions and available actions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
+Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer all registered users in a plain native dropdown, with pagination as needed and no search input or search interaction, retaining the signed-in administrator and selected account across pages. Selecting an account renders that user’s space read-model: enabled apps and resource permissions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Management affordances use the signed-in administrator’s capabilities, independently of the selected user’s projection. Delete remains available for every otherwise deletable space under any display context; owner-only enrollment, member and resource-permission controls remain available only when the signed-in administrator owns the space. Selecting another owner never lends that user’s authority. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
 
 Both Spaces and Agent delegations use plain native user dropdowns without search, retaining pagination as needed. Agent delegations’ **Current user** must name the actual user whose delegations are rendered, including after selection, pagination and refresh; its initial selection is the signed-in administrator. Ordinary users receive no switcher and see only their own context in both views. Ignore obsolete responses after a context change so the label and displayed data remain aligned.
 
 | ID | Observable acceptance |
 | --- | --- |
-| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can select any registered user through a plain native dropdown with pagination as needed and no search interaction to render that user’s enabled apps, resource permissions and available actions, including a nonmember’s empty permission state. |
+| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can select any registered user through a plain native dropdown with pagination as needed and no search interaction to render that user’s enabled apps and resource permissions, including a nonmember’s empty permission state; management controls retain the signed-in administrator’s capabilities. |
 | BUC02 | Switching display context leaves native session identity and server-side authorization unchanged; synthetic permitted and denied action requests retain the administrator’s own grants. |
 | BUC03 | Agent delegations initially shows the signed-in administrator and keeps Current user aligned with the actual displayed delegations across user changes, refresh and pagination. |
 | BUC04 | Ordinary users have no user-context switcher and cannot select another user’s read-model. Synthetic API and Chromium checks at 1440/390 px cover these boundaries, existing flows, keyboard/native-select operation and zero horizontal overflow. |
+| BUC05 | At 1440/390 px, selecting a non-creator member or nonmember preserves the administrator’s Delete action and existing exact-ID confirmed cascade in their own session. Their own owner controls also survive the switch; selecting a foreign owner exposes no owner-only controls and grants no authority. Automatic personal-space protection, ordinary-user capabilities, APIs and confirmation flows remain unchanged. |
 
 ## Self-service business spaces and app enrollment
 
@@ -125,7 +126,7 @@ Owners add existing accounts through the product member flow and explicitly gran
 
 ## Creator-initiated space deletion
 
-The signed-in user who created a space can delete it from Settings → Spaces and the documented account API; deletion follows creation and requires no additional owner/admin role. Platform administrators can delete any otherwise deletable space. A member who only joined cannot delete it. Deletion protection follows the automatically provisioned personal-space origin marker, not the `personal` type. The automatic personal space cannot be deleted by its user or any platform administrator; every other space, including an additional user-created personal space, remains deletable by its creator or a platform administrator. Before sending a deletion, show an explicit warning and require the exact space ID to be typed and confirmed. The warning lists memberships, resource permissions, agent delegation rules and consent scopes referencing the space, per-space app enrollments and their granted web entries.
+The signed-in user who created a space can delete it from Settings → Spaces and the documented account API; deletion follows creation and requires no additional owner/admin role. Platform administrators can delete any otherwise deletable space; the action remains visible when they select another user as display context. A member who only joined cannot delete it. Deletion protection follows the automatically provisioned personal-space origin marker, not the `personal` type. The automatic personal space cannot be deleted by its user or any platform administrator; every other space, including an additional user-created personal space, remains deletable by its creator or a platform administrator. Before sending a deletion, show an explicit warning and require the exact space ID to be typed and confirmed. The warning lists memberships, resource permissions, agent delegation rules and consent scopes referencing the space, per-space app enrollments and their granted web entries.
 
 Commit the platform cascade atomically under the current policy serialization boundary: remove the space and all listed references, withdraw its access immediately, and preserve all other spaces, users and independent authorizations. Refresh lists and pickers, clear a deleted selection and show the remaining spaces or the existing empty state without stale references. App-adapter provisioned data files are outside this platform deletion operation; retain them for separately authorized operator cleanup and document that boundary.
 
@@ -359,6 +360,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.145 | 2026-11-21 | Add administrator display-context switching in Spaces and correct Agent delegations current-user semantics |
 | v0.1.146 | 2026-11-21 | Provision protected personal spaces, designate OAuth space and offer all-user administrator display context. |
 | v0.1.147 | 2026-11-21 | Clarify delegation IDs and status, use modal confirmations and plain user dropdowns in Settings. |
+| v0.1.148 | 2026-11-21 | Keep Spaces management capabilities tied to the signed-in session across display contexts |
 
 ### Letters and Profiles
 

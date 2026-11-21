@@ -436,6 +436,8 @@ async function renderSpaces(current, preserve) {
   if (session.platformAdmin && !selectedSpaceUserId) selectedSpaceUserId = session.user.id;
   let detail = selectedSpaceId ? await api(spacePath('') + (session.platformAdmin && selectedSpaceUserId !== session.user.id ? `?contextUserId=${encodeURIComponent(selectedSpaceUserId)}` : '')) : null;
   if (ended || current !== epoch || view !== 'spaces') return;
+  // Keep the acting session's capabilities separate from the display projection.
+  const capabilities = { canDelete: Boolean(detail?.space.canDelete), canManage: detail?.space.ownerId === session.user.id };
   content.replaceChildren();
   let displayedUserId = session.user.id;
   if (session.platformAdmin) {
@@ -446,7 +448,7 @@ async function renderSpaces(current, preserve) {
     content.append(picker(pickerUsers(), displayedUserId, id => { selectedSpaceUserId = id; void render(); }));
     if (displayedUserId !== session.user.id) content.append(el('p', 'section-note', t('Viewing {0}. Actions still use your signed-in account’s permissions.', '正在查看 {0} 的视图。操作仍使用你登录账号的权限。', context?.user.username || knownUsers.get(displayedUserId)?.username || displayedUserId)));
   }
-  if (detail && selectedAppId) { renderSpaceApp(detail, displayedUserId); return; }
+  if (detail && selectedAppId) { renderSpaceApp(detail, capabilities); return; }
   const create = el('form', 'editor form-panel'), type = selectField(t('Space type', '空间类型'), 'type', ['personal', 'family', 'company'].map(value => ({ value, label: spaceTypeName(value) })));
   const submit = el('button', 'primary', t('Create space', '创建空间')); submit.type = 'submit';
   create.append(el('h2', '', t('New space', '新空间')), el('p', 'section-note', t('Enable apps and grant resource permissions after creating a space. Personal spaces have no other members.', '创建后再启用应用并授予资源权限。个人空间不能添加其他成员。')), controlRow(type.root, submit));
@@ -462,7 +464,7 @@ async function renderSpaces(current, preserve) {
     picker.input.value = selectedSpaceId;
     picker.input.addEventListener('change', () => { selectedSpaceId = picker.input.value; selectedAppId = null; history.pushState(null, '', spaceHref()); void render(); });
     const selection = controlRow(picker.root);
-    if (space.canDelete) selection.append(button(t('Delete space', '删除空间'), 'danger-button space-delete', () => confirmSpaceDeletion(context, space)));
+    if (capabilities.canDelete) selection.append(button(t('Delete space', '删除空间'), 'danger-button space-delete', () => confirmSpaceDeletion(context, space)));
     context.append(selection, el('p', 'section-note', owner ? t('You own this space. App enrollment and resource permissions are separate; enable an app, then grant only the required actions.', '你是此空间的所有者。启用应用与授予资源权限分开进行；先启用应用，再仅授予所需操作。') : t('Ask the space owner to enable apps or change your resource permissions.', '需要启用应用或变更资源权限时，请联系空间所有者。')));
     if (space.deletionProtected) context.append(el('p', 'section-note', t('Automatically created personal spaces cannot be deleted.', '自动创建的个人空间不能删除。')));
     panel.append(context);
@@ -471,11 +473,11 @@ async function renderSpaces(current, preserve) {
     for (const member of members) {
       const row = el('li', 'user-row'), description = el('div', 'user-summary'); row.dataset.member = member.userId;
       description.append(el('strong', 'user-name', member.username || member.userId), el('span', 'meta', member.userId === space.ownerId ? t('Owner', '所有者') : t('Member', '成员'))); row.append(description);
-      if (owner && member.userId !== space.ownerId) row.append(button(t('Remove', '移除'), 'danger-button', () => confirmAction(row, t('Remove this member and their access to this space?', '移除此成员及其空间权限？'), () => void mutateSpace(spacePath(`/members/${encodeURIComponent(member.userId)}`), { method: 'DELETE' }, t('Member removed.', '成员已移除。')))));
+      if (capabilities.canManage && member.userId !== space.ownerId) row.append(button(t('Remove', '移除'), 'danger-button', () => confirmAction(row, t('Remove this member and their access to this space?', '移除此成员及其空间权限？'), () => void mutateSpace(spacePath(`/members/${encodeURIComponent(member.userId)}`), { method: 'DELETE' }, t('Member removed.', '成员已移除。')))));
       memberList.append(row);
     }
     memberSection.append(memberList);
-    if (owner && space.type !== 'personal') {
+    if (capabilities.canManage && space.type !== 'personal') {
       const form = el('form', 'form-panel'), username = field(t('Registered username', '已注册的用户名'), 'username'); username.input.required = true; username.input.maxLength = 64; username.input.autocomplete = 'off';
       const add = el('button', 'quiet-button', t('Add member', '添加成员')); add.type = 'submit';
       form.append(controlRow(username.root, add), el('p', 'section-note', t('Adding a member grants no resource permissions. Enabled web-entry-only apps are available to space members.', '添加成员不会自动授予资源权限。成员可打开已启用的仅网页入口应用。')));
@@ -495,8 +497,8 @@ async function renderSpaces(current, preserve) {
   }
   if (!detail) content.append(el('p', 'empty', t('No spaces yet.', '暂无空间。')));
 }
-function renderSpaceApp({ space, apps, members, permissions }, displayedUserId = session.user.id) {
-  const app = apps.find(app => app.id === selectedAppId), owner = space.ownerId === displayedUserId;
+function renderSpaceApp({ space, apps, members, permissions }, { canManage }) {
+  const app = apps.find(app => app.id === selectedAppId);
   const context = el('div', 'space-app-context'); context.append(spaceLink(t('Back to Spaces', '返回空间'), null, 'link-button space-back'), el('p', 'meta', spaceLabel(space))); content.append(context);
   if (!app) { content.append(el('p', 'empty', t('This app is no longer installed. Return to Spaces to choose another app.', '此应用已不再安装，请返回空间选择其他应用。'))); return; }
   document.querySelector('#heading').textContent = app.name || app.id;
@@ -504,7 +506,7 @@ function renderSpaceApp({ space, apps, members, permissions }, displayedUserId =
   enrollment.append(el('h2', '', t('App enrollment', '应用启用状态')));
   const row = el('div', 'account-setting'), description = el('div');
   description.append(el('strong', '', app.name || app.id), el('span', 'meta', app.enabled ? t('Enabled', '已启用') : t('Disabled', '未启用'))); row.append(description);
-  if (owner && app.enrollmentAllowed !== false) {
+  if (canManage && app.enrollmentAllowed !== false) {
     const change = () => void mutateSpace(spacePath(`/apps/${encodeURIComponent(app.id)}`), { method: 'PUT', body: { enabled: !app.enabled } }, app.enabled ? t('App disabled for this space.', '已停用此空间的应用。') : app.supportsBusinessActions ? t('App enabled. Grant resource permissions as needed.', '应用已启用，请按需授予资源权限。') : t('App enabled. Space members can open its web entry.', '应用已启用，空间成员可打开网页入口。'));
     row.append(button(app.enabled ? t('Disable', '停用') : t('Enable', '启用'), app.enabled ? 'danger-button' : 'quiet-button', () => app.enabled ? confirmAction(row, t('Disable this app for the space? Its current access and delegations will stop.', '停用此空间的应用？当前访问和委托将停止。'), change) : change()));
   }
@@ -519,11 +521,11 @@ function renderSpaceApp({ space, apps, members, permissions }, displayedUserId =
     const memberName = members.find(member => member.userId === permission.userId)?.username || permission.userId;
     const item = el('li', 'grant-row'), summary = el('div', 'control-summary'), controls = controlRow(summary); item.append(controls); item.dataset.permission = permission.id;
     summary.append(el('strong', '', memberName), el('span', 'meta', permission.actions.map(action => actionNames[action] || action).join(', ')), el('span', 'meta', permission.resources.includes('*') ? t('All resources in this app and space', '此应用在本空间内的所有资源') : t('Resources: {0}', '资源：{0}', permission.resources.join(', '))));
-    if (owner) controls.append(button(t('Revoke permission', '撤销权限'), 'danger-button', () => confirmAction(item, t('Revoke this resource permission?', '撤销此资源权限？'), () => void mutateSpace(spacePath(`/permissions/${encodeURIComponent(permission.id)}`), { method: 'DELETE' }, t('Permission revoked.', '权限已撤销。')))));
+    if (canManage) controls.append(button(t('Revoke permission', '撤销权限'), 'danger-button', () => confirmAction(item, t('Revoke this resource permission?', '撤销此资源权限？'), () => void mutateSpace(spacePath(`/permissions/${encodeURIComponent(permission.id)}`), { method: 'DELETE' }, t('Permission revoked.', '权限已撤销。')))));
     permissionList.append(item);
   }
   permissionSection.append(scopedPermissions.length ? permissionList : el('p', 'empty', t('No resource permissions granted.', '尚未授予资源权限。'))); content.append(permissionSection);
-  if (!owner || !app.enabled || app.businessAvailable === false) return;
+  if (!canManage || !app.enabled || app.businessAvailable === false) return;
   const grantSection = el('section', 'editor'); grantSection.append(el('h2', '', t('Grant permission', '授予权限')));
   const form = el('form', 'form-panel'), person = selectField(t('Member', '成员'), 'userId', members.map(member => ({ value: member.userId, label: member.username || member.userId })));
   const resources = field(t('Resource IDs (comma-separated, or * for all)', '资源 ID（逗号分隔，* 表示全部）'), 'resources'); resources.input.required = true; resources.input.maxLength = 8000;
