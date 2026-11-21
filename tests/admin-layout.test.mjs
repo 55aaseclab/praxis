@@ -1453,3 +1453,99 @@ test('Chromium Spaces picker follows the displayed user with distinct personal I
   }
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers; no business service contacted', browser: browser.version(), evidence }));
 });
+
+test('Chromium members leave spaces through the centered modal without stale access or borrowed display authority', { skip: !browserEnabled, timeout: 150000 }, async t => {
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const { origin, auth } = await fixture(t), evidence = [];
+  const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
+  if (artifacts) mkdirSync(artifacts, { recursive: true });
+  for (const width of [1440, 390]) for (const language of ['en', 'zh']) {
+    const suffix = `${width}-${language}`, memberId = `leave-member-${suffix}`, ownerId = `leave-owner-${suffix}`;
+    for (const id of [memberId, ownerId]) auth.createUser({ id, username: id, password });
+    const personal = auth.ensurePersonalSpace(memberId), retained = auth.createSelfServiceSpace({ type: 'family', ownerId });
+    auth.setMembership({ spaceId: retained.id, userId: memberId, role: 'member' });
+    auth.setSpaceAppEnrollment({ spaceId: retained.id, appId: 'reminder', enabled: true });
+    auth.grantResource({ userId: memberId, appId: 'reminder', spaceId: retained.id, actions: ['read'], resources: ['synthetic-leave-record'] });
+    const member = await browser.newContext({ viewport: { width, height: 900 } }), owner = await browser.newContext({ viewport: { width, height: 900 } }), admin = await browser.newContext({ viewport: { width, height: 900 } });
+    t.after(() => member.close()); t.after(() => owner.close()); t.after(() => admin.close());
+    for (const context of [member, owner, admin]) await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+    const login = async (context, username) => assert.equal((await context.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username, password } })).status(), 200);
+    await login(member, memberId); await login(owner, ownerId); await login(admin, 'synthetic-owner');
+    const page = await member.newPage(), ownerPage = await owner.newPage(), adminPage = await admin.newPage(), errors = [], dialogs = [];
+    for (const target of [page, ownerPage, adminPage]) { target.on('pageerror', error => errors.push(error.message)); target.on('dialog', async dialog => { if (target === page) dialogs.push(dialog.message()); await dialog.accept(); }); }
+    const open = async (target, spaceId, app = '') => { await target.goto(`${origin}/admin/?view=spaces&space=${spaceId}${app ? `&app=${app}` : ''}`); await ready(target); };
+    await open(page, personal.id);
+    assert.equal(await page.locator('.space-leave').count(), 0, 'automatic personal space has no leave concept');
+    for (const type of ['family', 'company']) {
+      const space = auth.createSelfServiceSpace({ type, ownerId });
+      auth.setMembership({ spaceId: space.id, userId: memberId, role: 'member' });
+      for (const appId of ['reminder', 'finance']) auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
+      auth.grantResource({ userId: memberId, appId: 'reminder', spaceId: space.id, actions: ['read'], resources: ['synthetic-leave-record'] });
+      const rule = spaceId => ({ appId: 'reminder', spaceId, actions: ['read'], resources: ['synthetic-leave-record'] });
+      const multi = auth.createGrant({ userId: memberId, clientId: 'synthetic-client', rules: [rule(space.id), rule(retained.id)] });
+      const single = auth.createGrant({ userId: memberId, clientId: 'synthetic-client', rules: [rule(space.id)] });
+      const token = auth.issueToken({ grantId: multi.id }).accessToken;
+      await open(ownerPage, space.id);
+      assert.equal(await ownerPage.locator('.space-leave').count(), 0, 'owner has deletion instead of leave');
+      assert.equal(await ownerPage.locator('.space-delete').count(), 1);
+      await open(adminPage, space.id);
+      await adminPage.locator('#selected-user').selectOption(memberId); await ready(adminPage);
+      await adminPage.locator('select[name=space]').selectOption(space.id); await ready(adminPage);
+      assert.equal(auth.membershipRole('z-owner', space.id), null);
+      assert.equal(await adminPage.locator('.space-leave').count(), 0, 'viewing another member never lends their leave authority');
+      await open(page, space.id);
+      const trigger = page.locator('.space-leave');
+      assert.equal(await trigger.count(), 1);
+      if (type === 'family') evidence.push({ width, language, ...await inspectConfirmation(page, trigger, `${suffix}-leave-space`) });
+      assert.equal(auth.membershipRole(memberId, space.id), 'member', 'all dismissals preserve membership');
+      await trigger.click();
+      const confirmation = page.locator('.space-leave-confirm');
+      assert.equal(await confirmation.locator('li').count(), 3, 'warning identifies membership, permissions and delegation cleanup');
+      assert.match(await confirmation.innerText(), /resource permissions that require membership|依赖成员身份的资源权限/);
+      assert.match(await confirmation.innerText(), /no remaining rules will be revoked|无剩余规则的委托将被撤销/);
+      assert.equal(await confirmation.getByRole('button', { name: language === 'en' ? 'Cancel' : '取消', exact: true }).evaluate(node => node === document.activeElement), true, 'cancel receives initial focus');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth <= 1), true, 'leave dialog has no horizontal overflow');
+      if (width === 390) assert.ok((await confirmation.locator('button').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height))).every(height => height >= 44), 'phone controls retain touch targets');
+      if (artifacts) await page.screenshot({ path: join(artifacts, `${suffix}-${type}-leave-confirmation.png`), fullPage: true });
+      const response = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/spaces/${space.id}/leave`));
+      await confirmation.getByRole('button', { name: language === 'en' ? 'Leave space' : '退出空间', exact: true }).click();
+      const left = await response; assert.equal(left.status(), 200); assert.deepEqual(left.request().postDataJSON(), {}, 'session supplies the departing user without body parameters');
+      await ready(page);
+      assert.equal(auth.membershipRole(memberId, space.id), null);
+      assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE user_id=? AND space_id=? AND membership_required=1').get(memberId, space.id).n, 0);
+      assert.equal(auth.getGrant(multi.id).rules.some(rule => rule.spaceId === space.id), false, 'multi-space delegation is pruned');
+      assert.ok(auth.db.prepare('SELECT revoked_at FROM auth_grants WHERE id=?').get(single.id).revoked_at, 'empty delegation is revoked');
+      assert.throws(() => auth.authorize(token, { appId: 'reminder', spaceId: space.id, action: 'read', resourceId: 'synthetic-leave-record' }));
+      assert.equal(auth.authorize(token, { appId: 'reminder', spaceId: retained.id, action: 'read', resourceId: 'synthetic-leave-record' }).spaceId, retained.id, 'unrelated delegation rules remain usable');
+      assert.equal((await member.request.get(`${origin}/api/business/account/spaces/${space.id}`)).status(), 404, 'departed space is immediately inaccessible');
+      const access = await (await member.request.get(`${origin}/api/business/web-access`)).json();
+      assert.equal(access.apps.includes('finance'), false, 'membership-only app entry is immediately lost');
+      assert.equal(access.apps.includes('reminder'), true, 'another space retains its entry');
+      assert.equal(await page.locator(`select[name=space] option[value="${space.id}"]`).count(), 0);
+      assert.notEqual(new URL(page.url()).searchParams.get('space'), space.id);
+      assert.equal(new URL(page.url()).searchParams.has('app'), false);
+      assert.equal(await page.locator('select[name=space]').evaluate(node => node === document.activeElement), true, 'focus moves to the refreshed picker');
+      assert.match(dialogs.at(-1), /You left the space|你已退出空间/);
+      await open(page, space.id, 'reminder');
+      assert.notEqual(new URL(page.url()).searchParams.get('space'), space.id, 'stale app deep link falls back to a current space');
+      assert.equal(new URL(page.url()).searchParams.has('app'), false);
+      await page.reload(); await ready(page);
+      assert.equal(await page.locator(`select[name=space] option[value="${space.id}"]`).count(), 0, 'refresh cannot restore departed references');
+      // The owner can still remove a member through the established confirmed action.
+      auth.setMembership({ spaceId: space.id, userId: memberId, role: 'member' });
+      await open(ownerPage, space.id);
+      const row = ownerPage.locator(`.user-row[data-member="${memberId}"]`);
+      await row.getByRole('button', { name: language === 'en' ? 'Remove' : '移除', exact: true }).click();
+      const removed = ownerPage.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/members/${memberId}`));
+      await ownerPage.locator('.confirm-dialog').getByRole('button', { name: language === 'en' ? 'Confirm' : '确认', exact: true }).click();
+      assert.equal((await removed).status(), 200); await ready(ownerPage);
+      assert.equal(auth.membershipRole(memberId, space.id), null, 'owner removal stays unchanged');
+      evidence.push({ width, language, type, warningAndConfirmation: 'Pass', membershipPermissionAndDelegationCleanup: 'Pass', immediateAccessLoss: 'Pass', unrelatedScopePreserved: 'Pass', pickerRouteAndReload: 'Pass', ownerRemoval: 'Pass', administratorDisplayDoesNotBorrowAuthority: 'Pass' });
+    }
+    assert.deepEqual(errors, []);
+    await member.close(); await owner.close(); await admin.close();
+  }
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers; no business services', browser: browser.version(), evidence }));
+});

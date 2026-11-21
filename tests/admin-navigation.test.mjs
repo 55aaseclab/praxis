@@ -99,10 +99,10 @@ test('updated platform requirements open in both workbench reader languages', { 
     await page.locator('a.prd-entry[href="/prds/praxis/"]').click();
     await page.waitForURL(`${origin}/prds/praxis/`);
     assert.equal(await page.locator('html').getAttribute('lang'), lang);
-    assert.match(await page.locator('body').innerText(), /SLC01/);
-    assert.match(await page.locator('body').innerText(), /0\.1\.154/);
+    assert.match(await page.locator('body').innerText(), /LSP01/);
+    assert.match(await page.locator('body').innerText(), /0\.1\.155/);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-    t.diagnostic(JSON.stringify({ width, language: lang, reader: '/prds/praxis/', acceptance: 'SLC01–SLC03', status: 'Pass' }));
+    t.diagnostic(JSON.stringify({ width, language: lang, reader: '/prds/praxis/', acceptance: 'LSP01–LSP03', status: 'Pass' }));
     await context.close();
   }
 });

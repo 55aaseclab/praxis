@@ -1017,12 +1017,22 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
             if (request.method === 'POST') { fields(['type']); return { status: 201, value: store.createSelfServiceSpace({ type: input.type, ownerId: userId }) }; }
             fail('Space method is not supported.', 405, 'METHOD_NOT_ALLOWED');
           }
-          const match = /^\/api\/business\/account\/spaces\/([^/]+)(?:\/(apps|members|permissions)(?:\/([^/]+))?)?$/.exec(path);
+          const match = /^\/api\/business\/account\/spaces\/([^/]+)(?:\/(apps|members|permissions|leave)(?:\/([^/]+))?)?$/.exec(path);
           if (!match) fail('Space route was not found.', 404, 'NOT_FOUND');
           const spaceId = decodeURIComponent(match[1]), section = match[2], targetId = match[3] ? decodeURIComponent(match[3]) : null;
           const space = store.db.prepare('SELECT id,type,owner_id AS ownerId FROM auth_spaces WHERE id=?').get(spaceId);
           const role = store.membershipRole(userId, spaceId);
           if (!space || !role && space.ownerId !== userId && !platformAdmin) fail('Space not found.', 404, 'NOT_FOUND');
+          if (section === 'leave' && !targetId) {
+            if (request.method !== 'POST') fail('Space leave requires POST.', 405, 'METHOD_NOT_ALLOWED');
+            fields([]);
+            if (space.ownerId === userId) fail('The space owner cannot leave their own space.', 409, 'OWNER_REQUIRED');
+            if (space.type === 'personal') fail('Personal spaces have no leave operation.', 403, 'FORBIDDEN');
+            if (!role) fail('Space not found.', 404, 'NOT_FOUND');
+            store.setMembership({ spaceId, userId, role: null });
+            store.audit({ event: 'space.management', userId, spaceId, outcome: 'allowed' });
+            return { status: 200, value: { left: true, spaceId } };
+          }
           if (request.method === 'DELETE' && !section) {
             fields(['confirmSpaceId']);
             return { status: 200, value: store.deleteSpace({ spaceId, actorId: userId, confirmSpaceId: input.confirmSpaceId }) };

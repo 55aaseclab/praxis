@@ -1,8 +1,12 @@
 # Praxis roadmap
 
-Version: 0.1.154
+Version: 0.1.155
 
 [简体中文](ROADMAP.md)
+
+## Member self-service leave-space
+
+Deliver LSP01–LSP03: add native-session `POST /api/business/account/spaces/:id/leave` for a member's own non-personal membership, reusing atomic membership removal, membership-required permission cleanup and scoped delegation pruning/revocation. Preserve `OWNER_REQUIRED`, single-member personal spaces, owner/admin removal powers and all existing authorization boundaries. Add actor-scoped **Leave space** in the existing overview and centered confirmation modal with an explicit cleanup warning; refresh lists/pickers and clear departed space/app references. Verify isolated synthetic allow/refuse/rollback/access-loss cases and bilingual Chromium at 1440/390 px, including cancellation, focus, unchanged modal geometry, owner removal and return/reload. Open both PRDs, pass the full suite and one aligned PATCH, commit, then build/deploy only the affected web/core pair through the authorized managed test blue/green environment. Report technical running version and public readback; independent business acceptance belongs to its designated client.
 
 ## Spaces list follows the displayed account
 
@@ -334,6 +338,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.152 | 2026-11-21 | Manage delegations across Settings surfaces and refresh Spaces user-context permissions. |
 | v0.1.153 | 2026-11-21 | Use acting-session ownership for Spaces guidance in administrator display contexts |
 | v0.1.154 | 2026-11-21 | Make Spaces lists follow administrator display context and remove filler hints |
+| v0.1.155 | 2026-11-21 | Members can leave non-personal spaces through confirmed Settings and native-session API with atomic scoped access cleanup. |
 
 ### Public applications with private collections
 

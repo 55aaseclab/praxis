@@ -1,8 +1,20 @@
 # Praxis product requirements
 
-Version: 0.1.154 · [简体中文](PRD.md)
+Version: 0.1.155 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
+
+## Member self-service leave-space
+
+A signed-in member can leave a non-personal space from Settings → Spaces through **Leave space** and the shared centered confirmation modal, or through documented `POST /api/business/account/spaces/:id/leave`. The request identifies only the space; the acting native session identifies the departing member, with the existing Authorization-header rejection, same-origin and CSRF checks. The warning explains that leaving removes their membership, membership-required resource permissions and the space-scoped parts of their agent delegations. Confirmation reuses the existing atomic `setMembership` removal path, pruning the departing member's rules for this space and revoking a delegation when no rules remain. Access requiring that membership stops immediately; other spaces and independent permissions retain their established behavior.
+
+An owner cannot leave their created space: retain `OWNER_REQUIRED` and the existing delete-space workflow. Personal spaces have no leave concept and remain single-member, including the automatically provisioned personal space. Platform administrators retain their existing member-removal powers. A displayed-user context never authorizes leaving on that user's behalf. Refresh lists and pickers after success, discard the departed space/app selection and show a currently available space or the existing empty state; returning or refreshing must not restore stale references. No other authorization semantics change.
+
+| ID | Observable acceptance |
+| --- | --- |
+| LSP01 | Isolated synthetic API checks cover family/company member departure, atomic membership/permission/delegation cleanup and rollback, immediate access loss, unrelated-scope preservation and rejoining without revived permissions. Owner departure returns `OWNER_REQUIRED`; personal-space, nonmember, foreign-identity, Bearer, Origin and CSRF refusals preserve state. Existing owner/admin member-removal behavior remains unchanged. |
+| LSP02 | Real Chromium at 1440/390 px in both languages verifies actor-scoped Leave visibility, the centered warning, confirmation/cancellation/Escape/backdrop and keyboard focus, zero modal layout shift, immediate picker/list refresh and no stale departed space/app after return or reload. Owner and personal-space leave affordances are absent; existing owner removal remains usable. |
+| LSP03 | Both workbench PRD readers and the full version-gated suite pass with one aligned PATCH. Commit verified source before building/deploying only the affected web/core pair through the authorized managed test blue/green environment. Report technical results, actual running version and public readback separately from independent business acceptance. |
 
 ## Spaces list display context and concise guidance
 
@@ -430,6 +442,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.152 | 2026-11-21 | Manage delegations across Settings surfaces and refresh Spaces user-context permissions. |
 | v0.1.153 | 2026-11-21 | Use acting-session ownership for Spaces guidance in administrator display contexts |
 | v0.1.154 | 2026-11-21 | Make Spaces lists follow administrator display context and remove filler hints |
+| v0.1.155 | 2026-11-21 | Members can leave non-personal spaces through confirmed Settings and native-session API with atomic scoped access cleanup. |
 
 ### Letters and Profiles
 

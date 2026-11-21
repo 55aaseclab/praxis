@@ -8,6 +8,7 @@ const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入
 errorNames.CONFIRMATION_REQUIRED = t('Type the displayed confirmation exactly to delete.', '请准确输入所显示的确认内容以删除。');
 errorNames.SELF_DELETION_FORBIDDEN = t('You cannot delete your own account.', '不能删除自己的账号。');
 errorNames.PERSONAL_SPACE_REQUIRED = t('Automatically created personal spaces cannot be deleted.', '自动创建的个人空间不能删除。');
+errorNames.OWNER_REQUIRED = t('Space owners cannot leave. Delete the space instead.', '空间所有者不能退出，请改为删除空间。');
 const content = document.querySelector('#content'), notice = document.querySelector('#notice');
 let session = null, users = [], nextCursor = null, selectedId = null, selectedGrantId = null, view = Object.hasOwn(titles, new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : null, epoch = 0, ended = false, writing = false;
 const initialRoute = new URLSearchParams(location.search);
@@ -461,6 +462,23 @@ function appAccessSummary(app) {
 const spaceTypeName = type => ({ personal: t('Personal', '个人'), family: t('Family', '家庭'), company: t('Team', '团队') })[type] || t('Space', '空间');
 const spaceLabel = space => `${spaceTypeName(space.type)} · ${space.id.slice(0, 8)}`;
 const spacePath = suffix => `${accountBase}/spaces/${encodeURIComponent(selectedSpaceId)}${suffix}`;
+function confirmSpaceLeave(parent, space) {
+  const box = el('div', 'confirm-box space-leave-confirm'), actions = el('div', 'actions');
+  box.append(el('p', '', t('Leave {0}? Your membership and access that requires it will stop immediately. The following will be removed:', '退出 {0}？你的成员关系及依赖成员身份的访问将立即停止。以下内容将被移除：', spaceLabel(space))));
+  const removed = el('ul', 'space-delete-effects');
+  for (const text of [t('Your membership in this space', '你在此空间的成员关系'), t('Your resource permissions that require membership', '你依赖成员身份的资源权限'), t('The parts of your agent delegations scoped to this space; delegations with no remaining rules will be revoked', '你的智能体委托中属于此空间的部分；无剩余规则的委托将被撤销')]) removed.append(el('li', '', text));
+  const cancel = button(t('Cancel', '取消'), 'quiet-button', () => close());
+  actions.append(button(t('Leave space', '退出空间'), 'danger-button', () => {
+    const current = parent.isConnected; close(); if (!current) return;
+    void mutateSpace(`${accountBase}/spaces/${encodeURIComponent(space.id)}/leave`, { method: 'POST', body: {} }, t('You left the space.', '你已退出空间。'), () => {
+      selectedSpaceId = null; selectedAppId = null; history.replaceState(null, '', spaceHref()); content.replaceChildren();
+    }).then(() => {
+      if (!ended && view === 'spaces' && !notice.classList.contains('error')) (content.querySelector('select[name=space]') || document.querySelector('#heading')).focus();
+    });
+  }), cancel);
+  box.append(removed, actions);
+  const close = openConfirmation(box, t('Confirm leaving space', '确认退出空间'), cancel);
+}
 function confirmSpaceDeletion(parent, space) {
   const box = el('form', 'confirm-box space-delete-confirm');
   box.dataset.spaceId = space.id; box.setAttribute('aria-label', t('Confirm space deletion', '确认删除空间'));
@@ -523,7 +541,7 @@ async function renderSpaces(current, preserve) {
   let detail = selectedSpaceId ? await api(spacePath('') + (session.platformAdmin && contextUserId !== session.user.id ? `?contextUserId=${encodeURIComponent(contextUserId)}` : '')) : null;
   if (ended || current !== epoch || view !== 'spaces') return;
   // Keep the acting session's capabilities separate from the display projection.
-  const capabilities = { canDelete: Boolean(detail?.space.canDelete), canManage: detail?.space.ownerId === session.user.id, displayContext: session.platformAdmin && contextUserId !== session.user.id };
+  const capabilities = { canDelete: Boolean(detail?.space.canDelete), canLeave: detail?.space.type !== 'personal' && detail?.space.ownerId !== session.user.id && Boolean(detail?.space.role), canManage: detail?.space.ownerId === session.user.id, displayContext: session.platformAdmin && contextUserId !== session.user.id };
   content.replaceChildren();
   let displayedUserId = session.user.id;
   if (session.platformAdmin) {
@@ -551,6 +569,7 @@ async function renderSpaces(current, preserve) {
     picker.input.addEventListener('change', () => { selectedSpaceId = picker.input.value; selectedAppId = null; history.pushState(null, '', spaceHref()); void render(); });
     const selection = controlRow(picker.root);
     if (capabilities.canDelete) selection.append(button(t('Delete space', '删除空间'), 'danger-button space-delete', () => confirmSpaceDeletion(context, space)));
+    if (capabilities.canLeave) selection.append(button(t('Leave space', '退出空间'), 'danger-button space-leave', () => confirmSpaceLeave(context, space)));
     context.append(selection);
     if (space.deletionProtected) context.append(el('p', 'section-note', t('Automatically created personal spaces cannot be deleted.', '自动创建的个人空间不能删除。')));
     panel.append(context);

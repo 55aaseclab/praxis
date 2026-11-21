@@ -755,6 +755,88 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   assert.equal((await f.request('/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
 });
 
+test('members leave family and company spaces through the native API with atomic scoped cleanup and immediate access loss', async t => {
+  const f = await httpFixture(t, { apps: { reminder: { spaces: ['family-a', 'company-a'] } } });
+  const member = await f.login('bob'), prefix = '/api/business/account/spaces';
+  const headers = { Cookie: member.cookie, 'X-CSRF-Token': member.body.csrfToken };
+  f.store.setMembership({ spaceId: 'company-a', userId: 'bob', role: 'member' });
+  f.store.grantResource({ userId: 'bob', ...rule('company-a', ['read'], ['company-record']) });
+  // An explicit guest permission predating membership remains independent.
+  const independent = f.store.grantResource({ userId: 'bob', ...rule('personal-a', ['read'], ['independent-record']) });
+  const only = f.grant('bob', [rule('family-a', ['read'], ['family-record'])]);
+  const mixed = f.grant('bob', [rule('family-a', ['read'], ['family-record']), rule('company-a', ['read'], ['company-record'])]);
+  const onlyToken = f.store.issueToken({ grantId: only.id }).accessToken, mixedToken = f.store.issueToken({ grantId: mixed.id }).accessToken;
+  const preserved = f.store.db.prepare("SELECT * FROM auth_resources WHERE id=?").get(independent.id);
+  const ownerMemberships = f.store.db.prepare("SELECT * FROM auth_members WHERE user_id='alice' ORDER BY space_id").all();
+  let notified = 0;
+  const off = f.store.onChange(change => {
+    if (change.type !== 'membership') return;
+    notified++;
+    assert.equal(f.store.membershipRole('bob', change.spaceId), null);
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM auth_resources WHERE user_id=? AND space_id=? AND membership_required=1').get('bob', change.spaceId).n, 0);
+  });
+  const left = await f.json(`${prefix}/family-a/leave`, {}, { headers });
+  assert.equal(left.status, 200); assert.deepEqual(await left.json(), { left: true, spaceId: 'family-a' });
+  assert.equal(notified, 1);
+  assert.throws(() => f.store.authenticate(onlyToken), { status: 401 });
+  assert.throws(() => f.store.authorize(mixedToken, { appId: 'reminder', spaceId: 'family-a', action: 'read', resourceId: 'family-record' }), { status: 403 });
+  assert.equal(f.store.authorize(mixedToken, { appId: 'reminder', spaceId: 'company-a', action: 'read', resourceId: 'company-record' }).userId, 'bob');
+  assert.deepEqual(f.store.listGrants('bob').find(grant => grant.id === mixed.id).rules, [rule('company-a', ['read'], ['company-record'])]);
+  assert.equal((await f.request(`${prefix}/family-a`, { headers })).status, 404);
+  assert.ok(!(await (await f.request(prefix, { headers })).json()).spaces.some(space => space.id === 'family-a'));
+  assert.equal((await f.json(`${prefix}/company-a/leave`, {}, { headers })).status, 200);
+  assert.throws(() => f.store.authenticate(mixedToken), { status: 401 });
+  assert.equal(notified, 2); off();
+  assert.deepEqual(f.store.db.prepare('SELECT * FROM auth_resources WHERE id=?').get(independent.id), preserved);
+  assert.deepEqual(f.store.db.prepare("SELECT * FROM auth_members WHERE user_id='alice' ORDER BY space_id").all(), ownerMemberships);
+  assert.ok(f.store.db.prepare("SELECT 1 FROM auth_spaces WHERE id='family-a'").get(), 'leaving does not delete a space');
+  f.store.setMembership({ spaceId: 'family-a', userId: 'bob', role: 'member' });
+  assert.deepEqual(f.store.userPermissions('bob', 'family-a', 'reminder', 'read'), [], 'rejoining cannot revive removed permissions');
+  assert.throws(() => f.store.authenticate(onlyToken), { status: 401 });
+});
+
+test('leave API binds identity to the native session and retains owner, personal-space and management boundaries', async t => {
+  const f = await httpFixture(t), owner = await f.login('alice'), member = await f.login('bob'), outsider = await f.login('guest');
+  const prefix = '/api/business/account/spaces';
+  const call = (actor, id = 'family-a', input = {}, extra = {}, method = 'POST') => f.json(`${prefix}/${id}/leave`, input, { method, headers: { Cookie: actor.cookie, 'X-CSRF-Token': actor.body.csrfToken, ...extra } });
+  const before = f.store.db.prepare('SELECT * FROM auth_members ORDER BY space_id,user_id').all();
+  const owned = await call(owner); assert.equal(owned.status, 409); assert.equal((await owned.json()).error, 'OWNER_REQUIRED');
+  f.store.createUser({ id: 'automatic-owner', username: 'synthetic-automatic-owner', password });
+  const personal = f.store.ensurePersonalSpace('automatic-owner'), automaticOwner = await f.login('synthetic-automatic-owner');
+  const personalLeave = await call(automaticOwner, personal.id); assert.equal(personalLeave.status, 409); assert.equal((await personalLeave.json()).error, 'OWNER_REQUIRED');
+  assert.equal((await call(outsider)).status, 404);
+  assert.equal((await call(member, 'family-a', { userId: 'alice' })).status, 400);
+  assert.equal((await call(member, 'family-a', {}, { 'X-CSRF-Token': 'forged' })).status, 403);
+  assert.equal((await call(member, 'family-a', {}, { Origin: 'https://attacker.example' })).status, 403);
+  assert.equal((await call(member, 'family-a', {}, { Authorization: 'Bearer synthetic-token' })).status, 401);
+  assert.equal((await f.json(`${prefix}/family-a/leave`, {})).status, 401);
+  assert.equal((await f.request(`${prefix}/family-a/leave`, { headers: { Cookie: member.cookie } })).status, 405);
+  assert.equal((await call(member, 'family-a', {}, {}, 'DELETE')).status, 405);
+  f.store.setPlatformAdmin({ userId: 'guest', enabled: true });
+  assert.equal((await call(outsider)).status, 404, 'platform visibility cannot fabricate membership to leave');
+  assert.deepEqual(f.store.db.prepare('SELECT * FROM auth_members WHERE space_id<>? ORDER BY space_id,user_id').all(personal.id), before);
+  assert.equal(f.store.spaceDeletionProtected(personal.id), true);
+  const ownerHeaders = { Cookie: owner.cookie, 'X-CSRF-Token': owner.body.csrfToken };
+  assert.equal((await f.json(`${prefix}/family-a/members/bob`, undefined, { method: 'DELETE', headers: ownerHeaders })).status, 200, 'owner removal remains available');
+  f.store.setMembership({ spaceId: 'family-a', userId: 'bob', role: 'member' });
+  f.store.setMembership({ spaceId: 'family-a', userId: 'guest', role: 'admin' });
+  assert.equal((await f.json('/api/business/management/spaces/family-a/members/bob', undefined, { method: 'DELETE', headers: { Cookie: outsider.cookie, 'X-CSRF-Token': outsider.body.csrfToken } })).status, 200, 'existing space administrator removal remains available');
+});
+
+test('leave API rolls back membership, resource permissions, delegation pruning and notifications on cleanup failure', async t => {
+  const f = await httpFixture(t), member = await f.login('bob');
+  const grant = f.grant('bob', [rule('family-a', ['read'])]), token = f.store.issueToken({ grantId: grant.id }).accessToken;
+  const tables = ['auth_members', 'auth_resources', 'auth_grants', 'auth_audit', 'auth_meta'];
+  const snapshot = () => Object.fromEntries(tables.map(table => [table, f.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]));
+  const before = snapshot(); let notifications = 0;
+  f.store.onChange(() => notifications++);
+  f.store.db.exec("CREATE TEMP TRIGGER synthetic_leave_failure BEFORE UPDATE ON auth_grants BEGIN SELECT RAISE(ABORT,'synthetic leave rollback'); END");
+  const response = await f.json('/api/business/account/spaces/family-a/leave', {}, { headers: { Cookie: member.cookie, 'X-CSRF-Token': member.body.csrfToken } });
+  assert.equal(response.status, 500);
+  assert.deepEqual(snapshot(), before); assert.equal(notifications, 0);
+  assert.equal(f.store.authorize(token, { appId: 'reminder', spaceId: 'family-a', action: 'read' }).userId, 'bob');
+});
+
 test('public space lifecycle refuses personal membership, elevation, cross-space edits and non-native or forged requests', async t => {
   const apps = { reminder: { spaces: [] } };
   const f = await httpFixture(t, { apps, gateway: true });
