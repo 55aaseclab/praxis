@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.144 · [简体中文](PRD.md)
+Version: 0.1.145 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -63,11 +63,24 @@ All management views align controls to the main content’s left edge and action
 
 ## Spaces overview and per-app management
 
-Settings → Spaces uses one screen for one job. Keep the New space form in its existing position at the top. The space overview shows the current space, its members and every installed reviewed app (fourteen in the built-in installation), including a clear indication of whether each app supports agent business actions. Every app row offers **Manage**, opening a dedicated management page for that app in that space. The page shows its current enrollment and the existing enable/disable confirmation behavior, members' permissions for this app and a grant form scoped to this app with member, resources and supported actions. It contains no other app's controls; returning to the overview preserves the space selection. Preserve existing labels and space IDs.
+Settings → Spaces uses one screen for one job. Keep the New space form at the top of the space controls, below the administrator-only user-context row. The space overview shows the current space, its members and every installed reviewed app (fourteen in the built-in installation), including a clear indication of whether each app supports agent business actions. Every app row offers **Manage**, opening a dedicated management page for that app in that space. The page shows its current enrollment and the existing enable/disable confirmation behavior, members' permissions for this app and a grant form scoped to this app with member, resources and supported actions. It contains no other app's controls; returning to the overview preserves the space selection. Preserve existing labels and space IDs.
 
 For installed apps without agent business actions and with grant-based web entry, enrollment grants web entry to current space members and the page explains this. It grants no business resource permission, agent action or external delegation. Protected apps remain visible with Manage and an explanation of why enrollment is unavailable: Polaris retains its platform-administrator boundary; Letters and Profiles retain their document-owner boundary. Business-capable apps retain their existing explicit resource/action authorization and require a configured business adapter to enroll. The installed catalog is complete even when only a subset has business adapters; additive capability metadata must not remove or change existing API fields or payloads.
 
 Across every management view, adjacent sections have one separator, with nested editor sections and the first section adding no competing borders. Show success feedback in a separate browser `window.alert` dialog that closes only after user acknowledgment; add no page notice or text row and no auto-dismiss timer. The page layout and copy remain unchanged by this feedback. Display remaining error/loading notices as a fixed bottom-right overlay, above Home on phones, outside document flow: showing or clearing a notice must never insert a row or change content geometry. Error notices persist across view changes until addressed, retried or explicitly refreshed. If an operation succeeds but its follow-up read fails, keep the read error visible and do not show a success alert. During a same-view save and refresh, retain the existing controls until the refreshed result is ready; do not replace the content with an intermediate loading state that collapses its height or shifts scroll/focus. Verify actual geometry, scroll and focus stability during saves and when errors appear/clear, plus overview → app management → overview, enrollment, member add/remove and app-scoped grant/revoke with isolated synthetic fixtures in Chromium at 1440 px and 390 px, preserving accessible focus, native controls and zero horizontal overflow.
+
+## Administrator display context in Settings
+
+Settings → Spaces starts with a **Current user** row for platform administrators, reusing Agent delegations’ first-row native select pattern. Default to the signed-in administrator’s own account. Offer the selected space’s members and keep the administrator’s own account available. Selecting a member renders that member’s space read-model: enabled apps, resource permissions and available actions. This selection is display context only: it never changes the signed-in identity, session, grants or action authorization. Every action continues to use the administrator’s own existing authorization checks. Keep existing APIs and management flows compatible.
+
+Agent delegations’ **Current user** must name the actual user whose delegations are rendered, including after selection, pagination and refresh; its initial selection is the signed-in administrator. Ordinary users receive no switcher and see only their own context in both views. Ignore obsolete responses after a context change so the label and displayed data remain aligned.
+
+| ID | Observable acceptance |
+| --- | --- |
+| BUC01 | An administrator sees the first-row Spaces switcher, initially selects their own account, and can select a current space member to render that member’s enabled apps, resource permissions and available actions. |
+| BUC02 | Switching display context leaves native session identity and server-side authorization unchanged; synthetic permitted and denied action requests retain the administrator’s own grants. |
+| BUC03 | Agent delegations initially shows the signed-in administrator and keeps Current user aligned with the actual displayed delegations across user changes, refresh and pagination. |
+| BUC04 | Ordinary users have no user-context switcher and cannot select another user’s read-model. Synthetic API and Chromium checks at 1440/390 px cover these boundaries, existing flows, keyboard/native-select operation and zero horizontal overflow. |
 
 ## Self-service business spaces and app enrollment
 
@@ -321,6 +334,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.142 | 2026-11-21 | Keep native Settings selects stationary on focus, opening and dismissal |
 | v0.1.143 | 2026-11-21 | Separate Spaces overview and per-app management with complete app catalog, bounded web enrollment, single separators and browser success alerts |
 | v0.1.144 | 2026-11-21 | Add creator-confirmed atomic space deletion with personal-space protection and immediate scoped revocation |
+| v0.1.145 | 2026-11-21 | Add administrator display-context switching in Spaces and correct Agent delegations current-user semantics |
 
 ### Letters and Profiles
 

@@ -770,6 +770,71 @@ test('public space lifecycle refuses personal membership, elevation, cross-space
   assert.equal((await call(owner, path + '/members/alice', undefined, 'DELETE')).status, 409);
 });
 
+test('administrator space contexts reproduce member read models without changing the native actor', async t => {
+  const f = await httpFixture(t, { apps: { reminder: { spaces: ['family-a'] } } });
+  f.store.setPlatformAdmin({ userId: 'alice', enabled: true });
+  for (const { id } of f.store.db.prepare("SELECT id FROM auth_resources WHERE user_id='bob'").all()) f.store.revokeResource(id);
+  f.store.grantResource({ userId: 'bob', ...rule('family-a', ['read'], ['synthetic-member-record']) });
+  f.store.grantResource({ userId: 'alice', ...rule('family-a', ['update'], ['synthetic-owner-record']) });
+  const admin = await f.login('alice'), member = await f.login('bob');
+  const prefix = '/api/business/account/spaces/family-a';
+  const read = actor => f.request(prefix, { headers: { Cookie: actor.cookie } });
+  const response = await read(admin);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  const details = await response.json(), memberDetails = await (await read(member)).json();
+  assert.ok(!Object.hasOwn(memberDetails, 'userContexts'), 'ordinary members receive no other user contexts');
+  assert.deepEqual(details.userContexts.map(context => context.user.id).sort(), ['alice', 'bob']);
+  assert.equal(new Set(details.userContexts.map(context => context.user.id)).size, details.userContexts.length, 'member administrator appears once');
+  const own = details.userContexts.find(context => context.user.id === 'alice');
+  assert.deepEqual(own.user, { id: 'alice', username: 'alice' });
+  assert.deepEqual(Object.fromEntries(Object.entries(details).filter(([key]) => key !== 'userContexts')), Object.fromEntries(Object.entries(own).filter(([key]) => key !== 'user')), 'default own projection matches the existing top-level read model');
+  const shownMember = details.userContexts.find(context => context.user.id === 'bob');
+  assert.deepEqual(Object.fromEntries(Object.entries(shownMember).filter(([key]) => key !== 'user')), memberDetails, 'member display has exactly their actual read model');
+  assert.ok(shownMember.permissions.every(permission => permission.userId === 'bob'));
+  assert.ok(!shownMember.permissions.some(permission => permission.resources.includes('synthetic-owner-record')));
+  assert.equal(shownMember.space.role, 'member'); assert.equal(shownMember.space.canDelete, false);
+  assert.equal(shownMember.apps.find(app => app.id === 'reminder').enabled, true);
+  assert.equal(shownMember.apps.find(app => app.id === 'finance').enabled, false);
+  for (const secret of [password, 'password_hash', 'sessionToken', 'access_token', admin.body.csrfToken]) assert.ok(!JSON.stringify(details).includes(secret));
+  const session = f.store.requireNativeSession(admin.cookie.split('=')[1]);
+  assert.equal(session.user.id, 'alice'); assert.equal(session.csrfToken, admin.body.csrfToken);
+  assert.ok(f.store.userPermissions('alice', 'family-a', 'reminder', 'delete').includes('*'), 'viewing a member does not reduce the administrator own business grants');
+  assert.deepEqual(f.store.userPermissions('bob', 'family-a', 'reminder', 'read'), ['synthetic-member-record']);
+  assert.deepEqual(f.store.userPermissions('bob', 'family-a', 'reminder', 'delete'), [], 'member retains only their own actions');
+});
+
+test('a nonmember administrator can inspect owner context but cannot act with the displayed owner grants', async t => {
+  const f = await httpFixture(t, { apps: { reminder: { spaces: ['family-a'] } } });
+  f.store.setPlatformAdmin({ userId: 'guest', enabled: true });
+  const admin = await f.login('guest'), owner = await f.login('alice'), member = await f.login('bob');
+  const prefix = '/api/business/account/spaces/family-a';
+  const read = actor => f.request(prefix, { headers: { Cookie: actor.cookie } });
+  const details = await (await read(admin)).json();
+  assert.deepEqual(details.userContexts.map(context => context.user.id).sort(), ['alice', 'bob', 'guest']);
+  const own = details.userContexts.find(context => context.user.id === 'guest');
+  assert.equal(own.space.role, null); assert.equal(own.space.canDelete, true);
+  assert.deepEqual(own.permissions, [], 'administrator status supplies no member resource permissions');
+  const shownOwner = details.userContexts.find(context => context.user.id === 'alice');
+  assert.equal(shownOwner.space.role, 'owner'); assert.equal(shownOwner.space.canDelete, true);
+  assert.deepEqual(Object.fromEntries(Object.entries(shownOwner).filter(([key]) => key !== 'user')), await (await read(owner)).json());
+  const before = Object.fromEntries(['auth_members', 'auth_resources', 'auth_space_apps'].map(table => [table, f.store.db.prepare(`SELECT * FROM ${table}`).all()]));
+  const write = (actor, suffix, input, method = 'POST') => f.json(prefix + suffix, input, { method, headers: { Cookie: actor.cookie, 'X-CSRF-Token': actor.body.csrfToken } });
+  assert.equal((await write(admin, '/apps/reminder', { enabled: false }, 'PUT')).status, 403);
+  assert.equal((await write(admin, '/members', { username: 'guest', role: 'member' })).status, 403);
+  assert.equal((await write(admin, '/permissions', { userId: 'guest', appId: 'reminder', resources: ['synthetic-forbidden-record'], actions: ['read'] })).status, 403);
+  assert.equal((await write(admin, '/members/bob', undefined, 'DELETE')).status, 403);
+  assert.deepEqual(f.store.userPermissions('guest', 'family-a', 'reminder', 'read'), [], 'owner preview confers no business authority');
+  for (const actor of [admin, member]) assert.equal((await f.request(prefix + '?userId=alice', { headers: { Cookie: actor.cookie } })).status, 400, 'display identity cannot be supplied as a new query authority');
+  assert.equal((await write(owner, '/apps/reminder', { enabled: false, userId: 'guest' }, 'PUT')).status, 400, 'write payloads retain their existing allowlist');
+  assert.deepEqual(Object.fromEntries(['auth_members', 'auth_resources', 'auth_space_apps'].map(table => [table, f.store.db.prepare(`SELECT * FROM ${table}`).all()])), before, 'all rejected requests leave policy unchanged');
+  const session = f.store.requireNativeSession(admin.cookie.split('=')[1]);
+  assert.equal(session.user.id, 'guest'); assert.equal(session.csrfToken, admin.body.csrfToken);
+  assert.ok(!Object.hasOwn(await (await read(member)).json(), 'userContexts'));
+  f.store.setMembership({ spaceId: 'family-a', userId: 'bob', role: null });
+  assert.ok(!(await (await read(admin)).json()).userContexts.some(context => context.user.id === 'bob'), 'removed members disappear on refresh');
+});
+
 test('space catalog includes every installed app and retains business adapter IDs and operation ceilings', async t => {
   const f = await httpFixture(t, { apps: { reminder: { spaces: [] }, slides: { spaces: [] } }, gateway: true });
   const owner = await f.login('alice'), prefix = '/api/business/account/spaces';

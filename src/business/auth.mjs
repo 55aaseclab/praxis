@@ -937,9 +937,19 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
           if (writing && space.ownerId !== userId) fail('Only the space owner can change this setting.', 403, 'FORBIDDEN');
           if (request.method === 'GET' && !section) {
             const members = store.db.prepare('SELECT m.user_id AS userId,u.username,m.role FROM auth_members m JOIN auth_users u ON u.id=m.user_id WHERE m.space_id=? ORDER BY m.user_id').all(spaceId);
-            const permissions = store.db.prepare('SELECT id,user_id AS userId,app_id AS appId,resources,actions,expires_at AS expiresAt FROM auth_resources WHERE space_id=?').all(spaceId)
-              .filter(row => space.ownerId === userId || row.userId === userId).map(row => ({ ...row, resources: JSON.parse(row.resources), actions: JSON.parse(row.actions) }));
-            return { status: 200, value: { space: { ...space, role, canDelete: store.canDeleteSpace(userId, space) }, apps: catalog.map(app => ({ ...app, enabled: store.appSpaceEnabled(app.id, spaceId, apps) })), members, permissions } };
+            const permissions = store.db.prepare('SELECT id,user_id AS userId,app_id AS appId,resources,actions,expires_at AS expiresAt FROM auth_resources WHERE space_id=?').all(spaceId);
+            const scopedApps = catalog.map(app => ({ ...app, enabled: store.appSpaceEnabled(app.id, spaceId, apps) }));
+            // Display projections never supply an actor to the write paths above/below.
+            const projection = subjectId => ({
+              space: { ...space, role: store.membershipRole(subjectId, spaceId), canDelete: store.canDeleteSpace(subjectId, space) },
+              apps: scopedApps, members,
+              permissions: permissions.filter(row => space.ownerId === subjectId || row.userId === subjectId)
+                .map(row => ({ ...row, resources: JSON.parse(row.resources), actions: JSON.parse(row.actions) })),
+            });
+            const value = projection(userId);
+            if (platformAdmin) value.userContexts = [session.user, ...members.filter(member => member.userId !== userId).map(member => ({ id: member.userId, username: member.username }))]
+              .map(user => ({ user: { id: user.id, username: user.username }, ...projection(user.id) }));
+            return { status: 200, value };
           }
           let value;
           if (section === 'apps' && targetId && request.method === 'PUT') {

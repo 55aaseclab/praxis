@@ -8,9 +8,9 @@ const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入
 errorNames.CONFIRMATION_REQUIRED = t('Type the full space ID exactly to confirm deletion.', '请输入完整且一致的空间 ID 以确认删除。');
 errorNames.PERSONAL_SPACE_REQUIRED = t('Personal spaces cannot be deleted.', '个人空间不能删除。');
 const content = document.querySelector('#content'), notice = document.querySelector('#notice');
-let session = null, users = [], nextCursor = null, selectedId = null, view = Object.hasOwn(titles, new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : null, epoch = 0, ended = false, writing = false, createOpen = false;
+let session = null, users = [], nextCursor = null, selectedId = null, selectedGrantId = null, view = Object.hasOwn(titles, new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : null, epoch = 0, ended = false, writing = false, createOpen = false;
 const initialRoute = new URLSearchParams(location.search);
-let selectedSpaceId = initialRoute.get('space'), selectedAppId = initialRoute.get('app');
+let selectedSpaceId = initialRoute.get('space'), selectedAppId = initialRoute.get('app'), selectedSpaceUserId = null;
 const spacesNavigation = document.createElement('button');
 spacesNavigation.type = 'button'; spacesNavigation.className = 'nav-entry'; spacesNavigation.dataset.view = 'spaces'; spacesNavigation.dataset.sharedView = ''; spacesNavigation.hidden = true;
 spacesNavigation.append(document.querySelector('[data-view="access"] .nav-icon').cloneNode(true), document.createTextNode(t('Spaces', '空间')));
@@ -18,7 +18,9 @@ document.querySelector('#navigation').append(spacesNavigation);
 let expiryTimer, accessTimer, overview, overviewLoading, mcpView, mcpLoading, dataView, dataLoading, dataController, booting = false, bootRevision = 0, usersLoaded = false;
 const controllers = new Set();
 let writeFocus;
-const selected = () => users.find(user => user.id === selectedId);
+const pickerUsers = () => session ? [users.find(user => user.id === session.user.id) || { ...session.user, enabled: true }, ...users.filter(user => user.id !== session.user.id)] : [];
+const selectionId = () => view === 'grants' ? selectedGrantId : selectedId;
+const selected = () => pickerUsers().find(user => user.id === selectionId());
 function loadOverviewAsset(path, kind) {
   return new Promise(resolve => {
     const node = document.createElement(kind === 'style' ? 'link' : 'script');
@@ -67,7 +69,7 @@ function setSession(value) {
     clearAppFacts();
     if (session.user.id !== value.user.id) view = null;
     epoch++; for (const controller of controllers) controller.abort(); overview?.clear();
-    users = []; nextCursor = null; selectedId = null; selectedSpaceId = null; selectedAppId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
+    users = []; nextCursor = null; selectedId = null; selectedGrantId = null; selectedSpaceId = null; selectedAppId = null; selectedSpaceUserId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
   }
   session = value; clearTimeout(expiryTimer); clearTimeout(accessTimer);
   if (!view || !value.platformAdmin && !['general', 'spaces', 'access', 'grants'].includes(view)) view = 'general';
@@ -110,7 +112,7 @@ function time(value) { if (value === null || value === undefined) return t("No e
 function terminal(status, text) {
   if (ended) return;
   clearAppFacts();
-  ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; nextCursor = null; selectedId = null;
+  ended = true; epoch++; clearTimeout(expiryTimer); clearTimeout(accessTimer); session = null; users = []; nextCursor = null; selectedId = null; selectedGrantId = null;
   for (const controller of controllers) controller.abort();
   overview?.clear(); dataController?.destroy(); dataController = null; document.querySelector('#overview-controls').hidden = true;
   document.querySelector('#general-view').hidden = true;
@@ -141,12 +143,12 @@ function report(error) { if (!ended && !error.stale && error.name !== 'AbortErro
 function setBusy(value) {
   if (value) {
     const active = document.activeElement;
-    writeFocus = content.contains(active) ? { node: active, tag: active.tagName, name: active.name, text: active.textContent, scope: [view, selectedSpaceId, selectedAppId, selectedId].join('/') } : null;
+    writeFocus = content.contains(active) ? { node: active, tag: active.tagName, name: active.name, text: active.textContent, scope: [view, selectedSpaceId, selectedAppId, selectionId()].join('/') } : null;
   }
   writing = value; for (const node of content.querySelectorAll('button, input, select')) node.disabled = value; document.querySelector('#create-user').disabled = value; document.querySelector('#refresh').disabled = value;
   if (!value) for (const box of content.querySelectorAll('.space-delete-confirm')) box.querySelector('button[type=submit]').disabled = box.querySelector('input').value !== box.dataset.spaceId;
   if (!value && writeFocus) {
-    if (writeFocus.scope === [view, selectedSpaceId, selectedAppId, selectedId].join('/')) {
+    if (writeFocus.scope === [view, selectedSpaceId, selectedAppId, selectionId()].join('/')) {
       const target = writeFocus.node.isConnected ? writeFocus.node : [...content.querySelectorAll('button,input,select,a')].find(node => node.tagName === writeFocus.tag && (writeFocus.name ? node.name === writeFocus.name : node.textContent === writeFocus.text));
       target?.focus({ preventScroll: true });
     }
@@ -181,12 +183,12 @@ function confirmAction(parent, text, action) {
 }
 function userPath(user, suffix = '') { return `/users/${encodeURIComponent(user.id)}${suffix}`; }
 function updateUser(user) { const index = users.findIndex(value => value.id === user.id); if (index >= 0) users[index] = user; else users.push(user); }
-function picker() {
+function picker(options = pickerUsers(), value = selectionId(), change = id => { if (view === 'grants') selectedGrantId = id; else selectedId = id; void render(); }) {
   const root = el('label', 'user-picker'), select = el('select'); select.id = 'selected-user';
   root.append(el('span', '', t("Current user", "当前用户")), select);
-  for (const user of users) { const option = el('option', '', `${user.username}${user.enabled ? '' : t(" (disabled)", "（已停用）")}`); option.value = user.id; select.append(option); }
-  select.value = selectedId;
-  select.addEventListener('change', () => { selectedId = select.value; void render(); }); return root;
+  for (const user of options) { const option = el('option', '', `${user.username}${user.enabled === false ? t(" (disabled)", "（已停用）") : ''}`); option.value = user.id; select.append(option); }
+  select.value = value;
+  select.addEventListener('change', () => { if (!writing && !booting && !ended) change(select.value); else select.value = value; }); return root;
 }
 function createForm() {
   const panel = el('section', 'editor form-panel'); panel.setAttribute('aria-label', t("New user", "新增用户"));
@@ -309,7 +311,7 @@ function renderGrants(user, value, own = false) {
     list.append(row);
   }
   content.append(value.grants.length ? list : el('p', 'empty', t("No agent delegations.", "暂无智能体委托。")));
-  if (value.nextCursor) content.append(button(t("Load more delegations", "加载更多委托"), 'quiet-button pagination', async () => { const current = epoch; try { const more = await api(own ? `${accountBase}/grants?limit=50&after=${encodeURIComponent(value.nextCursor)}` : userPath(user, `/grants?limit=50&after=${encodeURIComponent(value.nextCursor)}`)); if (ended || current !== epoch || !own && selectedId !== user.id || view !== 'grants') return; const combined = { grants: [...value.grants, ...more.grants], nextCursor: more.nextCursor }; content.replaceChildren(); if (!own) content.append(picker()); renderGrants(user, combined, own); } catch (error) { report(error); } }));
+  if (value.nextCursor) content.append(button(t("Load more delegations", "加载更多委托"), 'quiet-button pagination', async () => { const current = epoch; try { const more = await api(own ? `${accountBase}/grants?limit=50&after=${encodeURIComponent(value.nextCursor)}` : userPath(user, `/grants?limit=50&after=${encodeURIComponent(value.nextCursor)}`)); if (ended || current !== epoch || !own && selectionId() !== user.id || view !== 'grants') return; const combined = { grants: [...value.grants, ...more.grants], nextCursor: more.nextCursor }; content.replaceChildren(); if (!own) content.append(picker()); renderGrants(user, combined, own); } catch (error) { report(error); } }));
 }
 const spaceTypeName = type => ({ personal: t('Personal', '个人'), family: t('Family', '家庭'), company: t('Team', '团队') })[type] || t('Space', '空间');
 const spaceLabel = space => `${spaceTypeName(space.type)} · ${space.id.slice(0, 8)}`;
@@ -365,10 +367,20 @@ async function renderSpaces(current, preserve) {
     selectedSpaceId = spaces[0]?.id || null; selectedAppId = null;
     history.replaceState(null, '', spaceHref());
   }
-  const detail = selectedSpaceId ? await api(spacePath('')) : null;
+  let detail = selectedSpaceId ? await api(spacePath('')) : null;
   if (ended || current !== epoch || view !== 'spaces') return;
   content.replaceChildren();
-  if (detail && selectedAppId) { renderSpaceApp(detail); return; }
+  let displayedUserId = session.user.id;
+  if (session.platformAdmin) {
+    const contexts = detail?.userContexts || [];
+    if (!contexts.some(context => context.user.id === selectedSpaceUserId)) selectedSpaceUserId = session.user.id;
+    const context = contexts.find(context => context.user.id === selectedSpaceUserId);
+    displayedUserId = context?.user.id || session.user.id;
+    if (context) detail = context;
+    content.append(picker(contexts.length ? contexts.map(context => context.user) : [session.user], displayedUserId, id => { selectedSpaceUserId = id; void render(); }));
+    if (displayedUserId !== session.user.id) content.append(el('p', 'section-note', t('Viewing {0}. Actions still use your signed-in account’s permissions.', '正在查看 {0} 的视图。操作仍使用你登录账号的权限。', context.user.username)));
+  }
+  if (detail && selectedAppId) { renderSpaceApp(detail, displayedUserId); return; }
   const create = el('form', 'editor form-panel'), type = selectField(t('Space type', '空间类型'), 'type', ['personal', 'family', 'company'].map(value => ({ value, label: spaceTypeName(value) })));
   const submit = el('button', 'primary', t('Create space', '创建空间')); submit.type = 'submit';
   create.append(el('h2', '', t('New space', '新空间')), el('p', 'section-note', t('Enable apps and grant resource permissions after creating a space. Personal spaces have no other members.', '创建后再启用应用并授予资源权限。个人空间不能添加其他成员。')), controlRow(type.root, submit));
@@ -378,7 +390,7 @@ async function renderSpaces(current, preserve) {
   });
   content.append(create);
   if (detail) {
-    const { space, apps, members } = detail, owner = space.ownerId === session.user.id;
+    const { space, apps, members } = detail, owner = space.ownerId === displayedUserId;
     const panel = el('section', 'space-overview'), context = el('div', 'space-section');
     const picker = selectField(t('Current space', '当前空间'), 'space', spaces.map(space => ({ value: space.id, label: spaceLabel(space) })));
     picker.input.value = selectedSpaceId;
@@ -417,8 +429,8 @@ async function renderSpaces(current, preserve) {
   }
   if (!detail) content.append(el('p', 'empty', t('No spaces yet.', '暂无空间。')));
 }
-function renderSpaceApp({ space, apps, members, permissions }) {
-  const app = apps.find(app => app.id === selectedAppId), owner = space.ownerId === session.user.id;
+function renderSpaceApp({ space, apps, members, permissions }, displayedUserId = session.user.id) {
+  const app = apps.find(app => app.id === selectedAppId), owner = space.ownerId === displayedUserId;
   const context = el('div', 'space-app-context'); context.append(spaceLink(t('Back to Spaces', '返回空间'), null, 'link-button space-back'), el('p', 'meta', spaceLabel(space))); content.append(context);
   if (!app) { content.append(el('p', 'empty', t('This app is no longer installed. Return to Spaces to choose another app.', '此应用已不再安装，请返回空间选择其他应用。'))); return; }
   document.querySelector('#heading').textContent = app.name || app.id;
@@ -518,7 +530,7 @@ async function renderView(preserve) {
     return;
   }
   if (view === 'users') { renderUsers(); content.setAttribute('aria-busy', 'false'); return; }
-  if (!selected()) selectedId = users[0]?.id || null;
+  if (!selected()) { if (view === 'grants') selectedGrantId = session.user.id; else selectedId = users[0]?.id || session.user.id; }
   const user = selected();
   if (!user) { content.append(el('p', 'empty', t("Create a user first.", "请先新增用户。"))); content.setAttribute('aria-busy', 'false'); return; }
   if (!preserve) content.append(picker(), el('p', 'loading', t("Loading…", "正在读取…")));
@@ -542,7 +554,7 @@ async function boot() {
     document.querySelector('#account-name').textContent = session.user.username;
     if (session.platformAdmin && ['users', 'access', 'grants'].includes(view)) {
       const result = await api('/users?limit=50'); if (ended || current !== epoch) return;
-      users = result.users; nextCursor = result.nextCursor; usersLoaded = true; if (!selected()) selectedId = null;
+      users = result.users; nextCursor = result.nextCursor; usersLoaded = true; if (!selected()) { if (view === 'grants') selectedGrantId = null; else selectedId = null; }
     }
     if (!notice.classList.contains('error')) message(); await render({ preserve: content.childElementCount > 0 });
   } catch (error) { if ([401, 403].includes(error.status)) terminal(error.status); else report(error); if (!ended) content.setAttribute('aria-busy', 'false'); }

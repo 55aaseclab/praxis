@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.144
+Version: 0.1.145
 
 [简体中文](ROADMAP.md)
 
@@ -29,7 +29,11 @@ Define a shared field/action row and uniform note/section rhythm before implemen
 
 ## Spaces overview and per-app management
 
-Define BSP05–BSP08 before implementation. Separate the space overview (members and the complete installed app catalog, with agent-business capability marks) from Manage pages containing only one app's enrollment and member permissions/grant form. Keep the New space form at its existing top position. Keep existing IDs, labels, confirmations and authorization; add catalog capability metadata and member web entry for non-business apps without granting agent actions or bypassing app-owned checks. Use single separators throughout management. Present success in a separate browser `window.alert` dialog, closed by user acknowledgment, without a page notice/text row, copy/layout change or auto-dismiss timer. Keep errors until addressed, retried or explicitly refreshed, including follow-up read failures after successful operations, which must not produce a success alert. Verify isolated synthetic API plus real Chromium 1440/390 px flows for Manage/return, enable/disable, member add/remove, grant/revoke, acknowledged browser success alerts without inserted page rows, persistent read/write errors and no horizontal overflow; read both PRDs through the workbench. Run the platform suite and aligned one-PATCH version gate, commit checked source, then build and deploy the affected web/core pair through the authorized test blue/green environment. Report actual runtime version and public readback separately from independent business acceptance.
+Define BSP05–BSP08 before implementation. Separate the space overview (members and the complete installed app catalog, with agent-business capability marks) from Manage pages containing only one app's enrollment and member permissions/grant form. Keep the New space form at the top of the space controls, below the administrator-only user-context row. Keep existing IDs, labels, confirmations and authorization; add catalog capability metadata and member web entry for non-business apps without granting agent actions or bypassing app-owned checks. Use single separators throughout management. Present success in a separate browser `window.alert` dialog, closed by user acknowledgment, without a page notice/text row, copy/layout change or auto-dismiss timer. Keep errors until addressed, retried or explicitly refreshed, including follow-up read failures after successful operations, which must not produce a success alert. Verify isolated synthetic API plus real Chromium 1440/390 px flows for Manage/return, enable/disable, member add/remove, grant/revoke, acknowledged browser success alerts without inserted page rows, persistent read/write errors and no horizontal overflow; read both PRDs through the workbench. Run the platform suite and aligned one-PATCH version gate, commit checked source, then build and deploy the affected web/core pair through the authorized test blue/green environment. Report actual runtime version and public readback separately from independent business acceptance.
+
+## Administrator display context in Settings
+
+Define BUC01–BUC04 before implementation. Reuse the Agent delegations first-row Current user pattern in Spaces for platform administrators, defaulting to their own signed-in account and offering the selected space’s members. Render the selected member’s enabled apps, resource permissions and available actions as a display read-model without changing session identity, grants, action authorization or existing API/management flows. Correct Agent delegations to identify its actual displayed user, default to the administrator and keep label/data aligned through refresh, pagination and context changes. Ordinary users retain only their own context with no switcher. Verify isolated synthetic API allowed/denied cases and real Chromium 1440/390 px flows, native selects and no horizontal overflow. Run the full platform suite and one aligned PATCH version gate, open both PRDs through the workbench reader, commit verified source, then build and deploy the affected web/core pair through the authorized test blue/green environment. Report technical evidence, actual runtime version and public readback separately from independent business acceptance.
 
 ## Self-service business spaces
 
@@ -290,6 +294,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.142 | 2026-11-21 | Keep native Settings selects stationary on focus, opening and dismissal |
 | v0.1.143 | 2026-11-21 | Separate Spaces overview and per-app management with complete app catalog, bounded web enrollment, single separators and browser success alerts |
 | v0.1.144 | 2026-11-21 | Add creator-confirmed atomic space deletion with personal-space protection and immediate scoped revocation |
+| v0.1.145 | 2026-11-21 | Add administrator display-context switching in Spaces and correct Agent delegations current-user semantics |
 
 ### Public applications with private collections
 
