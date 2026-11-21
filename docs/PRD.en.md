@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.148 · [简体中文](PRD.md)
+Version: 0.1.149 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -51,7 +51,7 @@ The public homepage describes cards as attention management: choose what to focu
 
 An anonymous visitor can follow **Create an account** from the public homepage or sign-in page to `GET /auth/register`. The English/Simplified Chinese form and `POST /auth/register` (JSON or form encoding) accept only `username`, `password` and an optional validated local `return_to`. Usernames contain 3–64 ASCII letters, numbers, dots, underscores or hyphens, starting with a letter or number; passwords contain 12–1024 characters. Reject invalid/unknown fields, duplicate usernames and cross-origin requests without creating an identity. Return only the new identity and sign-in path for JSON, or redirect the form to sign-in; never return a password, session or OAuth credential from registration.
 
-Persist a basic abuse limit of five registration attempts per transport peer and 100 globally per hour, including invalid attempts. Do not trust caller-supplied forwarding headers; proxied visitors share the peer limit. Return HTTP 429 with `Retry-After` on exhaustion. Registration atomically creates exactly one personal space owned by the new user, marked at creation as the automatically provisioned personal space and protected from deletion by every caller. Provisioning is idempotent: an operator-provisioned user keeps their existing personal space without duplication. Registration creates no app-entry policy, resource permission, client delegation or administrator role; the personal space starts with no enrolled apps. After a separate sign-in, preserve the validated OAuth return path. An authorized account may consent to the existing authorization-code + S256 PKCE flow for the protected MCP resource; an account with no matching permissions sees no available actions. Verification uses isolated synthetic identities, including restart persistence, rejected elevation/origin/redirect attempts, rate-limit expiry, bounded consent and MCP token use. Live business-client acceptance remains separate.
+Persist a basic abuse limit of five registration attempts per transport peer and 100 globally per hour, including invalid attempts. Do not trust caller-supplied forwarding headers; proxied visitors share the peer limit. Return HTTP 429 with `Retry-After` on exhaustion. Registration atomically creates exactly one personal space owned by the new user, marked at creation as the automatically provisioned personal space and protected from standalone space deletion by every caller; administrator account deletion removes it with its owner under the account-deletion rules below. Provisioning is idempotent: an operator-provisioned user keeps their existing personal space without duplication. Registration creates no app-entry policy, resource permission, client delegation or administrator role; the personal space starts with no enrolled apps. After a separate sign-in, preserve the validated OAuth return path. An authorized account may consent to the existing authorization-code + S256 PKCE flow for the protected MCP resource; an account with no matching permissions sees no available actions. Verification uses isolated synthetic identities, including restart persistence, rejected elevation/origin/redirect attempts, rate-limit expiry, bounded consent and MCP token use. Live business-client acceptance remains separate.
 
 ### OAuth consent selection and callback redirects
 
@@ -62,9 +62,26 @@ Keep external-agent permission checkboxes unchecked until the user selects them.
 | ID | Observable acceptance |
 | --- | --- |
 | BSA01 | Synthetic public registration creates exactly one owned, marked personal space atomically; retries and operator provisioning do not duplicate it, and restart preserves the origin marker. |
-| BSA02 | User and platform administrator cannot delete the automatic personal space; creators/admins can delete every other space, including user-created personal spaces, with exact-ID confirmation and the existing atomic cascade. |
+| BSA02 | User and platform administrator cannot delete the automatic personal space through standalone space deletion; creators/admins can delete every other space, including user-created personal spaces, with exact-ID confirmation and the existing atomic cascade. |
 | BSA03 | Consent selects one accessible space, defaults to the user’s personal space and offers inline creation for a user without spaces; only the selected space’s currently allowed app/actions can be granted. |
 | BSA04 | Actual browser consent and code/S256 PKCE exchange at 1440/390 px produce the designated `space_id` with existing token fields unchanged; refresh retains designation, legacy flows remain usable and Origin/CSRF/scope rejection still passes. |
+
+## Administrator user management and deletion
+
+Settings → Users is administrator-only and follows the Spaces section pattern. Place a **New user** section above the user list; do not put creation in the pane heading. Selecting a listed user opens a dedicated per-user detail page with account details and the existing enable/disable, password-reset and platform-administrator controls. Keep the list free of inline editors. Use `/admin/?view=users&user=<user-id>` for detail, title it with the selected username, and provide **Back to users**, browser history and reloadable user selection; ordinary users cannot view or call user-management controls.
+
+A platform administrator can delete another user, including another administrator, but no caller may delete their own account. Use the existing centered confirmation modal, explain the cascade and require the exact typed username before enabling confirmation. Cancel, Escape or backdrop dismissal makes no request and restores focus without shifting the page. Refuse deletion if the target owns any space other than their marked automatically provisioned personal space; clearly list the owned space IDs that must be resolved through the existing space-management flow first. Do not implicitly delete those spaces.
+
+Within the existing policy serialization boundary, account deletion atomically removes the user, native sessions, agent delegations and credentials, pending authorization codes/consent scopes, space memberships, resource permissions and administrator entry policy. Remove the marked automatically provisioned personal space with its platform authorization references and app enrollments as part of that same transaction. This is the sole exception to its protection against standalone space deletion; its app-adapter data files remain for separately authorized operator cleanup. Other users, spaces and independent authorizations remain unchanged. Old credentials and signed consent forms cannot restore access. Refresh all user pickers/selectors, clear deleted selections and return to the list without stale references.
+
+| ID | Observable acceptance |
+| --- | --- |
+| USR01 | At 1440/390 px, New user section creation succeeds; the pane heading has no creation button, and choosing a user opens a dedicated account-detail page with list return, history and reload support. |
+| USR02 | Existing enable/disable, password and administrator controls work on the detail page; Spaces and Agent delegations retain their existing context-switcher behavior. Ordinary users have no user-management views or API access. |
+| USR03 | A native administrator deletes another user only after exact typed confirmation in the existing modal. Wrong/missing confirmation and Cancel/Escape/backdrop dismissal do not mutate; admin and ordinary self-deletion attempts are refused. |
+| USR04 | An owned nonautomatic space blocks account deletion with a clear list of space IDs and no changes; the automatic personal space alone does not block deletion and is removed atomically with the account while adapter data files remain. |
+| USR05 | Synthetic checks prove atomic rollback and removal of sessions, delegations/credentials/codes/consent scopes, memberships, permissions, entry policy and automatic-space references; subsequent access fails and unrelated users/spaces/authorization remain intact. |
+| USR06 | Chromium at 1440/390 px verifies confirmation, detail navigation, refreshed lists and every user selector without stale deleted selections or horizontal overflow; full platform/version checks and both workbench PRD languages pass. Report deployed revision and technical evidence separately from independent business acceptance. |
 
 ## Consistent Settings control rows
 
@@ -126,14 +143,14 @@ Owners add existing accounts through the product member flow and explicitly gran
 
 ## Creator-initiated space deletion
 
-The signed-in user who created a space can delete it from Settings → Spaces and the documented account API; deletion follows creation and requires no additional owner/admin role. Platform administrators can delete any otherwise deletable space; the action remains visible when they select another user as display context. A member who only joined cannot delete it. Deletion protection follows the automatically provisioned personal-space origin marker, not the `personal` type. The automatic personal space cannot be deleted by its user or any platform administrator; every other space, including an additional user-created personal space, remains deletable by its creator or a platform administrator. Before sending a deletion, show an explicit warning and require the exact space ID to be typed and confirmed. The warning lists memberships, resource permissions, agent delegation rules and consent scopes referencing the space, per-space app enrollments and their granted web entries.
+The signed-in user who created a space can delete it from Settings → Spaces and the documented account API; deletion follows creation and requires no additional owner/admin role. Platform administrators can delete any otherwise deletable space; the action remains visible when they select another user as display context. A member who only joined cannot delete it. Deletion protection follows the automatically provisioned personal-space origin marker, not the `personal` type. Through standalone space deletion, the automatic personal space cannot be deleted by its user or any platform administrator; every other space, including an additional user-created personal space, remains deletable by its creator or a platform administrator. Before sending a deletion, show an explicit warning and require the exact space ID to be typed and confirmed. The warning lists memberships, resource permissions, agent delegation rules and consent scopes referencing the space, per-space app enrollments and their granted web entries.
 
 Commit the platform cascade atomically under the current policy serialization boundary: remove the space and all listed references, withdraw its access immediately, and preserve all other spaces, users and independent authorizations. Refresh lists and pickers, clear a deleted selection and show the remaining spaces or the existing empty state without stale references. App-adapter provisioned data files are outside this platform deletion operation; retain them for separately authorized operator cleanup and document that boundary.
 
 | ID | Observable acceptance |
 | --- | --- |
 | BSD01 | A creator sees Delete, types the exact space ID and explicitly confirms; missing/wrong confirmation and a joined member's deletion attempt are refused without changes. No extra role gate is required. |
-| BSD02 | A platform administrator deletes an otherwise deletable space; the marked automatic personal space remains protected for every caller. An additional user-created personal space is deletable by its creator or a platform administrator with the same confirmed cascade. |
+| BSD02 | A platform administrator deletes an otherwise deletable space; the marked automatic personal space remains protected against standalone space deletion for every caller. An additional user-created personal space is deletable by its creator or a platform administrator with the same confirmed cascade. |
 | BSD03 | Synthetic deletion removes memberships, permissions, delegation rules/consent scopes, enrollments and enrollment-derived web entries atomically; immediate re-access is refused and other spaces/users/authorizations remain unchanged. App-owned files are retained. |
 | BSD04 | Real Chromium flows at 1440/390 px verify warning/confirmation, cancellation, success, refreshed pickers/lists and no stale selection or horizontal overflow; both workbench PRD languages render. Source checks and test deployment evidence remain separate from independent business acceptance. |
 
@@ -361,6 +378,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.146 | 2026-11-21 | Provision protected personal spaces, designate OAuth space and offer all-user administrator display context. |
 | v0.1.147 | 2026-11-21 | Clarify delegation IDs and status, use modal confirmations and plain user dropdowns in Settings. |
 | v0.1.148 | 2026-11-21 | Keep Spaces management capabilities tied to the signed-in session across display contexts |
+| v0.1.149 | 2026-11-21 | Separate Users creation and detail pages and add confirmed atomic administrator account deletion |
 
 ### Letters and Profiles
 

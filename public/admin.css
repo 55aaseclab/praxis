@@ -65,3 +65,9 @@ a.quiet-button{display:inline-flex;align-items:center;justify-content:center;tex
 .grant-heading strong{flex:1}
 .grant-identifiers{margin-top:8px}
 .grant-identifiers code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:normal;overflow-wrap:anywhere;user-select:all}
+
+/* User detail pages share the Settings section and confirmation rhythm. */
+.user-identity{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;overflow-wrap:anywhere;user-select:all}
+.user-delete-confirm .control-row{margin-bottom:12px}
+.user-deletion{border-top:1px solid var(--line)}
+@media(max-width:390px){.user-row>a.quiet-button{align-self:stretch}}

@@ -5,11 +5,14 @@ const base = '/api/business/admin', accountBase = '/api/business/account';
 const actionNames = { read: t("Read", "读取"), create: t("Create", "新增"), update: t("Update", "修改"), complete: t("Complete", "完成"), delete: t("Delete", "删除"), submit: t("Submit corrections", "提交校正"), assign: t("Assign tasks", "分配任务"), manage_members: t("Manage members", "管理成员"), manage_sharing: t("Manage sharing", "管理共享"), manage_delegation: t("Manage delegations", "管理委托") };
 const titles = { spaces: t('Spaces', '空间'), general: t('General', '通用'), overview: t("Overview", "状态概览"), data: t("Data management", "数据管理"), mcp: 'MCP', users: t("Users", "用户"), access: t("App access", "入口权限"), grants: t("Agent delegations", "智能体委托") };
 const errorNames = { INVALID_INPUT: t("Check the form fields.", "请检查输入内容。"), READ_TIMEOUT: t("Read timed out. Try again.", "读取超时，请重试。"), WRITE_TIMEOUT: t("Request timed out. Refresh to check whether it was saved.", "请求超时，尚未确认是否保存。请先刷新核对结果。"), INVALID_REQUEST: t("Check the form fields.", "请检查输入内容。"), NOT_FOUND: t("This record no longer exists. Refresh to continue.", "这条记录已不存在，请刷新。"), FORBIDDEN: t("This action is no longer permitted. Refresh to check your space access.", "当前无权执行此操作，请刷新核对空间权限。"), CONFLICT: t("Account already exists or its state changed. Check and try again.", "账号已存在或状态已变化，请检查后重试。"), LAST_ADMIN_REQUIRED: t("Keep at least one active platform administrator.", "至少需要保留一名启用的平台管理员。"), POLICY_BUSY: t("Authorization is being updated. Try again shortly.", "授权正在更新，请稍后重试。"), CSRF_REJECTED: t("Session changed. Sign in again.", "登录状态已变化，请重新登录。"), UNAVAILABLE: t("Service unavailable. Try again later.", "服务暂时不可用，请稍后重试。"), DATA_INVENTORY_UNAVAILABLE: t("Could not load data locations. Refresh to retry.", "暂时无法读取数据位置，请稍后刷新。"), ADMIN_DEFAULT_ACCESS: t("Platform administrators have access to all app entries.", "平台管理员默认拥有全部入口，无需单独授权。") };
-errorNames.CONFIRMATION_REQUIRED = t('Type the full space ID exactly to confirm deletion.', '请输入完整且一致的空间 ID 以确认删除。');
+errorNames.CONFIRMATION_REQUIRED = t('Type the displayed confirmation exactly to delete.', '请准确输入所显示的确认内容以删除。');
+errorNames.SELF_DELETION_FORBIDDEN = t('You cannot delete your own account.', '不能删除自己的账号。');
 errorNames.PERSONAL_SPACE_REQUIRED = t('Automatically created personal spaces cannot be deleted.', '自动创建的个人空间不能删除。');
 const content = document.querySelector('#content'), notice = document.querySelector('#notice');
-let session = null, users = [], nextCursor = null, selectedId = null, selectedGrantId = null, view = Object.hasOwn(titles, new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : null, epoch = 0, ended = false, writing = false, createOpen = false;
+let session = null, users = [], nextCursor = null, selectedId = null, selectedGrantId = null, view = Object.hasOwn(titles, new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : null, epoch = 0, ended = false, writing = false;
 const initialRoute = new URLSearchParams(location.search);
+let userDetailId = initialRoute.get('user');
+document.querySelector('#create-user').remove();
 let selectedSpaceId = initialRoute.get('space'), selectedAppId = initialRoute.get('app'), selectedSpaceUserId = null;
 const spacesNavigation = document.createElement('button');
 spacesNavigation.type = 'button'; spacesNavigation.className = 'nav-entry'; spacesNavigation.dataset.view = 'spaces'; spacesNavigation.dataset.sharedView = ''; spacesNavigation.hidden = true;
@@ -78,7 +81,7 @@ function setSession(value) {
     clearAppFacts();
     if (session.user.id !== value.user.id) view = null;
     epoch++; for (const controller of controllers) controller.abort(); overview?.clear();
-    closeConfirmation(); users = []; knownUsers.clear(); nextCursor = null; selectedId = null; selectedGrantId = null; selectedSpaceId = null; selectedAppId = null; selectedSpaceUserId = null; usersLoaded = false; createOpen = false; content.replaceChildren();
+    closeConfirmation(); users = []; knownUsers.clear(); nextCursor = null; selectedId = null; selectedGrantId = null; selectedSpaceId = null; selectedAppId = null; selectedSpaceUserId = null; usersLoaded = false; userDetailId = null; content.replaceChildren();
   }
   session = value; clearTimeout(expiryTimer); clearTimeout(accessTimer);
   if (!view || !value.platformAdmin && !['general', 'spaces', 'access', 'grants'].includes(view)) view = 'general';
@@ -128,7 +131,6 @@ function terminal(status, text) {
   document.querySelector('#general-view').hidden = true;
   content.replaceChildren(); content.setAttribute('aria-busy', 'false');
   document.querySelector('#account-name').textContent = '';
-  document.querySelector('#create-user').hidden = true;
   for (const node of document.querySelectorAll('[data-admin-only],[data-shared-view]')) node.hidden = true;
   for (const node of document.querySelectorAll('#navigation button, #refresh')) node.disabled = true;
   message(text || (status === 401 ? t("Your session expired. Sign in again.", "登录已失效，请重新登录。") : t("You do not have access to Settings.", "当前账号无权访问设置。")), 'error');
@@ -142,20 +144,24 @@ async function api(path, { method = 'GET', body } = {}) {
     const response = await fetch(path.startsWith('/api/') ? path : base + path, { method, cache: 'no-store', mode: 'same-origin', credentials: 'same-origin', redirect: 'error', referrerPolicy: 'same-origin', signal: controller.signal, headers: { Accept: 'application/json', ...(method === 'GET' ? {} : { 'Content-Type': 'application/json', 'X-CSRF-Token': session?.csrfToken || '' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     let value; try { value = await response.json(); } catch {}
     if (response.status === 401 || response.status === 403 && !path.startsWith(`${accountBase}/spaces`)) { if (requestEpoch === epoch) terminal(response.status); throw Object.assign(new Error('Management session rejected.'), { stale: requestEpoch !== epoch }); }
-    if (!response.ok) throw Object.assign(new Error('Administration request failed.'), { code: value?.code, status: response.status, stale: requestEpoch !== epoch });
+    if (!response.ok) throw Object.assign(new Error('Administration request failed.'), { code: value?.code, status: response.status, stale: requestEpoch !== epoch, ownedSpaces: value?.ownedSpaces });
     return value;
   } catch (error) {
     if (error.name === 'AbortError' && requestEpoch === epoch && !ended) throw Object.assign(new Error('Management request timed out.'), { code: method === 'GET' ? 'READ_TIMEOUT' : 'WRITE_TIMEOUT' });
     throw error;
   } finally { clearTimeout(timeout); controllers.delete(controller); }
 }
-function report(error) { if (!ended && !error.stale && error.name !== 'AbortError') message(errorNames[error.code] || t("Could not complete this operation. Try again.", "暂时无法完成操作，请稍后重试。"), 'error'); }
+function report(error) {
+  if (!ended && !error.stale && error.code === 'OWNED_SPACES_REQUIRED') {
+    message(t('Delete the owned spaces first, then retry deleting this user: {0}', '请先删除以下自有空间，再重试删除此用户：{0}', (error.ownedSpaces || []).map(space => space.id).join(', ')), 'error'); return;
+  }
+  if (!ended && !error.stale && error.name !== 'AbortError') message(errorNames[error.code] || t("Could not complete this operation. Try again.", "暂时无法完成操作，请稍后重试。"), 'error'); }
 function setBusy(value) {
   if (value) {
     const active = document.activeElement;
     writeFocus = content.contains(active) ? { node: active, tag: active.tagName, name: active.name, text: active.textContent, scope: [view, selectedSpaceId, selectedAppId, selectionId()].join('/') } : null;
   }
-  writing = value; for (const node of content.querySelectorAll('button, input, select')) node.disabled = value; document.querySelector('#create-user').disabled = value; document.querySelector('#refresh').disabled = value;
+  writing = value; for (const node of content.querySelectorAll('button, input, select')) node.disabled = value; document.querySelector('#refresh').disabled = value;
   if (!value && writeFocus) {
     if (writeFocus.scope === [view, selectedSpaceId, selectedAppId, selectionId()].join('/')) {
       const target = writeFocus.node.isConnected ? writeFocus.node : [...content.querySelectorAll('button,input,select,a')].find(node => node.tagName === writeFocus.tag && (writeFocus.name ? node.name === writeFocus.name : node.textContent === writeFocus.text));
@@ -222,6 +228,12 @@ function confirmAction(parent, text, action) {
 }
 function userPath(user, suffix = '') { return `/users/${encodeURIComponent(user.id)}${suffix}`; }
 function updateUser(user) { knownUsers.set(user.id, user); const index = users.findIndex(value => value.id === user.id); if (index >= 0) users[index] = user; else users.push(user); }
+function forgetUser(id) {
+  users = users.filter(user => user.id !== id); knownUsers.delete(id);
+  if (selectedId === id) selectedId = null;
+  if (selectedGrantId === id) selectedGrantId = null;
+  if (selectedSpaceUserId === id) selectedSpaceUserId = null;
+}
 function picker(options = pickerUsers(), value = selectionId(), change = id => { if (view === 'grants') selectedGrantId = id; else selectedId = id; void render(); }) {
   const root = el('div', 'user-context'), label = el('label', 'user-picker'), select = el('select'); select.id = 'selected-user';
   label.append(el('span', '', t("Current user", "当前用户")), select); root.append(label);
@@ -249,9 +261,24 @@ function picker(options = pickerUsers(), value = selectionId(), change = id => {
   }));
   return root;
 }
+function userHref(id = null) {
+  const query = new URLSearchParams({ view: 'users' });
+  if (id) query.set('user', id);
+  return `/admin/?${query}`;
+}
+function userLink(label, id = null, className = 'quiet-button') {
+  const link = el('a', className, label); link.href = userHref(id);
+  link.addEventListener('click', event => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (booting || writing || ended) return;
+    userDetailId = id; history.pushState(null, '', link.href);
+    void render().then(() => document.querySelector('#heading').focus());
+  });
+  return link;
+}
 function createForm() {
-  const panel = el('section', 'editor form-panel'); panel.setAttribute('aria-label', t("New user", "新增用户"));
-  const heading = el('div', 'form-heading'); heading.append(el('h2', '', t("New user", "新增用户")), button(t("Cancel", "取消"), 'link-button', () => { createOpen = false; void render(); }));
+  const panel = el('section', 'editor form-panel'); panel.setAttribute('aria-label', t('New user', '新用户'));
   const form = el('form'), fields = controlRow();
   const username = field(t("Account", "账号"), 'username'), password = field(t("Initial password", "初始密码"), 'password', 'password');
   username.input.required = true; username.input.maxLength = 200; username.input.autocomplete = 'off';
@@ -261,12 +288,39 @@ function createForm() {
   form.append(fields, el('p', 'section-note', t("Set app access, business permissions and administrator privileges separately after creating a user.", "新用户默认没有平台管理、应用入口或业务数据权限。创建后再分别授权。")));
   form.addEventListener('submit', event => {
     event.preventDefault(); const body = { username: username.input.value.trim(), password: password.input.value };
-    void mutate('/users', { method: 'POST', body }, value => { updateUser(value.user); selectedId = value.user.id; createOpen = false; renderUsers(); message(t("User created. Set their app access as needed.", "用户已创建，请按需设置入口权限。"), 'success'); });
-  }); panel.append(heading, form); return panel;
+    void mutate('/users', { method: 'POST', body }, value => {
+      updateUser(value.user); userDetailId = value.user.id; history.pushState(null, '', userHref(userDetailId)); renderUsers();
+      document.querySelector('#heading').focus(); message(t("User created. Set their app access as needed.", "用户已创建，请按需设置入口权限。"), 'success');
+    });
+  }); panel.append(el('h2', '', t('New user', '新用户')), form); return panel;
+}
+function confirmUserDeletion(parent, user) {
+  const box = el('form', 'confirm-box user-delete-confirm');
+  box.append(el('p', '', t('Permanently delete this user? This cannot be undone. Their sessions, agent delegations and consent scopes, memberships, resource permissions and app entry policy will be removed.', '永久删除此用户？此操作无法撤销，将移除其登录会话、智能体委托与授权范围、成员关系、资源权限及应用入口配置。')),
+    el('p', '', t('Their automatically created personal space will also be removed. App data files remain for operator cleanup. Other owned spaces must be deleted first in Spaces.', '自动创建的个人空间将随账号移除，应用数据文件保留，由运维另行清理。其他自有空间须先在空间管理中删除。')),
+    el('p', 'user-identity', user.username));
+  const confirmation = field(t('Type the exact username to confirm', '输入准确的用户名以确认'), 'confirmUsername');
+  confirmation.input.autocomplete = 'off'; confirmation.input.spellcheck = false; confirmation.input.required = true;
+  const submit = el('button', 'danger-button', t('Delete user permanently', '永久删除用户')); submit.type = 'submit'; submit.disabled = true;
+  confirmation.input.addEventListener('input', () => { submit.disabled = writing || confirmation.input.value !== user.username; });
+  box.append(controlRow(confirmation.root, submit), button(t('Cancel', '取消'), 'quiet-button', () => close()));
+  box.addEventListener('submit', event => {
+    event.preventDefault(); if (confirmation.input.value !== user.username || !parent.isConnected) return;
+    close();
+    void mutate(userPath(user), { method: 'DELETE', body: { confirmUsername: confirmation.input.value } }, async () => {
+      forgetUser(user.id);
+      selectedSpaceId = null; selectedAppId = null; userDetailId = null;
+      history.replaceState(null, '', userHref()); renderUsers();
+      const value = await api('/users?limit=50');
+      users = value.users; for (const current of users) knownUsers.set(current.id, current); nextCursor = value.nextCursor;
+      renderUsers(); document.querySelector('#heading').focus(); message(t('User deleted.', '用户已删除。'), 'success');
+    });
+  });
+  const close = openConfirmation(box, t('Confirm user deletion', '确认删除用户'), confirmation.input);
 }
 function accountEditor(user) {
   const panel = el('section', 'editor form-panel'); panel.setAttribute('aria-label', t("Account settings", "账号设置"));
-  panel.append(el('h2', '', user.username), el('p', 'section-note', t("Administrators can open all apps. Business records still require access to their space and resources.", "平台管理员默认拥有全部应用入口；业务记录仍按所属空间与当前授权范围访问。")));
+  panel.append(el('h2', '', t('Account details', '账号详情')), el('p', 'user-identity', t('User ID: {0}', '用户 ID：{0}', user.id)), el('p', 'section-note', t("Administrators can open all apps. Business records still require access to their space and resources.", "平台管理员默认拥有全部应用入口；业务记录仍按所属空间与当前授权范围访问。")));
   for (const type of ['enabled', 'platformAdmin']) {
     const row = el('div', 'account-setting'), description = el('div');
     description.append(el('strong', '', type === 'enabled' ? t("Account status", "账号状态") : t("Platform administrator", "平台管理员")), el('span', 'meta', type === 'enabled' ? user.enabled ? t("Enabled", "已启用") : t("Disabled", "已停用") : user.platformAdmin ? t("Yes", "是") : t("No", "否")));
@@ -279,22 +333,35 @@ function accountEditor(user) {
   const submit = el('button', 'quiet-button', t("Reset password", "重置密码")); submit.type = 'submit';
   passwordForm.append(el('h3', '', t("Reset password", "重置密码")), controlRow(password.root, submit), el('p', 'section-note', t("Use at least 12 characters. The user must sign in again after a reset.", "至少12个字符。重置后，该用户需要重新登录。")));
   passwordForm.addEventListener('submit', event => { event.preventDefault(); const body = { password: password.input.value }; void mutate(userPath(user, '/password'), { method: 'POST', body }, () => { renderUsers(); message(t("Password reset.", "密码已重置。"), 'success'); }); });
-  panel.append(passwordForm); return panel;
+  panel.append(passwordForm);
+  const deletion = el('section', 'editor user-deletion'); deletion.append(el('h3', '', t('Delete user', '删除用户')));
+  if (user.id === session.user.id) deletion.append(el('p', 'section-note', t('You cannot delete your own account.', '不能删除自己的账号。')));
+  else deletion.append(el('p', 'section-note', t('Deleting this account immediately withdraws its access. This cannot be undone.', '删除账号后将立即撤销其访问权限，此操作无法撤销。')), button(t('Delete user', '删除用户'), 'danger-button', () => confirmUserDeletion(panel, user)));
+  panel.append(deletion); return panel;
 }
 function renderUsers() {
   content.replaceChildren();
-  if (createOpen) content.append(createForm());
-  content.append(el('p', 'section-note', t("Manage sign-in accounts and administrators. Configure app access and agent delegations separately.", "管理登录账号与平台管理员身份。应用入口和智能体委托分别设置。")));
+  if (userDetailId) {
+    const user = knownUsers.get(userDetailId);
+    content.append(userLink(t('Back to users', '返回用户列表')));
+    document.querySelector('#heading').textContent = user?.username || titles.users;
+    if (user) content.append(accountEditor(user));
+    return;
+  }
+  document.querySelector('#heading').textContent = titles.users;
+  content.append(createForm());
+  const section = el('section', 'editor user-collection');
+  section.append(el('h2', '', t('Registered users', '已注册用户')), el('p', 'section-note', t("Manage sign-in accounts and administrators. Configure app access and agent delegations separately.", "管理登录账号与平台管理员身份。应用入口和智能体委托分别设置。")));
   const list = el('ul', 'user-list');
   for (const user of users) {
-    const row = el('li', 'user-row'); row.dataset.user = user.id; if (selectedId === user.id) row.setAttribute('aria-current', 'true');
+    const row = el('li', 'user-row'); row.dataset.user = user.id;
     const summary = el('div', 'user-summary'); summary.append(el('strong', 'user-name', user.username), el('span', 'meta', `${user.enabled ? t("Enabled", "已启用") : t("Disabled", "已停用")}${user.platformAdmin ? t(" · Administrator", " · 平台管理员") : ''}${session?.user.id === user.id ? t(" · Current account", " · 当前账号") : ''}`));
-    const manage = button(t("Manage", "管理"), 'quiet-button', () => { selectedId = user.id; createOpen = false; renderUsers(); content.querySelector('.editor')?.scrollIntoView({ block: 'nearest', behavior: 'auto' }); }); manage.setAttribute('aria-label', t("Manage {0}", "管理 {0}", user.username));
+    const manage = userLink(t('Manage', '管理'), user.id); manage.setAttribute('aria-label', t('Manage {0}', '管理 {0}', user.username));
     row.append(summary, manage); list.append(row);
   }
-  content.append(users.length ? list : el('p', 'empty', t("No users.", "暂无用户。")));
-  if (nextCursor) content.append(button(t("Load more users", "加载更多用户"), 'quiet-button pagination', async () => { const current = epoch; try { const value = await api(`/users?limit=50&after=${encodeURIComponent(nextCursor)}`); if (ended || current !== epoch || view !== 'users') return; for (const user of value.users) updateUser(user); nextCursor = value.nextCursor; renderUsers(); } catch (error) { report(error); } }));
-  const user = selected(); if (user) content.append(accountEditor(user));
+  section.append(users.length ? list : el('p', 'empty', t("No users.", "暂无用户。")));
+  if (nextCursor) section.append(button(t("Load more users", "加载更多用户"), 'quiet-button pagination', async () => { const current = epoch; try { const value = await api(`/users?limit=50&after=${encodeURIComponent(nextCursor)}`); if (ended || current !== epoch || view !== 'users' || userDetailId) return; for (const user of value.users) updateUser(user); nextCursor = value.nextCursor; renderUsers(); } catch (error) { report(error); } }));
+  content.append(section);
 }
 function check(label, name, value) {
   const root = el('label', 'check-field'), input = el('input'); input.type = 'checkbox'; input.name = name; input.checked = value === true; root.append(input, el('span', '', label)); return { root, input };
@@ -555,7 +622,7 @@ async function renderView(preserve) {
   document.querySelector('#general-view').hidden = view !== 'general';
   content.hidden = view === 'overview' || view === 'general';
   const current = ++epoch; if (!preserve) content.replaceChildren(); content.setAttribute('aria-busy', 'true');
-  if (!preserve || view !== 'spaces' || !selectedAppId) document.querySelector('#heading').textContent = titles[view]; document.querySelector('#heading').tabIndex = -1; document.querySelector('#create-user').hidden = view !== 'users' || ended || !session.platformAdmin;
+  if (!preserve || view !== 'spaces' || !selectedAppId) document.querySelector('#heading').textContent = titles[view]; document.querySelector('#heading').tabIndex = -1;
   for (const node of document.querySelectorAll('[data-view]')) { if (node.dataset.view === view) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current'); }
   if (view === 'general') { content.setAttribute('aria-busy', 'false'); return; }
   if (view === 'overview') {
@@ -598,7 +665,19 @@ async function renderView(preserve) {
     finally { if (current === epoch) content.setAttribute('aria-busy', 'false'); }
     return;
   }
-  if (view === 'users') { renderUsers(); content.setAttribute('aria-busy', 'false'); return; }
+  if (view === 'users') {
+    try {
+      if (userDetailId) {
+        const id = userDetailId, value = await api(userPath({ id }));
+        if (ended || current !== epoch || view !== 'users' || userDetailId !== id) return;
+        knownUsers.set(id, value.user);
+      }
+      renderUsers();
+    } catch (error) {
+      if (!ended && current === epoch) { if (error.status === 404) forgetUser(userDetailId); else knownUsers.delete(userDetailId); renderUsers(); report(error); }
+    } finally { if (current === epoch) content.setAttribute('aria-busy', 'false'); }
+    return;
+  }
   if (!selected()) { if (view === 'grants') selectedGrantId = session.user.id; else selectedId = users[0]?.id || session.user.id; }
   const user = selected();
   if (!user) { content.append(el('p', 'empty', t("Create a user first.", "请先新增用户。"))); content.setAttribute('aria-busy', 'false'); return; }
@@ -623,7 +702,21 @@ async function boot() {
     document.querySelector('#account-name').textContent = session.user.username;
     if (session.platformAdmin && ['users', 'access', 'grants', 'spaces'].includes(view)) {
       const result = await api('/users?limit=50'); if (ended || current !== epoch) return;
-      users = result.users; for (const user of users) knownUsers.set(user.id, user); nextCursor = result.nextCursor; usersLoaded = true; if (!selected()) { if (view === 'grants') selectedGrantId = null; else selectedId = null; }
+      users = result.users; knownUsers.clear(); for (const user of users) knownUsers.set(user.id, user); nextCursor = result.nextCursor;
+      // Revalidate retained off-page selections: another administrator may have
+      // deleted an account since this page last loaded.
+      for (const id of new Set([selectedId, selectedGrantId, selectedSpaceUserId].filter(id => id && !knownUsers.has(id)))) {
+        try {
+          const value = await api(userPath({ id }));
+          if (ended || current !== epoch) return;
+          knownUsers.set(id, value.user);
+        } catch (error) {
+          if (ended || current !== epoch) return;
+          if (error.status !== 404) throw error;
+          forgetUser(id);
+        }
+      }
+      usersLoaded = true; if (!selected()) { if (view === 'grants') selectedGrantId = null; else selectedId = null; }
     }
     if (!notice.classList.contains('error')) message(); await render({ preserve: content.childElementCount > 0 });
   } catch (error) { if ([401, 403].includes(error.status)) terminal(error.status); else report(error); if (!ended) content.setAttribute('aria-busy', 'false'); }
@@ -634,14 +727,13 @@ async function boot() {
     }
   }
 }
-for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => { if (booting || writing || ended || !session || ['overview', 'users', 'mcp', 'data'].includes(node.dataset.view) && !session.platformAdmin) return; view = node.dataset.view; createOpen = false; selectedAppId = null; history.pushState(null, '', `/admin/?view=${view}`); if (session.platformAdmin && ['users', 'access', 'grants', 'spaces'].includes(view) && !usersLoaded) void boot(); else void render(); });
-document.querySelector('#create-user').addEventListener('click', () => { if (booting || writing || ended || !session?.platformAdmin) return; createOpen = !createOpen; renderUsers(); content.querySelector('input')?.focus(); });
+for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => { if (booting || writing || ended || !session || ['overview', 'users', 'mcp', 'data'].includes(node.dataset.view) && !session.platformAdmin) return; view = node.dataset.view; userDetailId = null; selectedAppId = null; history.pushState(null, '', `/admin/?view=${view}`); if (session.platformAdmin && ['users', 'access', 'grants', 'spaces'].includes(view) && !usersLoaded) void boot(); else void render(); });
 document.querySelector('#refresh').addEventListener('click', () => { message(); void boot(); });
 addEventListener('popstate', () => {
   if (writing || ended || !session) return;
   const route = new URLSearchParams(location.search);
   view = Object.hasOwn(titles, route.get('view')) ? route.get('view') : 'general';
-  selectedSpaceId = route.get('space'); selectedAppId = route.get('app'); createOpen = false;
+  selectedSpaceId = route.get('space'); selectedAppId = route.get('app'); userDetailId = route.get('user');
   if (session.platformAdmin && ['users', 'access', 'grants', 'spaces'].includes(view) && !usersLoaded) void boot(); else void render();
 });
 content.addEventListener('input', event => {

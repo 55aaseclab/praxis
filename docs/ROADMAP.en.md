@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.148
+Version: 0.1.149
 
 [简体中文](ROADMAP.md)
 
@@ -26,6 +26,10 @@ Define BSA01–BSA04 before implementation. Public registration provisions one m
 ## OAuth consent callback redirects and empty selection
 
 Handle a verified empty selection on the existing external-agent consent page with an actionable English/Simplified Chinese error and retry form. Verify HTTP 400, no redirect and unchanged code/delegation counts with isolated synthetic fixtures; then select an action and complete the existing 303/code/S256 PKCE exchange. On verified consent and retry documents, narrowly allow the registered callback origin in CSP `form-action`; preserve the default restrictions elsewhere and reject unsafe CSP sources. Verify a real Chromium form POST, browser-followed cross-origin callback, no CSP violation and successful PKCE exchange, plus empty-selection failure and retry. Keep unchecked defaults and authorization boundaries. Run the platform suite and both PRD reader languages, commit, and build/deploy the affected web/core pair through the authorized test blue/green environment. Report running version and public readback separately from the independent business client's acceptance.
+
+## Administrator user management and deletion
+
+Define USR01–USR06 before implementation. Replace heading creation and inline user editors with a New user section and separate per-user detail page, preserving existing enable/disable, password and administrator operations, list return/history and ordinary-user restrictions. Add native administrator deletion of another user with the existing exact typed confirmation modal; refuse self-deletion for every caller. Refuse accounts owning any nonautomatic space with a clear list of owned IDs; resolve those spaces through existing management first. Atomically delete the account, its sessions, delegations/credentials/codes/consent scopes, memberships, permissions, entry policy and marked automatic personal space with its authorization/enrollment references under the current policy boundary. Retain adapter files for separately authorized cleanup and preserve unrelated authorization. Refresh every user picker and clear deleted selections. Verify isolated synthetic allow/deny, rollback, immediate revocation and real Chromium 1440/390 px creation/detail/confirmation/context-switcher flows, plus both workbench PRD editions. Run the full platform suite and one aligned PATCH version gate; commit verified source, then build and deploy only the affected web/core pair through the authorized test blue/green controller. Report technical evidence, deployed revision and public readback separately from independent business acceptance.
 
 ## Consistent Settings control rows
 
@@ -306,6 +310,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.146 | 2026-11-21 | Provision protected personal spaces, designate OAuth space and offer all-user administrator display context. |
 | v0.1.147 | 2026-11-21 | Clarify delegation IDs and status, use modal confirmations and plain user dropdowns in Settings. |
 | v0.1.148 | 2026-11-21 | Keep Spaces management capabilities tied to the signed-in session across display contexts |
+| v0.1.149 | 2026-11-21 | Separate Users creation and detail pages and add confirmed atomic administrator account deletion |
 
 ### Public applications with private collections
 

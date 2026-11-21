@@ -237,6 +237,39 @@ export class AuthStore {
     });
     return { reset: true };
   }
+  deleteUser({ userId, actorId, confirmUsername } = {}) {
+    identifier(userId, 'User'); identifier(actorId, 'Administrator');
+    return this.controlTransaction(() => {
+      // Store-level enforcement also protects callers outside the HTTP handler.
+      if (userId === actorId) fail('You cannot delete your own account.', 403, 'SELF_DELETION_FORBIDDEN');
+      if (!this.db.prepare('SELECT 1 FROM auth_users WHERE id=? AND enabled=1').get(actorId) || !this.isPlatformAdmin(actorId)) fail('Only a platform administrator can delete another user.', 403, 'FORBIDDEN');
+      const user = this.db.prepare('SELECT id,username FROM auth_users WHERE id=?').get(userId);
+      if (!user) fail('User not found.', 404, 'NOT_FOUND');
+      if (confirmUsername !== user.username) fail('Type the exact username to confirm deletion.', 400, 'CONFIRMATION_REQUIRED');
+      const ownedSpaces = this.db.prepare('SELECT s.id,s.type FROM auth_spaces s WHERE s.owner_id=? AND NOT EXISTS (SELECT 1 FROM auth_auto_personal_spaces a WHERE a.space_id=s.id AND a.owner_id=?) ORDER BY s.id').all(userId, userId);
+      if (ownedSpaces.length) {
+        const error = new AuthError('Resolve the user-owned spaces before deleting this account.', 409, 'OWNED_SPACES_REQUIRED');
+        error.ownedSpaces = ownedSpaces.map(space => ({ ...space }));
+        throw error;
+      }
+      this.protectLastAdmin(userId);
+      const automatic = this.db.prepare('SELECT space_id FROM auth_auto_personal_spaces WHERE owner_id=?').get(userId);
+      if (automatic) {
+        // Account deletion is the only exception to automatic-space protection.
+        // The marker and existing space cascade share this account transaction;
+        // no adapter data files are opened or removed.
+        this.db.prepare('DELETE FROM auth_auto_personal_spaces WHERE owner_id=?').run(userId);
+        this.deleteSpace({ spaceId: automatic.space_id, actorId, confirmSpaceId: automatic.space_id });
+      }
+      this.db.prepare('DELETE FROM auth_sessions WHERE user_id=? OR grant_id IN (SELECT id FROM auth_grants WHERE user_id=?)').run(userId, userId);
+      for (const table of ['auth_tokens', 'auth_codes', 'auth_grant_spaces']) this.db.prepare(`DELETE FROM ${table} WHERE grant_id IN (SELECT id FROM auth_grants WHERE user_id=?)`).run(userId);
+      for (const table of ['auth_grants', 'auth_members', 'auth_resources', 'auth_web_access', 'auth_platform_admins']) this.db.prepare(`DELETE FROM ${table} WHERE user_id=?`).run(userId);
+      this.db.prepare('DELETE FROM auth_users WHERE id=?').run(userId);
+      this.audit({ event: 'user.deleted', userId: actorId, resourceId: userId, outcome: 'allowed' });
+      this.changed({ type: 'user_deleted', userId });
+      return { deleted: true, userId };
+    });
+  }
   createUser({ id = randomUUID(), username, password }) {
     identifier(id); identifier(username, 'Username');
     const passwordHash = passwordDigest(password);
@@ -909,8 +942,39 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
     const language = loginLanguage(request, url);
     const translate = (english, chinese) => language === 'zh' ? chinese : english;
     const renderPage = (english, chinese, html) => page(translate(english, chinese), html, language);
-    if (!path.startsWith('/auth/') && !path.startsWith('/oauth/') && !path.startsWith('/api/business/management/') && !/^\/api\/business\/account\/spaces(?:\/|$)/.test(path) && !path.startsWith('/api/business/web-resource-access/') && !['/api/business/web-access', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'].includes(path)) return false;
+    // These account lifecycle routes run before the existing administrator
+    // handler; other administrator actions retain their established handler.
+    const adminUserRoute = ['GET', 'DELETE'].includes(request.method) && /^\/api\/business\/admin\/users\/[^/]+$/.test(path);
+    if (!adminUserRoute && !path.startsWith('/auth/') && !path.startsWith('/oauth/') && !path.startsWith('/api/business/management/') && !/^\/api\/business\/account\/spaces(?:\/|$)/.test(path) && !path.startsWith('/api/business/web-resource-access/') && !['/api/business/web-access', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'].includes(path)) return false;
     try {
+      if (adminUserRoute) {
+        if (request.headers.authorization !== undefined) fail('Native browser login is required.', 401, 'UNAUTHENTICATED');
+        const token = parseCookie(request);
+        store.requirePlatformAdminSession(token);
+        if (request.headers.origin && request.headers.origin !== store.issuer || request.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(request.headers['sec-fetch-site'])) fail('The browser request origin is not allowed.', 403, 'FORBIDDEN');
+        const raw = request.url.split('?', 1)[0];
+        if (!/^\/api\/business\/admin\/users\/[^/]+$/.test(raw) || url.searchParams.size || /[\\\x00-\x20\x7f]/.test(raw) || raw.includes('//') || /%(?:2f|5c|25)/i.test(raw)) fail('User route is invalid.');
+        const userId = identifier(decodeURIComponent(path.slice('/api/business/admin/users/'.length)), 'User');
+        if (/[\/\\]/.test(userId) || ['.', '..'].includes(userId)) fail('User route is invalid.');
+        let input;
+        if (request.method === 'DELETE') {
+          store.requireRequestCsrf(request);
+          if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) fail('Account deletion requires JSON.', 415, 'UNSUPPORTED_MEDIA_TYPE');
+          input = await readBody(request);
+          if (Object.keys(input).length !== 1 || !Object.hasOwn(input, 'confirmUsername')) fail('Account deletion requires only confirmUsername.');
+        }
+        const value = store.withAdminSession(token, actor => {
+          if (request.method === 'DELETE') {
+            store.requireRequestCsrf(request);
+            return store.deleteUser({ userId, actorId: actor.user.id, confirmUsername: input.confirmUsername });
+          }
+          const user = store.db.prepare('SELECT id,username,enabled FROM auth_users WHERE id=?').get(userId);
+          if (!user) fail('User not found.', 404, 'NOT_FOUND');
+          return { user: { ...user, enabled: Boolean(user.enabled), platformAdmin: store.isPlatformAdmin(user.id) } };
+        });
+        send(response, 200, value);
+        return true;
+      }
       if (/^\/api\/business\/account\/spaces(?:\/|$)/.test(path)) {
         if (request.headers.authorization !== undefined) fail('Native browser login is required.', 401, 'UNAUTHENTICATED');
         if (request.headers.origin && request.headers.origin !== store.issuer || request.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(request.headers['sec-fetch-site'])) fail('The browser request origin is not allowed.', 403, 'ORIGIN_REJECTED');
@@ -1288,6 +1352,11 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
       if (error.retryAfter) response.setHeader('Retry-After', String(error.retryAfter));
       const status = error.status ?? 500;
       const code = error.code ?? 'INTERNAL_ERROR', message = error.status ? error.message : 'Authentication request failed.';
+      if (adminUserRoute) {
+        try { store.audit({ event: 'platform.admin.denied', outcome: 'denied', reason: code }); } catch {}
+        send(response, status, { code, ...(code === 'OWNED_SPACES_REQUIRED' ? { ownedSpaces: error.ownedSpaces } : {}), ...(status === 401 ? { loginUrl: `${store.issuer}/auth/login?return_to=%2Fadmin%2F` } : {}) });
+        return true;
+      }
       if (path === '/api/business/web-access' || path.startsWith('/api/business/web-resource-access/')) {
         send(response, status, { code, ...(status === 401 ? { loginUrl: `${store.issuer}/auth/login?return_to=%2F` } : {}) });
         return true;

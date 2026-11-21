@@ -310,7 +310,6 @@ test('Chromium admin control rows and space actions remain usable at desktop and
       if (view === 'data') await page.locator('.data-table').waitFor();
       if (view === 'mcp') await page.locator('.mcp-table').first().waitFor();
       if (view === 'overview') { await page.locator('#platform-traces [data-scope=mcp-summary]').waitFor(); await page.locator('#platform-observations [data-scope=methodology]').waitFor(); }
-      if (view === 'users') { await page.locator('[data-user="a-member"] button').click(); await page.locator('#create-user').click(); }
       evidence.push(await inspectLayout(page, width, view));
       separatorEvidence.push(await inspectSeparators(page, width, view));
       selectEvidence.push(await inspectSelectStability(page, width, view, artifacts));
@@ -680,7 +679,7 @@ test('Chromium same-name delegations show full IDs and account/delegation confir
     page.on('pageerror', error => errors.push(error.message));
     const open = async view => { await page.goto(`${origin}/admin/?view=${view}`); await ready(page); };
     await open('users');
-    await page.locator('[data-user="z-owner"] button').click();
+    await page.locator('[data-user="z-owner"] a').click(); await ready(page);
     for (const name of [text('Disable account', '停用账号'), text('Remove administrator role', '移除管理员')]) {
       evidence.push({ width, ...await inspectConfirmation(page, page.getByRole('button', { name, exact: true }), name) });
     }
@@ -893,4 +892,174 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     await context.close(); await memberContext.close();
   }
   t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real HTTP handlers', browser: browser.version(), evidence }));
+});
+
+test('Chromium user sections, dedicated account pages and confirmed deletion work at desktop and phone widths', { skip: !browserEnabled, timeout: 150000 }, async t => {
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const { origin, auth } = await fixture(t), evidence = [];
+  const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
+  if (artifacts) mkdirSync(artifacts, { recursive: true });
+  for (const [width, language] of [[1440, 'en'], [390, 'zh']]) {
+    const text = (en, zh) => language === 'en' ? en : zh;
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const member = await browser.newContext({ viewport: { width, height: 900 } });
+    t.after(() => context.close()); t.after(() => member.close());
+    await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+    await member.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
+    const login = async (client, username, pass = password) => assert.equal((await client.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username, password: pass } })).status(), 200);
+    await login(context, 'synthetic-owner'); await login(member, 'synthetic-member');
+    const page = await context.newPage(), memberPage = await member.newPage(), errors = [], alerts = [];
+    page.setDefaultTimeout(10000); memberPage.setDefaultTimeout(10000);
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('dialog', async dialog => { alerts.push(dialog.message()); await dialog.accept(); });
+    const open = async route => { await page.goto(`${origin}/admin/?${route}`); await ready(page); };
+    const write = async (method, suffix, action) => {
+      const response = page.waitForResponse(response => response.request().method() === method && response.url().endsWith(suffix));
+      await action(); assert.equal((await response).ok(), true); await ready(page);
+    };
+    const confirm = () => page.locator('.confirm-dialog').getByRole('button', { name: text('Confirm', '确认'), exact: true }).click();
+    await open('view=users');
+    assert.equal(await page.locator('.pane-heading #create-user:visible').count(), 0, 'creation is not a pane-heading action');
+    const creation = page.locator('section').filter({ has: page.getByRole('heading', { name: text('New user', '新用户'), exact: true }) });
+    assert.equal(await creation.count(), 1, 'list has a New user section');
+    assert.equal(await page.locator('.account-setting').count(), 0, 'list contains no inline account editor');
+    evidence.push(await inspectLayout(page, width, 'users/list'));
+    const username = `synthetic-new-user-${width}`;
+    await creation.locator('input[name=username]').fill(username);
+    await creation.locator('input[name=password]').fill(password);
+    await write('POST', '/admin/users', () => creation.locator('button[type=submit]').click());
+    const created = auth.db.prepare('SELECT id FROM auth_users WHERE username=?').get(username).id;
+    assert.equal(new URL(page.url()).searchParams.get('user'), created, 'creation opens dedicated account page');
+    assert.equal(await page.locator('#content .user-list').count(), 0, 'detail does not append to the list');
+    assert.equal(await page.getByRole('heading', { name: text('New user', '新用户'), exact: true }).count(), 0, 'detail contains no creation section');
+    assert.equal(await page.locator('input[name=username]').count(), 0);
+    assert.equal(await page.locator('#heading').innerText(), username);
+    evidence.push(await inspectLayout(page, width, 'users/detail'));
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-users-detail.png`), fullPage: true });
+    await page.reload(); await ready(page);
+    assert.equal(new URL(page.url()).searchParams.get('user'), created, 'detail reload preserves account');
+    await page.getByRole('link', { name: text('Back to users', '返回用户列表'), exact: true }).click(); await ready(page);
+    assert.equal(new URL(page.url()).searchParams.has('user'), false);
+    assert.equal(await page.locator('.account-setting').count(), 0);
+    await page.goBack(); await ready(page); assert.equal(new URL(page.url()).searchParams.get('user'), created, 'browser Back restores dedicated detail');
+    await page.getByRole('button', { name: text('Disable account', '停用账号'), exact: true }).click();
+    await write('PATCH', `/users/${created}`, confirm);
+    assert.equal(auth.db.prepare('SELECT enabled FROM auth_users WHERE id=?').get(created).enabled, 0);
+    await page.getByRole('button', { name: text('Enable account', '启用账号'), exact: true }).click();
+    await write('PATCH', `/users/${created}`, confirm);
+    assert.equal(auth.db.prepare('SELECT enabled FROM auth_users WHERE id=?').get(created).enabled, 1);
+    const replacementPassword = `${password}-reset`;
+    await page.locator('input[name=password]').fill(replacementPassword);
+    await write('POST', `/users/${created}/password`, () => page.locator('.password-form button[type=submit]').click());
+    await page.getByRole('button', { name: text('Grant administrator role', '设为管理员'), exact: true }).click();
+    await write('PUT', `/users/${created}/platform-admin`, confirm);
+    assert.equal(auth.isPlatformAdmin(created), true);
+    await page.getByRole('button', { name: text('Remove administrator role', '移除管理员'), exact: true }).click();
+    await write('PUT', `/users/${created}/platform-admin`, confirm);
+    assert.equal(auth.isPlatformAdmin(created), false);
+    const personal = auth.ensurePersonalSpace(created);
+    auth.setMembership({ spaceId: 'synthetic-family', userId: created, role: 'member' });
+    auth.setSpaceAppEnrollment({ spaceId: 'synthetic-family', appId: 'reminder', enabled: true });
+    auth.grantResource({ userId: created, appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-user-deletion'] });
+    auth.setWebAccess({ userId: created, apps: ['finance'], prds: false });
+    const grant = auth.createGrant({ userId: created, clientId: 'synthetic-client', rules: [{ appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-user-deletion'] }] });
+    const token = auth.issueToken({ grantId: grant.id }).accessToken;
+    const victim = await browser.newContext(); t.after(() => victim.close());
+    await login(victim, username, replacementPassword);
+    // Populate each administrator view with the soon-to-be-deleted selected user.
+    for (const view of ['spaces', 'grants', 'access']) {
+      await page.locator(`#navigation [data-view=${view}]`).click(); await ready(page);
+      await page.locator('#selected-user').selectOption(created); await ready(page);
+      assert.equal(await page.locator('#selected-user').inputValue(), created);
+    }
+    await page.locator('#navigation [data-view=users]').click(); await ready(page);
+    await page.locator(`[data-user="${created}"] a`).click(); await ready(page);
+    const trigger = page.getByRole('button', { name: text('Delete user', '删除用户'), exact: true });
+    evidence.push({ width, ...await inspectConfirmation(page, trigger, `${width}/typed user deletion`) });
+    await trigger.click();
+    const dialog = page.locator('.confirm-dialog'), typed = dialog.locator('input[name=confirmUsername]'), submit = dialog.locator('button[type=submit]');
+    assert.match(await dialog.innerText(), /sessions|会话/);
+    assert.match(await dialog.innerText(), /remain|retained|保留/);
+    assert.equal(await submit.isDisabled(), true);
+    await typed.fill(`${username} `); assert.equal(await submit.isDisabled(), true, 'typed username must match exactly');
+    await typed.fill(username.toUpperCase()); assert.equal(await submit.isDisabled(), true, 'username confirmation is case-sensitive');
+    await typed.fill(username); assert.equal(await submit.isEnabled(), true);
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-user-delete-confirmation.png`), fullPage: true });
+    const removed = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/users/${created}`));
+    await submit.click();
+    const removal = await removed; assert.equal(removal.status(), 200);
+    assert.deepEqual(removal.request().postDataJSON(), { confirmUsername: username }); await ready(page);
+    assert.equal(new URL(page.url()).searchParams.has('user'), false, 'deletion returns to list');
+    assert.equal(await page.locator(`[data-user="${created}"]`).count(), 0, 'deleted user leaves list');
+    assert.match(alerts.at(-1), /User deleted|用户已删除/);
+    assert.equal(auth.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(personal.id), undefined, 'automatic personal space removed with account');
+    for (const table of ['auth_users', 'auth_sessions', 'auth_members', 'auth_resources', 'auth_web_access', 'auth_platform_admins', 'auth_grants']) {
+      const column = table === 'auth_users' ? 'id' : 'user_id';
+      assert.equal(auth.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column}=?`).get(created).n, 0, `${table} has no deleted user`);
+    }
+    assert.equal((await victim.request.get(`${origin}/api/business/account/session`)).status(), 401, 'deleted native session is rejected immediately');
+    assert.throws(() => auth.authorize(token, { appId: 'reminder', spaceId: 'synthetic-family', action: 'read', resourceId: 'synthetic-user-deletion' }), 'deleted bearer credential cannot authorize');
+    for (const view of ['spaces', 'grants', 'access']) {
+      await page.locator(`#navigation [data-view=${view}]`).click(); await ready(page);
+      assert.equal(await page.locator(`#selected-user option[value="${created}"]`).count(), 0, `${view} has no cached deleted user`);
+      assert.notEqual(await page.locator('#selected-user').inputValue(), created, `${view} clears deleted selection`);
+    }
+    await open('view=spaces&space=synthetic-family&app=reminder');
+    assert.equal(await page.locator(`select[name=userId] option[value="${created}"]`).count(), 0, 'member/resource selector has no deleted account');
+    for (const activeView of ['spaces', 'grants']) {
+      const concurrent = `synthetic-concurrent-${width}-${activeView}`;
+      auth.createUser({ id: concurrent, username: concurrent, password });
+      await page.locator('#refresh').click(); await ready(page);
+      for (const view of [...['spaces', 'grants', 'access'].filter(view => view !== activeView), activeView]) {
+        await page.locator(`#navigation [data-view=${view}]`).click(); await ready(page);
+        await page.locator('#selected-user').selectOption(concurrent); await ready(page);
+      }
+      auth.deleteUser({ userId: concurrent, actorId: 'z-owner', confirmUsername: concurrent });
+      await page.locator('#refresh').click(); await ready(page);
+      for (const view of ['spaces', 'grants', 'access']) {
+        await page.locator(`#navigation [data-view=${view}]`).click(); await ready(page);
+        assert.equal(await page.locator(`#selected-user option[value="${concurrent}"]`).count(), 0, `${view}: Refresh removes a concurrently deleted cached account`);
+        assert.notEqual(await page.locator('#selected-user').inputValue(), concurrent, `${view}: concurrent deletion clears selected context`);
+      }
+    }
+    await open('view=users&user=z-owner');
+    assert.equal(await page.getByRole('button', { name: text('Delete user', '删除用户'), exact: true }).count(), 0, 'current administrator has no delete action');
+    const metadata = await (await context.request.get(`${origin}/api/business/account/session`)).json();
+    assert.equal((await context.request.delete(`${origin}/api/business/admin/users/z-owner`, { headers: { Origin: origin, 'X-CSRF-Token': metadata.csrfToken }, data: { confirmUsername: 'synthetic-owner' } })).status(), 403, 'administrator self-delete refused at API');
+    const memberSession = await (await member.request.get(`${origin}/api/business/account/session`)).json();
+    for (const id of ['a-member', 'z-owner']) assert.equal((await member.request.delete(`${origin}/api/business/admin/users/${id}`, { headers: { Origin: origin, 'X-CSRF-Token': memberSession.csrfToken }, data: { confirmUsername: id === 'a-member' ? 'synthetic-member' : 'synthetic-owner' } })).status(), 403, 'ordinary users cannot delete themselves or others');
+    await memberPage.goto(`${origin}/admin/?view=users&user=z-owner`); await ready(memberPage);
+    assert.equal(await memberPage.locator('#navigation [data-view=users]:visible').count(), 0);
+    assert.equal(await memberPage.locator('.account-setting, input[name=username], input[name=confirmUsername]').count(), 0, 'ordinary-user deep link reveals no management controls');
+    const ownedUser = `synthetic-space-owner-${width}`, ownedId = `synthetic-user-owned-space-${width}`;
+    auth.createUser({ id: ownedUser, username: ownedUser, password });
+    auth.createSpace({ id: ownedId, type: 'family', ownerId: ownedUser });
+    await open(`view=users&user=${ownedUser}`);
+    await page.getByRole('button', { name: text('Delete user', '删除用户'), exact: true }).click();
+    await page.locator('.confirm-dialog input[name=confirmUsername]').fill(ownedUser);
+    const refused = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/users/${ownedUser}`));
+    await page.locator('.confirm-dialog button[type=submit]').click(); assert.equal((await refused).status(), 409); await ready(page, { allowError: true });
+    assert.match(await page.locator('#notice.error').innerText(), new RegExp(ownedId), 'owned-space refusal names the spaces to resolve');
+    assert.ok(auth.db.prepare('SELECT 1 FROM auth_users WHERE id=?').get(ownedUser));
+    assert.ok(auth.db.prepare('SELECT 1 FROM auth_spaces WHERE id=?').get(ownedId));
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth <= 1));
+    assert.deepEqual(errors, []);
+    evidence.push({ width, language, sectionCreation: 'Pass', dedicatedDetailHistoryAndReload: 'Pass', enableDisablePasswordAndRole: 'Pass', modalExactUsernameAndCancellation: 'Pass', deletionCascadeAndImmediateRevocation: 'Pass', pickerInvalidation: 'Pass', concurrentDeletionRefresh: 'Pass', selfAndMemberRefusal: 'Pass', ownedSpacesRefusal: ownedId, overflow: 0, status: 'Pass' });
+    await victim.close(); await context.close(); await member.close();
+  }
+  // A direct account URL must not depend on the first page of the user catalog.
+  for (let index = 0; index < 51; index++) auth.createUser({ id: `b-pagination-${String(index).padStart(2, '0')}`, username: `synthetic-pagination-${index}`, password });
+  const late = 'zz-synthetic-beyond-first-page'; auth.createUser({ id: late, username: late, password });
+  const context = await browser.newContext(); t.after(() => context.close());
+  await context.addCookies([{ name: 'praxis_locale', value: 'en', url: origin }]);
+  assert.equal((await context.request.post(`${origin}/auth/login`, { headers: { Origin: origin }, data: { username: 'synthetic-owner', password } })).status(), 200);
+  const catalog = await (await context.request.get(`${origin}/api/business/admin/users?limit=50`)).json();
+  assert.equal(catalog.users.some(user => user.id === late), false);
+  const page = await context.newPage(); await page.goto(`${origin}/admin/?view=users&user=${late}`); await ready(page);
+  assert.equal(await page.locator('#heading').innerText(), late);
+  assert.equal(await page.locator('.account-setting').count(), 2, 'deep-link detail loads a user beyond first catalog page');
+  evidence.push({ deepLinkBeyondFirstPage: 'Pass' });
+  t.diagnostic(JSON.stringify({ fixture: 'isolated synthetic AuthStore and real authorization/administration HTTP handlers; synthetic identities only', browser: browser.version(), evidence }));
 });
