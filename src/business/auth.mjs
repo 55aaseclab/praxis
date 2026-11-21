@@ -694,7 +694,9 @@ export class AuthStore {
     let consent;
     try { consent = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); } catch { fail('Consent form could not be verified.', 403, 'CONSENT_REQUIRED'); }
     if (consent.session !== hash(token) || consent.context !== context || consent.at > this.clock() || consent.at + 600000 <= this.clock()) fail('Consent form is missing or expired.', 403, 'CONSENT_REQUIRED');
-    return this.normalizeRules(consent.rules.filter((rule, index) => input[`rule_${index}`] === '1'));
+    const selected = consent.rules.filter((rule, index) => input[`rule_${index}`] === '1');
+    if (!selected.length) fail('Select at least one permission to authorize this agent.', 400, 'EMPTY_CONSENT');
+    return this.normalizeRules(selected);
   }
   requireRequestCsrf(request) {
     if (request.headers?.authorization !== undefined) { credentialFromRequest(request); return; }
@@ -774,8 +776,9 @@ async function readBody(request) {
   }
   fail('Authentication request requires JSON or form encoding.', 415, 'UNSUPPORTED_MEDIA_TYPE');
 }
+const contentSecurityPolicy = "default-src 'none'; img-src 'self'; manifest-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 function send(response, status, value, type = 'application/json; charset=utf-8', headers = {}) {
-  response.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', Pragma: 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'Content-Security-Policy': "default-src 'none'; img-src 'self'; manifest-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'", ...headers });
+  response.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', Pragma: 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'Content-Security-Policy': contentSecurityPolicy, ...headers });
   response.end(type.startsWith('application/json') ? JSON.stringify(value) : value);
 }
 function page(title, content, language = 'zh') {
@@ -1116,16 +1119,35 @@ export function createAuthHandler({ store, issuer = store.issuer, webGateway, ap
         let session;
         try { session = store.getSession(parseCookie(request)); } catch (error) { if (error.status !== 401) throw error; send(response, 303, '', 'text/plain', { Location: `/auth/login?return_to=${encodeURIComponent(`${url.pathname}${url.search}`)}` }); return true; }
         const available = store.availableRules(session.user.id, oauth.requested);
+        const sendConsent = (status, error = false) => {
+          // Chromium applies the submitting document's form-action to the 303
+          // destination too. Only this verified request's callback may be added.
+          const origin = new URL(oauth.redirectUri).origin;
+          if (!/^https?:\/\/(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::[0-9]+)?$/i.test(origin)) fail('Registered callback origin is not a safe CSP source.', 400, 'INVALID_CLIENT');
+          send(response, status, renderConsent(error), 'text/html; charset=utf-8', {
+            'Content-Security-Policy': contentSecurityPolicy.replace("form-action 'self'", `form-action 'self' ${origin}`),
+          });
+        };
+        const renderConsent = (error = false) => {
+          const consent = store.createConsent(parseCookie(request), available, `${url.pathname}${url.search}`);
+          const message = error ? `<p role="alert">${translate('Select at least one permission, then choose Authorize selected actions.', '请至少勾选一项权限，再点击「确认授权」。')}</p>` : '';
+          return renderPage('Authorize external agent', '授权外部智能体', `<p><strong>${escapeHtml(oauth.clientName)}</strong>${translate(' is requesting access to act on your behalf. Select the allowed actions. This grant can be revoked at any time during its seven-day term.', ' 请求代表你操作以下业务。请选择获准范围，七天内可随时撤销。')}</p>${message}<form method="post" action="${escapeHtml(`${url.pathname}${url.search}`)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}">${choices(available, language, store.registry)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`);
+        };
         if (request.method === 'GET') {
           if (!available.length) { send(response, 200, renderPage('No actions available', '暂无可授权操作', `<p>${escapeHtml(oauth.clientName)}${translate(' requested actions that are unavailable for your account.', ' 请求的操作没有与你当前权限及已接入的业务能力相交。')}</p><p>${translate('App access and agent permissions are granted separately.', '应用访问权限不会自动产生智能体操作能力。')}</p><a href="/">${translate('Back to workbench', '返回工作台')}</a>`), 'text/html; charset=utf-8'); return true; }
-          const consent = store.createConsent(parseCookie(request), available, `${url.pathname}${url.search}`);
-          send(response, 200, renderPage('Authorize external agent', '授权外部智能体', `<p><strong>${escapeHtml(oauth.clientName)}</strong>${translate(' is requesting access to act on your behalf. Select the allowed actions. This grant can be revoked at any time during its seven-day term.', ' 请求代表你操作以下业务。请选择获准范围，七天内可随时撤销。')}</p><form method="post" action="${escapeHtml(`${url.pathname}${url.search}`)}"><input type="hidden" name="csrf" value="${escapeHtml(session.csrfToken)}"><input type="hidden" name="consent" value="${escapeHtml(consent)}">${choices(available, language, store.registry)}<button>${translate('Authorize selected actions', '确认授权')}</button></form>`), 'text/html; charset=utf-8');
+          sendConsent(200);
         } else {
           requireOrigin(request, store);
           const input = await readBody(request);
           store.verifyCsrf(parseCookie(request), input.csrf ?? request.headers['x-csrf-token']);
           if (!available.length) fail('No requested operations are currently available.', 400, 'INVALID_SCOPE');
-          const rules = store.consentRules(parseCookie(request), input, `${url.pathname}${url.search}`);
+          let rules;
+          try { rules = store.consentRules(parseCookie(request), input, `${url.pathname}${url.search}`); }
+          catch (error) {
+            if (error.code !== 'EMPTY_CONSENT' || !(request.headers['content-type'] ?? '').startsWith('application/x-www-form-urlencoded')) throw error;
+            sendConsent(400, true);
+            return true;
+          }
           const { code } = store.createAuthorizationCode({ request: oauth, userId: session.user.id, rules });
           const destination = new URL(oauth.redirectUri); destination.searchParams.set('code', code); destination.searchParams.set('iss', store.issuer); if (oauth.state !== null) destination.searchParams.set('state', oauth.state);
           send(response, 303, '', 'text/plain', { Location: destination.href });

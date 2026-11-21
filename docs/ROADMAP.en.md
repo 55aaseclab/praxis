@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.139
+Version: 0.1.140
 
 [简体中文](ROADMAP.md)
 
@@ -18,6 +18,10 @@ Define public-search intent, bilingual content, real product imagery and the try
 ## Public self-service accounts
 
 Deliver public bilingual registration from the homepage and sign-in page, with JSON/form validation, same-origin writes and persistent peer/global rate limits. Keep identity creation separate from app/resource grants and administrator roles. Verify synthetic registration → sign-in → authorization-code/S256 PKCE consent → protected MCP token use, denial cases, restart persistence and both PRD reader languages. Advance the platform patch once with aligned bilingual release records; after source/browser checks and commit, build and deploy the affected web/core pair through the assigned managed blue/green environment. Read back public registration and homepage copy without creating live accounts; the independent business actor verifies its own result separately.
+
+## OAuth consent callback redirects and empty selection
+
+Handle a verified empty selection on the existing external-agent consent page with an actionable English/Simplified Chinese error and retry form. Verify HTTP 400, no redirect and unchanged code/delegation counts with isolated synthetic fixtures; then select an action and complete the existing 303/code/S256 PKCE exchange. On verified consent and retry documents, narrowly allow the registered callback origin in CSP `form-action`; preserve the default restrictions elsewhere and reject unsafe CSP sources. Verify a real Chromium form POST, browser-followed cross-origin callback, no CSP violation and successful PKCE exchange, plus empty-selection failure and retry. Keep unchecked defaults and authorization boundaries. Run the platform suite and both PRD reader languages, commit, and build/deploy the affected web/core pair through the authorized test blue/green environment. Report running version and public readback separately from the independent business client's acceptance.
 
 ## Self-service business spaces
 
@@ -269,6 +273,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.137 | 2026-11-20 | Merge persistent AI-native campaigns and document version updates for cross-branch integration |
 | v0.1.138 | 2026-11-21 | Add public self-service account registration with bounded abuse protection |
 | v0.1.139 | 2026-11-21 | Enable self-service spaces with owner-controlled app enrollment and consistent authorization |
+| v0.1.140 | 2026-11-21 | Allow verified OAuth callback redirects in consent CSP and show actionable empty-selection retries |
 
 ### Public applications with private collections
 

@@ -8,6 +8,7 @@ import { AuthStore, createAuthHandler, credentialFromRequest, hashVerifier, SESS
 
 const password = 'Synthetic-test-password-2026';
 const issuer = 'http://127.0.0.1:4326';
+const defaultCsp = "default-src 'none'; img-src 'self'; manifest-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 const allReminderActions = ['read', 'create', 'update', 'complete', 'delete'];
 const rule = (spaceId = 'family-a', actions = allReminderActions, resources = ['*'], appId = 'reminder') => ({ appId, spaceId, actions, resources });
 
@@ -226,6 +227,7 @@ test('consent snapshots cannot change scope, session, expiry or selected rule in
   const rules = [rule('personal-a', ['read']), rule('family-a', ['update'])];
   const consent = f.store.createConsent(session.sessionToken, rules, 'browser');
   assert.deepEqual(f.store.consentRules(session.sessionToken, { consent, rule_1: '1' }, 'browser'), [rules[1]]);
+  assert.throws(() => f.store.consentRules(session.sessionToken, { consent }, 'browser'), { status: 400, code: 'EMPTY_CONSENT' });
   const other = f.store.login({ username: 'alice', password });
   assert.throws(() => f.store.consentRules(other.sessionToken, { consent, rule_1: '1' }, 'browser'), { status: 403 });
   assert.throws(() => f.store.consentRules(session.sessionToken, { consent, rule_1: '1' }, 'different-context'), { status: 403 });
@@ -281,6 +283,8 @@ test('OAuth HTTP login, consent, token exchange and revocation complete with syn
   const login = await f.login('bob');
   const form = await f.request(path, { headers: { Cookie: login.cookie } });
   assert.equal(form.status, 200);
+  const consentCsp = defaultCsp.replace("form-action 'self'", "form-action 'self' https://client.example");
+  assert.equal(form.headers.get('content-security-policy'), consentCsp);
   assert.match(await form.text(), /Authorize external agent/);
   const escalation = await f.json(path, { rules: [rule('family-a', ['delete'])] }, { headers: { Cookie: login.cookie, 'X-CSRF-Token': login.body.csrfToken } });
   assert.equal(escalation.status, 403);
@@ -296,6 +300,183 @@ test('OAuth HTTP login, consent, token exchange and revocation complete with syn
   assert.throws(() => f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'delete' }), { status: 403 });
   assert.equal((await f.json('/oauth/revoke', { token: tokens.refresh_token, client_id: 'agent-a' })).status, 200);
   assert.throws(() => f.store.authenticate(tokens.access_token), { status: 401 });
+});
+
+for (const language of ['en', 'zh']) test(`empty OAuth consent shows an actionable ${language} form and retries through PKCE`, async t => {
+  const f = await httpFixture(t), verifier = 'empty-selection-verifier-'.repeat(3);
+  const consentCsp = defaultCsp.replace("form-action 'self'", "form-action 'self' https://client.example");
+  assert.equal((await f.json('/auth/register', { username: 'consent-visitor', password })).status, 201);
+  const userId = f.store.db.prepare('SELECT id FROM auth_users WHERE username=?').get('consent-visitor').id;
+  f.store.grantResource({ userId, ...rule('family-a', ['read'], ['synthetic-record']) });
+  const registration = await f.json('/oauth/register', { client_name: 'Synthetic <consent> client', redirect_uris: ['https://client.example/callback'], token_endpoint_auth_method: 'none' });
+  assert.equal(registration.status, 201);
+  const { client_id: clientId } = await registration.json();
+  const login = await f.login('consent-visitor');
+  const path = '/oauth/authorize?' + new URLSearchParams({ client_id: clientId, redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${issuer}/mcp`, scope: 'reminder:read', state: 'empty-selection-retry', lang: language });
+  const form = await f.request(path, { headers: { Cookie: login.cookie } });
+  assert.equal(form.status, 200);
+  assert.equal(form.headers.get('content-security-policy'), consentCsp);
+  const html = await form.text();
+  assert.match(html, /name="rule_0"/);
+  assert.doesNotMatch(html, /\bchecked\b|role="alert"/);
+  const consent = html.match(/name="consent" value="([^"]+)"/)[1];
+  const submit = (input, headers = {}) => f.request(path, { method: 'POST', headers: { Cookie: login.cookie, Origin: issuer, 'Content-Type': 'application/x-www-form-urlencoded', ...headers }, body: new URLSearchParams(input) });
+  const counts = () => ['auth_codes', 'auth_grants', 'auth_tokens'].map(table => f.store.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n);
+  const before = counts();
+  for (const [input, headers] of [
+    [{ csrf: login.body.csrfToken, consent }, { Origin: 'https://other.example' }],
+    [{ csrf: 'invalid', consent }, {}],
+    [{ csrf: login.body.csrfToken, consent: `${consent}x` }, {}],
+  ]) {
+    const rejected = await submit(input, headers);
+    assert.equal(rejected.status, 403);
+    assert.equal(rejected.headers.get('content-security-policy'), defaultCsp);
+    assert.equal(rejected.headers.get('location'), null);
+    assert.doesNotMatch(await rejected.text(), /name="consent"/);
+  }
+  const empty = await submit({ csrf: login.body.csrfToken, consent });
+  assert.equal(empty.status, 400);
+  assert.equal(empty.headers.get('content-security-policy'), consentCsp);
+  assert.equal(empty.headers.get('location'), null);
+  assert.match(empty.headers.get('content-type'), /text\/html/);
+  assert.match(empty.headers.get('cache-control'), /no-store/);
+  const retry = await empty.text();
+  assert.match(retry, language === 'en' ? /role="alert">Select at least one permission, then choose Authorize selected actions\./ : /role="alert">请至少勾选一项权限，再点击「确认授权」。/);
+  assert.match(retry, /Synthetic &lt;consent&gt; client/);
+  assert.match(retry, /<form method="post" action="\/oauth\/authorize\?/);
+  assert.match(retry, /name="rule_0"/);
+  assert.doesNotMatch(retry, /\bchecked\b/);
+  assert.deepEqual(counts(), before, 'empty and invalid consent issue no codes, grants or tokens');
+  const allowed = await submit({ csrf: login.body.csrfToken, consent: retry.match(/name="consent" value="([^"]+)"/)[1], rule_0: '1' });
+  assert.equal(allowed.status, 303);
+  assert.equal(allowed.headers.get('content-security-policy'), defaultCsp);
+  const destination = new URL(allowed.headers.get('location'));
+  assert.equal(destination.origin + destination.pathname, 'https://client.example/callback');
+  assert.equal(destination.searchParams.get('state'), 'empty-selection-retry');
+  assert.equal(destination.searchParams.get('iss'), issuer);
+  assert.ok(destination.searchParams.get('code'));
+  const exchange = { grant_type: 'authorization_code', code: destination.searchParams.get('code'), client_id: clientId, redirect_uri: 'https://client.example/callback', code_verifier: verifier, resource: `${issuer}/mcp` };
+  const response = await f.json('/oauth/token', exchange);
+  assert.equal(response.status, 200);
+  const tokens = await response.json();
+  assert.equal(tokens.scope, 'reminder:read');
+  assert.equal(f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'read', resourceId: 'synthetic-record' }).userId, userId);
+  assert.throws(() => f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId: 'family-a', action: 'delete', resourceId: 'synthetic-record' }), { status: 403 });
+  assert.equal((await f.json('/oauth/token', exchange)).status, 400);
+});
+
+test('only verified selectable OAuth documents allow a safe registered callback CSP origin', async t => {
+  const f = await httpFixture(t), login = await f.login('bob');
+  assert.equal((await f.json('/auth/register', { username: 'csp-unprivileged', password })).status, 201);
+  const requestPath = (redirectUri, extra = {}) => '/oauth/authorize?' + new URLSearchParams({ client_id: 'agent-a', redirect_uri: redirectUri, response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier('csp-verifier-'.repeat(4)), resource: `${issuer}/mcp`, scope: 'reminder:read', ...extra });
+  for (const path of ['/auth/login', '/auth/register', '/auth/delegate']) {
+    const response = await f.request(path, { headers: { Cookie: login.cookie } });
+    assert.equal(response.headers.get('content-security-policy'), defaultCsp, path);
+  }
+  for (const [path, cookie, status] of [
+    [requestPath('https://unregistered.example/callback'), login.cookie, 400],
+    [requestPath('https://client.example/other'), login.cookie, 400],
+    [requestPath('https://client.example/callback', { code_challenge_method: 'plain' }), login.cookie, 400],
+    [requestPath('https://client.example/callback'), '', 303],
+    [requestPath('https://client.example/callback'), (await f.login('csp-unprivileged')).cookie, 200],
+  ]) {
+    const response = await f.request(path, { headers: { Cookie: cookie } });
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get('content-security-policy'), defaultCsp);
+  }
+  for (const uri of ['https://client.example/callback?state=x;form-action%20*', 'http://[::1]:7890/callback', 'https://*.example/callback', 'https://client.example;script-src.example/callback', "https://client'example/callback"]) {
+    const client = f.store.createClient({ name: 'Synthetic CSP client', redirectUris: [uri] });
+    const response = await f.request(requestPath(uri, { client_id: client.id }), { headers: { Cookie: login.cookie } });
+    const safe = ['client.example', '[::1]'].includes(new URL(uri).hostname);
+    assert.equal(response.status, safe ? 200 : 400);
+    assert.equal(response.headers.get('content-security-policy'), safe ? defaultCsp.replace("form-action 'self'", `form-action 'self' ${new URL(uri).origin}`) : defaultCsp);
+  }
+});
+
+// Run with PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs.
+// HTTP fetch alone cannot exercise Chromium's form-action redirect checks.
+test('Chromium follows consent POST to a cross-origin callback and completes PKCE', { skip: !process.env.PLAYWRIGHT_MODULE, timeout: 60000 }, async t => {
+  const { chromium } = await import(process.env.PLAYWRIGHT_MODULE);
+  const directory = mkdtempSync(join(tmpdir(), 'praxis-oauth-browser-'));
+  let store, handler, browser;
+  const callbacks = [];
+  const callback = createServer((request, response) => {
+    callbacks.push(new URL(request.url, 'http://callback.invalid'));
+    response.writeHead(200, { 'Content-Type': 'text/html' });
+    response.end('<!doctype html><title>Synthetic OAuth callback</title><p>Callback received.</p>');
+  });
+  const server = createServer(async (request, response) => {
+    if (!(await handler(request, response))) response.writeHead(404).end();
+  });
+  t.after(async () => {
+    await browser?.close();
+    for (const service of [server, callback]) { service.closeAllConnections(); await new Promise(resolve => service.close(resolve)); }
+    store?.close(); rmSync(directory, { recursive: true, force: true });
+  });
+  for (const service of [server, callback]) await new Promise(resolve => service.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const redirectUri = `http://127.0.0.1:${callback.address().port}/callback?fixed=synthetic`;
+  assert.notEqual(new URL(redirectUri).origin, origin);
+  store = new AuthStore({ file: join(directory, 'auth.sqlite'), issuer: origin });
+  handler = createAuthHandler({ store });
+  browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
+  for (const [language, width] of [['en', 1440], ['zh', 390]]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage(), violations = [], posts = [];
+    page.on('console', message => { if (/form-action|Content Security Policy/i.test(message.text())) violations.push(message.text()); });
+    page.on('response', response => { if (response.request().method() === 'POST' && new URL(response.url()).pathname === '/oauth/authorize') posts.push(response); });
+    const registration = await context.request.post(`${origin}/oauth/register`, { data: { client_name: 'Synthetic browser client', redirect_uris: [redirectUri], token_endpoint_auth_method: 'none' } });
+    assert.equal(registration.status(), 201);
+    const { client_id: clientId } = await registration.json();
+    const verifier = `synthetic-browser-verifier-${language}-`.repeat(3);
+    const path = '/oauth/authorize?' + new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: `${origin}/mcp`, scope: 'reminder:read', state: `synthetic-${language}`, lang: language });
+    const registrationPage = await page.goto(`${origin}/auth/register?` + new URLSearchParams({ return_to: path, lang: language }));
+    assert.equal(registrationPage.headers()['content-security-policy'], defaultCsp);
+    await page.locator('input[name=username]').fill(`synthetic-browser-${language}`);
+    await page.locator('input[name=password]').fill(password);
+    await Promise.all([page.waitForURL(url => url.pathname === '/auth/login'), page.locator('form[method=post] button').click()]);
+    await page.locator('input[name=username]').fill(`synthetic-browser-${language}`);
+    await page.locator('input[name=password]').fill(password);
+    await Promise.all([page.waitForURL(url => url.pathname === '/oauth/authorize'), page.locator('form[method=post] button').click()]);
+    assert.equal(await page.locator('input[name=rule_0]').count(), 0, 'a new account has no implicit permissions');
+    const userId = store.db.prepare('SELECT id FROM auth_users WHERE username=?').get(`synthetic-browser-${language}`).id;
+    // Only the isolated synthetic store is bootstrapped; no business service runs.
+    const spaceId = store.createSpace({ type: 'personal', ownerId: userId }).id;
+    store.grantResource({ userId, ...rule(spaceId, ['read'], ['synthetic-record']) });
+    const form = await page.reload();
+    const expectedCsp = defaultCsp.replace("form-action 'self'", `form-action 'self' ${new URL(redirectUri).origin}`);
+    assert.equal(form.headers()['content-security-policy'], expectedCsp);
+    assert.equal(await page.locator('input[name=rule_0]').isChecked(), false);
+    const counts = () => ['auth_codes', 'auth_grants', 'auth_tokens'].map(table => store.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n);
+    const before = counts(), callbackCount = callbacks.length;
+    const [empty] = await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/oauth/authorize'), page.locator('form[method=post] button').click()]);
+    await page.locator('[role=alert]').waitFor();
+    assert.equal(empty.status(), 400);
+    assert.equal(empty.headers()['location'], undefined);
+    assert.equal(empty.headers()['content-security-policy'], expectedCsp);
+    assert.equal(new URL(page.url()).pathname, '/oauth/authorize');
+    assert.match(await page.locator('[role=alert]').innerText(), language === 'en' ? /Select at least one permission/ : /请至少勾选一项权限/);
+    assert.deepEqual(counts(), before);
+    assert.equal(callbacks.length, callbackCount);
+    await page.locator('input[name=rule_0]').check();
+    await Promise.all([page.waitForURL(url => url.origin === new URL(redirectUri).origin), page.locator('form[method=post] button').click()]);
+    assert.equal(callbacks.length, callbackCount + 1, 'the browser, not fetch, reaches the receiver');
+    assert.deepEqual(posts.map(response => response.status()), [400, 303]);
+    const destination = callbacks.at(-1);
+    assert.equal(destination.searchParams.get('state'), `synthetic-${language}`);
+    assert.equal(destination.searchParams.get('iss'), origin);
+    assert.equal(destination.searchParams.get('fixed'), 'synthetic');
+    assert.ok(destination.searchParams.get('code'));
+    const exchange = { grant_type: 'authorization_code', code: destination.searchParams.get('code'), client_id: clientId, redirect_uri: redirectUri, code_verifier: verifier, resource: `${origin}/mcp` };
+    const tokens = await context.request.post(`${origin}/oauth/token`, { data: exchange });
+    assert.equal(tokens.status(), 200);
+    const token = await tokens.json();
+    assert.equal(token.scope, 'reminder:read');
+    assert.equal(store.authorize(token.access_token, { appId: 'reminder', spaceId, action: 'read', resourceId: 'synthetic-record' }).userId, userId);
+    assert.equal((await context.request.post(`${origin}/oauth/token`, { data: exchange })).status(), 400);
+    assert.deepEqual(violations, []);
+    await context.close();
+  }
 });
 
 test('public registration is reachable in both languages and preserves a validated OAuth return path', async t => {
