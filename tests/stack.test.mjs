@@ -50,7 +50,7 @@ test('blue-green facade keeps its container while application writers retain the
   assert.ok(starts.find(call => call.args.includes('--no-recreate')).args.includes('praxis-public'));
   const replaced = starts.find(call => call.args.includes('--force-recreate')).args;
   assert.ok(!replaced.includes('praxis-public'));
-  assert.ok(replaced.includes('travel') && replaced.includes('finance'));
+  assert.ok(replaced.includes('travel') && replaced.includes('intelligence'));
 });
 
 test('stack resolves the canonical workspace and writes only private path configuration', async t => {
@@ -661,13 +661,13 @@ test('Knowledge runtime configuration produces an exact app-only Compose binding
 async function configuredWorkingRoots(t) {
   const f = await fixture(t);
   const { resolveAppPaths, appStorageSources } = await import('../src/storage/app-paths.mjs');
-  f.config.workingData = { version: 1, roots: { finance: join(f.root, 'other-disk/finance') } };
+  f.config.workingData = { version: 1, roots: { intelligence: join(f.root, 'other-disk/intelligence') } };
   f.config.dockerSourceMode = 'registered';
   const paths = resolveAppPaths(f.config);
   const reminder = join(paths.reminder, 'synthetic-space/checklist.json');
   f.config.appSources = appStorageSources(paths, { 'synthetic-space': reminder });
   await writeFile(f.configPath, JSON.stringify(f.config));
-  for (const file of [reminder, paths.tingproof, join(paths.slidesDecks, 'registry.js'), join(paths.knowledgeContent, 'catalog/documents.json'), join(paths.knowledgeContent, 'published/index.html'), join(paths.knowledgeContent, 'published-standalone/index.html'), join(paths.travelContent, 'catalog/trips.json'), join(paths.travelContent, 'catalog/routes.json'), join(paths.travelContent, 'catalog/photo-credits.json'), join(paths.travelContent, 'published/index.html'), paths.finance]) {
+  for (const file of [reminder, paths.tingproof, join(paths.slidesDecks, 'registry.js'), join(paths.knowledgeContent, 'catalog/documents.json'), join(paths.knowledgeContent, 'published/index.html'), join(paths.knowledgeContent, 'published-standalone/index.html'), join(paths.travelContent, 'catalog/trips.json'), join(paths.travelContent, 'catalog/routes.json'), join(paths.travelContent, 'catalog/photo-credits.json'), join(paths.travelContent, 'published/index.html')]) {
     await mkdir(dirname(file), { recursive: true, mode: 0o700 });
     await writeFile(file, 'Synthetic content.', { mode: 0o600 });
   }
@@ -677,14 +677,14 @@ async function configuredWorkingRoots(t) {
   return { ...f, paths, settings };
 }
 
-test('configured roots bind Finance and both content apps explicitly and keep observations separate within the platform root', async t => {
+test('configured roots bind content apps explicitly and keep observations separate within the platform root', async t => {
   const f = await configuredWorkingRoots(t);
-  assert.equal(f.settings.workingPaths.finance, f.paths.finance);
+  assert.equal(f.settings.workingPaths.intelligence, f.paths.intelligence);
   assert.equal(f.settings.observationsDir, f.paths.observations);
   await validateData(f.settings);
   await writeComposeEnvironment(f.settings);
   const { services } = JSON.parse(await readFile(f.settings.travelMapOverrideFile, 'utf8'));
-  assert.deepEqual(services.finance.volumes, [{ type: 'bind', source: dirname(f.paths.finance), target: '/data', read_only: false, bind: { create_host_path: false } }]);
+  assert.equal(services.finance, undefined);
   assert.equal(services.travel.environment.TRAVEL_CONTENT_ROOT, '/data/content');
   assert.equal(services.travel.volumes[0].source, f.paths.travelContent);
   assert.equal(services.travel.volumes[0].read_only, true);
@@ -695,12 +695,13 @@ test('configured roots bind Finance and both content apps explicitly and keep ob
   await assert.rejects(validateObservationsDirectory(f.paths.knowledge, { uid: f.settings.uid, protectedPaths: f.settings.observationsProtectedPaths }), /dedicated private directory/);
 });
 
-test('configured Finance and published data fail closed when missing without creating replacements', async t => {
+test('configured published data fails closed when missing without creating replacements', async t => {
   const f = await configuredWorkingRoots(t);
-  await rm(f.paths.finance);
+  const trips = join(f.paths.travelContent, 'catalog/trips.json');
+  await rm(trips);
   await assert.rejects(validateData(f.settings), /missing or unsafe/);
-  await assert.rejects(stat(f.paths.finance), { code: 'ENOENT' });
-  await writeFile(f.paths.finance, 'Synthetic content.', { mode: 0o600 });
+  await assert.rejects(stat(trips), { code: 'ENOENT' });
+  await writeFile(trips, 'Synthetic content.', { mode: 0o600 });
   const index = join(f.paths.knowledgeContent, 'published/index.html');
   await rm(index);
   await assert.rejects(validateData(f.settings), /missing or unsafe/);

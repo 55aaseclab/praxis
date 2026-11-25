@@ -11,7 +11,7 @@ Each maintained app publishes a reviewed `praxis-provider.mjs` at its pinned pub
 | Source | Card execution | Data inventory |
 | --- | --- | --- |
 | Reminder, Knowledge, Travel, Projects, Memo, TingProof, Lattice | Server; existing signed, resource-filtered app reads | App-owned descriptors resolved against private configuration and runtime metadata |
-| Finance, Intelligence | Server; explicitly configured, fixed native read routes | App-owned descriptors; the current permission granularity is the native view |
+| Intelligence | Server; explicitly configured, fixed native read routes | App-owned descriptors; the current permission granularity is the native view |
 | Calendar, Matrix Reader | Current browser and native account/context | Browser, derived and external ownership metadata |
 | Letters, Profiles | Current browser; existing protected native document reads | Server-resolved originals metadata, subject to administrator access |
 | Polaris | Runtime classification; no workbench cards | Read-only runtime observation metadata |
@@ -55,7 +55,7 @@ The server supplies `spaces: string[]`, `actor: {userId, username}` and `invoke(
 
 Lattice uses catalog ID `lattice-slides`, adapter ID `slides` and native `/apps/slides/` links. These identifiers have separate purposes. App-owned projections preserve their actual authorization resource even when several cards refer to different items within that resource.
 
-Finance and Intelligence use `resourceMode: 'native-view'`, a fixed `nativeResourceId` and declared `nativeReads`. The host's `readNative({path, resourceId})` requires an explicit `appProviders.<appId>.url` origin in private core configuration. An absent origin makes the source unavailable; the host must not guess a localhost production service. Calls use the configured origin, declared path and current native app access. These existing whole-view reads do not become fine-grained MCP grants.
+Intelligence uses `resourceMode: 'native-view'`, a fixed `nativeResourceId` and declared `nativeReads`. The host's `readNative({path, resourceId})` requires an explicit `appProviders.<appId>.url` origin in private core configuration. An absent origin makes the source unavailable; the host must not guess a localhost production service. Calls use the configured origin, declared path and current native app access. These existing whole-view reads do not become fine-grained MCP grants.
 
 Browser modules declare `cards.execution: 'browser'`. The host obtains an account-filtered manifest from `/api/workbench/providers` and imports only the matching reviewed `/app-providers/<appId>.mjs` module. It supplies `identity: {userId, username}` and a GET-only `read(path)` bound to the app's own same-origin native route. The target app still authorizes its records. Provider source is reviewed application code; these interfaces are not a sandbox for untrusted uploads.
 
@@ -93,7 +93,7 @@ Inventory descriptors name a source ID, label, kind and location. The resolver a
 
 Inventory output includes label, kind, status and whichever location has evidence: `applicationPath`, `hostPath`, `containerPath`, `volumeName` or `storageKey`. An application path alone must not be relabeled as a host or container path. Preserve conflicts and unavailable bindings. Browser files and external homeserver history do not become server-backup coverage. These methods add no import, export, delete or restore controls. [Storage](STORAGE.en.md)
 
-The default initializer records only data-path declarations from its existing installation layout and the app-owned descriptors. It explicitly configures Finance and Intelligence origins. Its private `runtime.pathMaps[ENV]` contains only the configured space-to-path mapping. This is layout metadata, not an observed Docker mount or proof of backup success. For an installation created by the included Compose bootstrap, initialization fills missing provider metadata from its saved runtime configuration and layout, preserving existing overrides. It keeps a private exact rollback copy of core configuration; accounts, keys and records are not reinitialized. Other managed installations use their own reviewed origin/binding configuration.
+The default initializer records only data-path declarations from its existing installation layout and the app-owned descriptors. It explicitly configures the Intelligence origin. Its private `runtime.pathMaps[ENV]` contains only the configured space-to-path mapping. This is layout metadata, not an observed Docker mount or proof of backup success. For an installation created by the included Compose bootstrap, initialization fills missing provider metadata from its saved runtime configuration and layout, preserving existing overrides. It keeps a private exact rollback copy of core configuration; accounts, keys and records are not reinitialized. Other managed installations use their own reviewed origin/binding configuration.
 
 For a host-managed deployment, the read-only metadata publisher can refresh actual running bindings:
 
@@ -121,7 +121,7 @@ Use synthetic records for provider, authorization and preference checks. Check a
 | 来源 | 卡片执行 | 数据清单 |
 | --- | --- | --- |
 | Reminder、Knowledge、Travel、Projects、Memo、TingProof、Lattice | 服务端，使用已有签名及资源过滤读取 | 按应用描述和私有配置、运行元数据解析 |
-| Finance、Intelligence | 服务端，显式配置的固定原生只读路径 | 应用描述；当前权限粒度是原生整视图 |
+| Intelligence | 服务端，显式配置的固定原生只读路径 | 应用描述；当前权限粒度是原生整视图 |
 | Calendar、Matrix Reader | 当前浏览器及本人账户、阅读上下文 | 浏览器、派生与外部资料归属 |
 | Letters、Profiles | 当前浏览器，已有受保护的原生文档读取 | 服务端解析原件位置，由管理员查看 |
 | Polaris | 归为运行时，不生成工作台卡片 | 只读运行观察元数据 |
@@ -146,7 +146,7 @@ Use synthetic records for provider, authorization and preference checks. Check a
 
 Lattice 正式目录 ID 为 `lattice-slides`，适配器 ID 为 `slides`，原生路径为 `/apps/slides/`，三者用途不同。同一授权资源可包含多个卡片对象，投影仍保留真实授权资源。
 
-Finance、Intelligence 声明 `resourceMode: 'native-view'`、固定 `nativeResourceId` 和 `nativeReads`。宿主 `readNative({path, resourceId})` 要求私有核心配置中显式提供 `appProviders.<appId>.url`。未配置时来源不可用，不默认访问宿主机的生产端口。调用限定到已配置 origin、声明路径及当前原生应用权限，已有整视图读取不冒充按记录委托的 MCP 能力。
+Intelligence 声明 `resourceMode: 'native-view'`、固定 `nativeResourceId` 和 `nativeReads`。宿主 `readNative({path, resourceId})` 要求私有核心配置中显式提供 `appProviders.<appId>.url`。未配置时来源不可用，不默认访问宿主机的生产端口。调用限定到已配置 origin、声明路径及当前原生应用权限，已有整视图读取不冒充按记录委托的 MCP 能力。
 
 浏览器模块声明 `cards.execution: 'browser'`。宿主从 `/api/workbench/providers` 取得按账户筛选的清单，只加载匹配的经审核 `/app-providers/<appId>.mjs`。上下文提供 `identity: {userId, username}` 和限 GET、同源、所属应用路径的 `read(path)`；记录仍由原应用验权。模块属于经审核的应用代码，这些接口不是不可信上传代码的沙箱。
 
@@ -184,7 +184,7 @@ Calendar 设备事件按原生用户分别存储。Matrix 卡片只使用当前�
 
 清单返回标签、种类、状态以及有依据的位置，如 `applicationPath`、`hostPath`、`containerPath`、`volumeName`、`storageKey`。应用内路径不冒充宿主机或容器路径，冲突与缺失绑定如实保留。浏览器文件、外部 homeserver 历史不冒充服务端备份覆盖。本接口不增加导入、导出、删除或恢复控件。[存储合同](STORAGE.md)
 
-默认初始化器只从既有安装布局和应用描述记录数据位置，显式配置 Finance、Intelligence origin。私有 `runtime.pathMaps[ENV]` 只包含已配置的空间到路径映射，属于布局元数据，不代表已观察 Docker 挂载或备份成功。由内置 Compose 初始化的安装会依据已保存的运行配置与布局补齐缺失的 provider 元数据，保留已有覆盖项，并保存核心配置的私有原样回滚副本；不重建账号、密钥或业务记录。其他受管安装按自己的环境明确配置 origin 与绑定。
+默认初始化器只从既有安装布局和应用描述记录数据位置，显式配置 Intelligence origin。私有 `runtime.pathMaps[ENV]` 只包含已配置的空间到路径映射，属于布局元数据，不代表已观察 Docker 挂载或备份成功。由内置 Compose 初始化的安装会依据已保存的运行配置与布局补齐缺失的 provider 元数据，保留已有覆盖项，并保存核心配置的私有原样回滚副本；不重建账号、密钥或业务记录。其他受管安装按自己的环境明确配置 origin 与绑定。
 
 宿主机部署可使用上方 `scripts/provider-runtime.mjs --output ... --watch 30` 命令刷新实际运行绑定。工作器先按已安装应用筛选服务，再读取声明的数据路径变量、工作目录与挂载元数据；不输出全环境、命令参数、密钥或业务正文。绑定保留 native/business 角色，值冲突时记为 unknown。输出目录权限 0700、原子文件权限 0600；核心以只读目录挂载，`appProviderRuntimeFile` 指向核心可见路径，避免原子替换后单文件挂载仍指向旧 inode。运行命令本身不安装系统服务，也不改变业务存储。
 

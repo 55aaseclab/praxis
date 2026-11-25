@@ -64,7 +64,7 @@
 
 ## 数据与实现边界
 
-应用自有的 provider 合同为十三个非 runtime 应用提供卡片，为全部十四个应用提供数据清单。Polaris 作为 runtime 提供清单与运行 Trace 元数据，不参与工作台卡片。投影包含有来源的预览、依据和版本，个人稍后／收起状态独立持久保存。参见[provider 合同](../APP-PROVIDERS.md#简体中文)。
+应用自有的 provider 合同为十二个非 runtime 应用提供卡片，为全部十三个应用提供数据清单。Polaris 作为 runtime 提供清单与运行 Trace 元数据，不参与工作台卡片。投影包含有来源的预览、依据和版本，个人稍后／收起状态独立持久保存。参见[provider 合同](../APP-PROVIDERS.md#简体中文)。
 
 实现合同要求：
 

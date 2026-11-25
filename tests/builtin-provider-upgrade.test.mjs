@@ -4,13 +4,13 @@ import{builtinProviderDefaults,mergeMissingProviderConfiguration,upgradeBuiltinP
 import{AuthStore}from'../src/business/auth.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 test('existing provider URLs, disabled overrides and data bindings survive filling new defaults',()=>{
- const config={issuer:'https://praxis.example',database:'/synthetic/auth.db',apps:{reminder:{keyFile:'/synthetic/key',spaces:['stable-space']}},appProviders:{finance:{url:'https://configured.example',runtime:{environment:{FINANCE_DATA:'/custom/ledger.json'}}},intelligence:{url:null}}};
- const before=structuredClone(config),defaults={finance:{url:'http://127.0.0.1:4329',runtime:{status:'ready',environment:{FINANCE_DATA:'/default/ledger.json'}}},intelligence:{url:'http://127.0.0.1:4330'},polaris:{url:'http://127.0.0.1:18787'}};
- const updated=mergeMissingProviderConfiguration(config,defaults);assert.deepEqual(config,before);assert.deepEqual(updated.apps,config.apps);assert.equal(updated.database,config.database);assert.equal(updated.appProviders.finance.url,'https://configured.example');assert.equal(updated.appProviders.finance.runtime.environment.FINANCE_DATA,'/custom/ledger.json');assert.equal(updated.appProviders.intelligence.url,null);assert.equal(updated.appProviders.polaris.url,'http://127.0.0.1:18787');
+ const config={issuer:'https://praxis.example',database:'/synthetic/auth.db',apps:{reminder:{keyFile:'/synthetic/key',spaces:['stable-space']}},appProviders:{intelligence:{url:'https://configured.example',runtime:{environment:{INTELLIGENCE_DATA_DIR:'/custom/intelligence'}}},polaris:{url:null}}};
+ const before=structuredClone(config),defaults={intelligence:{url:'http://127.0.0.1:4330',runtime:{status:'ready',environment:{INTELLIGENCE_DATA_DIR:'/default/intelligence'}}},polaris:{url:'http://127.0.0.1:18787'},memo:{url:'http://127.0.0.1:4325'}};
+ const updated=mergeMissingProviderConfiguration(config,defaults);assert.deepEqual(config,before);assert.deepEqual(updated.apps,config.apps);assert.equal(updated.database,config.database);assert.equal(updated.appProviders.intelligence.url,'https://configured.example');assert.equal(updated.appProviders.intelligence.runtime.environment.INTELLIGENCE_DATA_DIR,'/custom/intelligence');assert.equal(updated.appProviders.polaris.url,null);assert.equal(updated.appProviders.memo.url,'http://127.0.0.1:4325');
 });
 test('saved bootstrap target and port metadata determine origins instead of overriding deployment choices',()=>{
- const defaults=builtinProviderDefaults({providers:[],runtime:{finance:{PORT:'24329'},intelligence:{INTELLIGENCE_PORT:'24330'},polaris:{PORT:'28787'}},appTargets:{finance:'http://127.0.0.1:34329'}});
- assert.equal(defaults.finance.url,'http://127.0.0.1:34329');assert.equal(defaults.intelligence.url,'http://127.0.0.1:24330');assert.equal(defaults.polaris.url,'http://127.0.0.1:28787');
+ const defaults=builtinProviderDefaults({providers:[],runtime:{intelligence:{INTELLIGENCE_PORT:'24330'},polaris:{PORT:'28787'}},appTargets:{intelligence:'http://127.0.0.1:34330'}});
+ assert.equal(defaults.intelligence.url,'http://127.0.0.1:34330');assert.equal(defaults.polaris.url,'http://127.0.0.1:28787');
 });
 test('provider-only upgrade preserves account, identity, key and record bytes plus a private exact config rollback copy',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'praxis-provider-upgrade-'));t.after(()=>rm(directory,{recursive:true,force:true}));await mkdir(join(directory,'keys'));
@@ -18,7 +18,7 @@ test('provider-only upgrade preserves account, identity, key and record bytes pl
  const digests={};for(const[name,bytes]of Object.entries(untouched)){await writeFile(join(directory,name),bytes,{mode:0o600});digests[name]=hash(Buffer.from(bytes));}
  const database=join(directory,'auth.db'),auth=new AuthStore({file:database,issuer:'http://127.0.0.1:14326'});auth.createUser({id:'stable-owner',username:'synthetic-owner',password:'Synthetic-test-password-2026'});auth.setPlatformAdmin({userId:'stable-owner',enabled:true});const session=auth.login({username:'synthetic-owner',password:'Synthetic-test-password-2026'});auth.close();digests['auth.db']=hash(await readFile(database));
  const file=join(directory,'core.json'),original=Buffer.from('{ "issuer":"https://praxis.example", "database":"/stable/auth.db", "apps":{"reminder":{"keyFile":"/stable/key","spaces":["stable-space"]}} }\n');await writeFile(file,original,{mode:0o600});
- const defaults={finance:{url:'http://127.0.0.1:4329'},intelligence:{url:'http://127.0.0.1:4330'},polaris:{url:'http://127.0.0.1:18787'}};
+  const defaults={intelligence:{url:'http://127.0.0.1:4330'},polaris:{url:'http://127.0.0.1:18787'},memo:{url:'http://127.0.0.1:4325'}};
  const result=await upgradeBuiltinProviderConfiguration(file,defaults);assert.equal(result.changed,true);assert.equal(hash(await readFile(result.backupFile)),hash(original));assert.equal((await lstat(result.backupFile)).mode&0o777,0o600);assert.equal((await lstat(file)).mode&0o777,0o600);
  const updated=JSON.parse(await readFile(file,'utf8'));const baseline=JSON.parse(original);delete updated.appProviders;assert.deepEqual(updated,baseline);
  for(const[name,digest]of Object.entries(digests))assert.equal(hash(await readFile(join(directory,name))),digest,name);
@@ -27,7 +27,7 @@ test('provider-only upgrade preserves account, identity, key and record bytes pl
 });
 test('invalid existing configuration fails closed without echoing its content or replacing bytes',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'praxis-provider-upgrade-invalid-'));t.after(()=>rm(directory,{recursive:true,force:true}));const file=join(directory,'core.json'),bytes=Buffer.from('PRIVATE_CONFIG_BODY');await writeFile(file,bytes,{mode:0o600});
- await assert.rejects(upgradeBuiltinProviderConfiguration(file,{finance:{url:'http://127.0.0.1:4329'}}),error=>!error.message.includes('PRIVATE_CONFIG_BODY')&&error.message.includes('configuration file is invalid'));
+ await assert.rejects(upgradeBuiltinProviderConfiguration(file,{intelligence:{url:'http://127.0.0.1:4330'}}),error=>!error.message.includes('PRIVATE_CONFIG_BODY')&&error.message.includes('configuration file is invalid'));
  assert.equal(hash(await readFile(file)),hash(bytes));
 });
 

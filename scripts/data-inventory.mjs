@@ -91,7 +91,6 @@ export async function inspectInventoryInput(key, storage, runDocker = dockerOutp
   return inspection?.read(storage, runDocker, safePath);
 }
 // Named CLI compatibility exports delegate to the currently installed app declaration.
-export const inspectFinanceMounts = (...args) => inspectInventoryInput('financeMounts', ...args);
 export const inspectIntelligenceRuntime = (...args) => inspectInventoryInput('intelligenceRuntime', ...args);
 
 async function publish(file, value, { sourceRoot, inputFiles }) {

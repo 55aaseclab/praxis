@@ -15,7 +15,7 @@ const example = `
 
 function startDemo(port) {
   return spawn(process.execPath, ['--import', preload, '-e', example, String(port)], {
-    env: { PRAXIS_DEMO_APP: 'finance', ...(process.env.PRAXIS_APP_SOURCE_ROOT ? { PRAXIS_APP_SOURCE_ROOT: process.env.PRAXIS_APP_SOURCE_ROOT } : {}) },
+    env: { PRAXIS_DEMO_APP: 'intelligence', ...(process.env.PRAXIS_APP_SOURCE_ROOT ? { PRAXIS_APP_SOURCE_ROOT: process.env.PRAXIS_APP_SOURCE_ROOT } : {}) },
     stdio: ['ignore', 'pipe', 'ignore'],
   });
 }
@@ -31,9 +31,9 @@ test('demo workbench links the app served by its own process', { timeout: 10000 
   const origin = new URL(line.replace(/^Demo workbench: /, ''));
   assert.equal(origin.hostname, '127.0.0.1');
   const { apps } = await (await fetch(new URL('/api/apps', origin))).json();
-  const finance = apps.find(app => app.id === 'finance');
-  assert.equal(finance.launcher, true);
-  assert.equal(await (await fetch(finance.url)).text(), 'synthetic app');
+  const intelligence = apps.find(app => app.id === 'intelligence');
+  assert.equal(intelligence.launcher, true);
+  assert.equal(await (await fetch(intelligence.url)).text(), 'synthetic app');
   assert.equal(apps.find(app => app.id === 'memo').unavailable, 'managed');
   assert.ok(!apps.some(app => ['letters', 'profiles', 'polaris'].includes(app.id)));
 });

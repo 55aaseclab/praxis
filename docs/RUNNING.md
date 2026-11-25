@@ -11,7 +11,7 @@ git submodule update --init --recursive
 docker compose up --build -d --wait
 ```
 
-The default Compose file starts the complete built-in distribution. Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Finance, Intelligence, Projects and Polaris have their native services. Calendar, Matrix Reader, Letters and Profiles are served by the workbench image. The `core` backend enforces browser and agent authorization.
+The default Compose file starts the complete built-in distribution. Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Intelligence, Projects and Polaris have their native services. Calendar, Matrix Reader, Letters and Profiles are served by the workbench image. The `core` backend enforces browser and agent authorization.
 
 The initializer creates the installation's owner account, workspace, signing keys and empty app stores once. Retrieve the initial login information privately:
 
@@ -63,7 +63,7 @@ git submodule update --init --recursive
 docker compose up --build -d --wait
 ```
 
-默认 Compose 启动完整的内置发行版。Reminder、Knowledge、Lattice Slides、Travel、TingProof、Memo、Finance、Intelligence、Projects 和 Polaris 均启动自己的原生服务；日历、Matrix 阅读器、信件和个人材料由工作台镜像提供。`core` 核心后端负责浏览器及智能体的授权。
+默认 Compose 启动完整的内置发行版。Reminder、Knowledge、Lattice Slides、Travel、TingProof、Memo、Intelligence、Projects 和 Polaris 均启动自己的原生服务；日历、Matrix 阅读器、信件和个人材料由工作台镜像提供。`core` 核心后端负责浏览器及智能体的授权。
 
 初始化服务仅首次生成所有者账号、工作区、签名密钥和空应用存储。私下读取初始登录信息：
 

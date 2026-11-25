@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.156
+Version: 0.1.157
 
 [简体中文](ROADMAP.md)
 
@@ -344,6 +344,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.154 | 2026-11-21 | Make Spaces lists follow administrator display context and remove filler hints |
 | v0.1.155 | 2026-11-21 | Members can leave non-personal spaces through confirmed Settings and native-session API with atomic scoped access cleanup. |
 | v0.1.156 | 2026-11-21 | Workbench and Settings subscribe to the authenticated session-events SSE stream with epoch-based refresh, automatic reconnection and silent degradation; Knowledge republished to follow the workbench language preference and render its overview without a stray contents label. |
+| v0.1.157 | 2026-11-25 | Retire the Finance app: remove its submodule, registration, deployment and tests, archive its documents under docs/finance, and delete its public repository. |
 
 ### Public applications with private collections
 

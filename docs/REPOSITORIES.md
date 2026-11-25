@@ -4,7 +4,7 @@
 
 Each built-in app is developed and published from `main` in its own public repository. The repository default branch and the branch recorded in `.gitmodules` are both `main`. Administrators and maintainers can push verified changes directly within their assigned scope; external contributions use the [contribution workflow](../CONTRIBUTING.md). Publish the app commit first, then pin its exact SHA in Praxis and verify the combination.
 
-The 2026-11-19 source audit checked two things for each component: whether its repository was readable anonymously and whether an unauthenticated client could retrieve the exact commit recorded by the platform. Nine repositories were provisioned under the public organization that day. Two held the Letters and Profiles readers. The seven new destinations for Finance, Intelligence, Knowledge, Projects, Travel, Calendar and Matrix Reader started empty; Reminder already had an empty public repository. Others had public default branches but lacked the intended application revision. Letters and Profiles were the first two published reader sources. The platform subsequently published and verified all fourteen built-in app pins from a fresh clone.
+The 2026-11-19 source audit checked two things for each component: whether its repository was readable anonymously and whether an unauthenticated client could retrieve the exact commit recorded by the platform. Nine repositories were provisioned under the public organization that day. Two held the Letters and Profiles readers. The seven new destinations for Finance, Intelligence, Knowledge, Projects, Travel, Calendar and Matrix Reader started empty; Reminder already had an empty public repository. Others had public default branches but lacked the intended application revision. Letters and Profiles were the first two published reader sources. The platform subsequently published and verified all fourteen built-in app pins from a fresh clone. On 2026-11-25 the Finance app was retired: its repository `55aaseclab/finance` was deleted and its documents are preserved under [docs/finance](finance/RETIRED.md).
 
 The platform records each source URL in [.gitmodules](../.gitmodules) and its revision as a Git tree entry with mode `160000`. A branch name in the table identifies the release source; the gitlink selects the exact build. Compare a submodule checkout’s HEAD with the parent gitlink before changing a pin. An independently maintained app can use `origin` and its tracking branch. A fork can also configure an `upstream` remote to track its source project.
 
@@ -28,7 +28,6 @@ The 2026-11-19 main-branch cutover moved the reviewed Memo, TingProof and Lattic
 | Travel | [travel](https://github.com/55aaseclab/travel) | `main` |
 | TingProof | [tingproof](https://github.com/55aaseclab/tingproof) | `main` |
 | Memo | [memo](https://github.com/55aaseclab/memo) | `main` |
-| Finance | [finance](https://github.com/55aaseclab/finance) | `main` |
 | Intelligence | [intelligence](https://github.com/55aaseclab/intelligence) | `main` |
 | Polaris | [polaris](https://github.com/55aaseclab/polaris) | `main` |
 | Letters | [letters](https://github.com/55aaseclab/letters) | `main` |

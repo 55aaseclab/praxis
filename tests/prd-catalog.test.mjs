@@ -30,7 +30,6 @@ const metadata = [
   { id: 'lattice-slides', group: 'third-party', project: 'Lattice', source: 'third_party/lattice/docs/Slides-Platform_PRD.md' },
   { id: 'travel', group: 'third-party', project: 'Travel', source: 'third_party/travel/docs/PRD.md' },
   { id: 'knowledge', group: 'third-party', project: 'Knowledge', source: 'third_party/knowledge/docs/PRD.md' },
-  { id: 'finance', group: 'third-party', project: 'Finance', source: 'third_party/finance/docs/PRD.md' },
   { id: 'intelligence', group: 'third-party', project: 'Intelligence', source: 'third_party/intelligence/docs/PRD.md' },
   { id: 'projects', group: 'third-party', project: 'Projects', source: 'third_party/projects/docs/PRD.md' },
   { id: 'matrix-reader', group: 'third-party', project: 'Matrix Reader', source: 'third_party/matrix-reader/PRD.md' },

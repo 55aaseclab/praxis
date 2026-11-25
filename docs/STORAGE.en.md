@@ -33,7 +33,6 @@ The workspace UUID survives host and provider changes. `deviceId` identifies a m
 | Lattice / Slides | Preserve decks, assets and operational `.lattice` state. Exclude dependencies and explicitly rebuildable outputs. The separately registered `apps/slides-business/` includes atomic JSON decks, revisions, jobs and content-addressed objects. |
 | Travel / Knowledge | Separate content directories, photos and structured data. Register Knowledge revisions and managed itineraries in their respective formats. Keep signing and provider credentials outside business content. |
 | Memo | `memo.db` holds guides, records, photos and history. Previously unimported browser records require device import or a complete JSON export. |
-| Finance | JSON in an explicitly mounted work directory. The former named volume remains a frozen recovery source. |
 
 Validate copies of JSON. Use the SQLite Online Backup API. Check directory stability before and after copying; if data changes, reject that snapshot. A Git bundle preserves local unpublished source commits. Include working changes and untracked files only from approved source paths. Record what's included and omitted.
 
@@ -132,7 +131,6 @@ Default to `<dataRoot>/workspaces/<workspaceId>/apps/<appId>`. A private storage
 | Travel | `itineraries/travel.db`, original `content/catalog` and derived `content/published` |
 | Lattice | `native/decks`, `native/.lattice`, `business/lattice.db` and separate assets |
 | Memo | `memo.db` with guides, records, photos and history; old device-local content needs import |
-| Finance | Explicitly mounted `finance.db` |
 | Projects | `projects.db` shared by project records |
 | Intelligence | `intelligence.db` for configured snapshots; explicit source demos keep their fixture |
 | Polaris | Read-only observation file in the private workspace. The viewer image and source carry no records. |
@@ -146,7 +144,7 @@ Before moving a working root, inventory the sources and stop their writers. Reco
 
 Preserve source files and private configuration after the move. For a same-filesystem rename, check the full inode and size inventory. For a cross-filesystem copy, verify the SHA-256 of each file. Trial restores go into a new empty directory. Missing configured content must fail closed.
 
-For a Finance named-volume migration, inspect the original file after stopping its writer. Keep the original volume as a recovery source. Restore device-only Memo records through the owning app’s import/export workflow. A successful server snapshot cannot establish that every offline device was exported.
+Restore device-only Memo records through the owning app’s import/export workflow. A successful server snapshot cannot establish that every offline device was exported.
 
 Validate relocated mounts from inside each service. For slot pairs follow the paused rebind and startup sequence in the [managed deployment guide](MANAGED-DEPLOYMENT.md). Keep the migration receipt private. [Docker guide](DOCKER.en.md) · [Verification](VERIFICATION.en.md)
 
@@ -160,7 +158,7 @@ Recovery source discovery reads declared configuration metadata and the coordina
 
 ## App-owned structured databases
 
-Use one app-owned SQLite database per application for authoritative server-managed structured records. Reminder, Finance, Intelligence, Travel and Lattice business state move from live JSON to their own databases; existing Knowledge, Projects, Memo, TingProof and platform databases retain ownership. Records keep stable space/resource IDs, revisions, ordering, receipts, events, timestamps, unknown historical fields and authorization. Reminder uses `reminder.db` with space-qualified records instead of a live `spaces/<id>/checklist.json` tree. Database namespaces do not grant access. JSON remains an explicit import/export or compatibility format, never an automatic fallback for a missing configured database.
+Use one app-owned SQLite database per application for authoritative server-managed structured records. Reminder, Intelligence, Travel and Lattice business state live in their own databases; existing Knowledge, Projects, Memo, TingProof and platform databases retain ownership. Records keep stable space/resource IDs, revisions, ordering, receipts, events, timestamps, unknown historical fields and authorization. Reminder uses `reminder.db` with space-qualified records instead of a live `spaces/<id>/checklist.json` tree. Database namespaces do not grant access. JSON remains an explicit import/export or compatibility format, never an automatic fallback for a missing configured database.
 
 Original documents, media, authored source files and exports retain their files and content hashes, with database references where the app needs them. Calendar device records move to browser IndexedDB without becoming a server account or server-backup claim; Matrix SDK encryption/device databases and external homeserver ownership remain unchanged. Letters/Profiles remain original-file readers; Polaris remains a read-only projection of separately owned runtime observations and gains no executor.
 

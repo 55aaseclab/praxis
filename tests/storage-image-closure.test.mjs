@@ -49,9 +49,9 @@ test('the filtered Storage runtime COPY closure loads both workers and the insta
     await import('./scripts/storage-worker.mjs');
     await import('./scripts/business-sync-worker.mjs');
     const {DEFAULT_APP_REGISTRY: registry} = await import('./src/default-app-registry.mjs');
-    if (registry.apps.length !== 14 || !registry.tools.length) throw Error('Incomplete installed declarations');
+    if (registry.apps.length !== 13 || !registry.tools.length) throw Error('Incomplete installed declarations');
     console.log(JSON.stringify({apps:registry.apps.length,workers:2,registryLoaded:true}));
   `;
   const { stdout } = await execute(process.execPath, ['--input-type=module', '-e', script], { cwd: directory, env: environment, maxBuffer: 1024 * 1024 });
-  assert.deepEqual(JSON.parse(stdout.trim()), { apps: 14, workers: 2, registryLoaded: true });
+  assert.deepEqual(JSON.parse(stdout.trim()), { apps: 13, workers: 2, registryLoaded: true });
 });

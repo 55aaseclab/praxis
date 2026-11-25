@@ -22,10 +22,6 @@
 	path = third_party/intelligence
 	url = https://github.com/55aaseclab/intelligence.git
 	branch = main
-[submodule "finance"]
-	path = third_party/finance
-	url = https://github.com/55aaseclab/finance.git
-	branch = main
 [submodule "projects"]
 	path = third_party/projects
 	url = https://github.com/55aaseclab/projects.git

@@ -180,7 +180,7 @@ test('bounded project-only polling clears revoked resource summaries without rer
 });
 
 test('an unconnected service has a translated status and no launch target', async () => {
-  const result = await launchers([{ id: 'finance', kind: 'app', name: 'Finance', unavailable: 'managed' }], 'http://127.0.0.1:4321');
+  const result = await launchers([{ id: 'intelligence', kind: 'app', name: 'Intelligence', unavailable: 'managed' }], 'http://127.0.0.1:4321');
   const [entry] = result.get('#apps');
   assert.equal(entry.href, undefined);
   assert.equal(entry.children.at(-1).textContent, '需受管授权');

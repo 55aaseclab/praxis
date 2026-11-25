@@ -1,6 +1,6 @@
 import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 // HTTP wiring fixtures only: native app behavior is verified in each owning repo.
-// Never contact installed native services, including a default Finance port.
+// Never contact installed native services, including a default Memo port.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -31,16 +31,16 @@ export async function getCards(context){${browser ? "return{status:'empty',items
 export async function getDataInventory(context){${broken ? "throw Error('Synthetic private implementation details')" : "const source=descriptor.dataSources[0],location=await context.resolveDataSource(structuredClone(source));return{status:'ready',items:[{label:source.label,kind:source.kind,...location}]}"}}
 `;
 }
-async function fixture(t, { nativeFinance = false, privateReaders = false } = {}) {
+async function fixture(t, { nativeIntelligence = false, privateReaders = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'praxis-provider-http-'));
   const state = join(root, 'state'); await mkdir(join(root, 'config')); await mkdir(state, { mode: 0o700 });
-  const catalog = ['reminder', 'finance', 'calendar', ...(privateReaders ? ['matrix-reader', 'letters', 'profiles'] : [])].map(id => ({ id, kind: 'app', builtin: true, name: id, source: `third_party/${id}`, path: '/', icon: `/${id}-icon.svg`, ...(['letters', 'profiles'].includes(id) && { adminOnly: true }) }));
+  const catalog = ['reminder', 'intelligence', 'calendar', ...(privateReaders ? ['matrix-reader', 'letters', 'profiles'] : [])].map(id => ({ id, kind: 'app', builtin: true, name: id, source: `third_party/${id}`, path: '/', icon: `/${id}-icon.svg`, ...(['letters', 'profiles'].includes(id) && { adminOnly: true }) }));
   async function saveCatalog() { await writeInstalledAppsFixture(root, catalog); }
   async function writeProvider(id, options = {}) { await mkdir(join(root, `third_party/${id}`), { recursive: true }); await writeFile(join(root, `third_party/${id}/praxis-provider.mjs`), syntheticProvider(id, { browser: ['calendar', 'matrix-reader', 'letters', 'profiles'].includes(id), ...options })); }
   await saveCatalog(); for (const { id } of catalog) await writeProvider(id);
   const reserved = createServer(); reserved.listen(0, '127.0.0.1'); await once(reserved, 'listening'); const webPort = reserved.address().port; await new Promise(resolve => reserved.close(resolve));
   const issuer = `http://127.0.0.1:${webPort}`;
-  const config = { issuer, providerRoot: root, database: join(state, 'auth.sqlite'), eventsDatabase: join(state, 'events.sqlite'), observationsFile: null, webGateway: { enabled: true }, allowedHosts: [], allowedOrigins: [], apps: { reminder: { url: 'https://synthetic-adapter.example.test/api/business', key: Buffer.alloc(32, 7), spaces: ['synthetic-space'] } }, appProviders: { ...(nativeFinance && { finance: { url: 'https://synthetic-native.example.test/' } }), ...(privateReaders && { letters: { ownerId: 'administrator' }, profiles: { ownerId: 'administrator' } }) } };
+  const config = { issuer, providerRoot: root, database: join(state, 'auth.sqlite'), eventsDatabase: join(state, 'events.sqlite'), observationsFile: null, webGateway: { enabled: true }, allowedHosts: [], allowedOrigins: [], apps: { reminder: { url: 'https://synthetic-adapter.example.test/api/business', key: Buffer.alloc(32, 7), spaces: ['synthetic-space'] } }, appProviders: { ...(nativeIntelligence && { intelligence: { url: 'https://synthetic-native.example.test/' } }), ...(privateReaders && { letters: { ownerId: 'administrator' }, profiles: { ownerId: 'administrator' } }) } };
   let auth = new AuthStore({ file: config.database, issuer }), core, web, coreOrigin;
   const sourceCalls = [], releases = new Set(); let respond;
   const sourceFetch = async (input, options = {}) => {
@@ -48,14 +48,14 @@ async function fixture(t, { nativeFinance = false, privateReaders = false } = {}
     const body = options.body ? JSON.parse(options.body) : null;
     sourceCalls.push({ url: url.href, method: options.method || 'GET', body });
     if (respond) return respond(url, options, body);
-    if (url.origin === 'https://synthetic-native.example.test') return new Response(JSON.stringify({ title: 'Synthetic native Finance result' }), { headers: { 'Content-Type': 'application/json' } });
+    if (url.origin === 'https://synthetic-native.example.test') return new Response(JSON.stringify({ title: 'Synthetic native Intelligence result' }), { headers: { 'Content-Type': 'application/json' } });
     assert.equal(body.operation, 'list');
     return new Response(JSON.stringify({ spaceId: 'synthetic-space', revision: 'snapshot-one', items: [nativeRecord, { resourceId: 'denied-record', text: 'Synthetic denied source note', date: '2026-11-21', done: false }].map(item => ({ resourceId: item.resourceId, revision: '1', collection: 'plans', item: { text: item.text, date: item.date, done: item.done } })) }), { headers: { 'Content-Type': 'application/json' } });
   };
   const users = {};
   for (const id of ['owner-a', 'owner-b', 'administrator']) users[id] = auth.createUser({ id, username: `synthetic-${id}`, password });
   auth.setPlatformAdmin({ userId: 'administrator', enabled: true });
-  for (const id of ['owner-a', 'owner-b']) auth.setWebAccess({ userId: id, apps: ['reminder', 'finance', 'calendar'], workbench: true, prds: false });
+  for (const id of ['owner-a', 'owner-b']) auth.setWebAccess({ userId: id, apps: ['reminder', 'intelligence', 'calendar'], workbench: true, prds: false });
   auth.createSpace({ id: 'synthetic-space', type: 'company', ownerId: 'administrator' });
   auth.setMembership({ spaceId: 'synthetic-space', userId: 'owner-a', role: 'member' });
   const permission = auth.grantResource({ userId: 'owner-a', spaceId: 'synthetic-space', appId: 'reminder', resources: ['allowed-record'], actions: ['read'] });
@@ -74,14 +74,14 @@ async function fixture(t, { nativeFinance = false, privateReaders = false } = {}
   return f;
 }
 
-test('HTTP cards require a native session, filter entries/resources, and never probe an unconfigured Finance origin', { timeout: 15000 }, async t => {
+test('HTTP cards require a native session, filter entries/resources, and never probe an unconfigured Intelligence origin', { timeout: 15000 }, async t => {
   const f = await fixture(t), before = ambientRequests.length;
   assert.equal((await f.request(cardPath, { user: null })).status, 401);
   assert.equal((await f.request(cardPath, { user: null, headers: { Authorization: 'Bearer synthetic-unrelated' } })).status, 401);
   const response = await f.request(cardPath); assert.equal(response.status, 200);
   const value = await response.json(); assert.equal(value.items.length, 1); assert.equal(value.items[0].resourceId, 'allowed-record');
   assert.ok(!JSON.stringify(value).includes('Synthetic denied source note'));
-  assert.equal(value.sources.find(source => source.appId === 'finance').status, 'unavailable');
+  assert.equal(value.sources.find(source => source.appId === 'intelligence').status, 'unavailable');
   assert.equal(value.sources.find(source => source.appId === 'calendar').status, 'browser');
   assert.ok(f.sourceCalls.every(call => call.url.startsWith('https://synthetic-adapter.example.test/')));
   f.auth.setWebAccess({ userId: 'owner-a', apps: ['calendar'], workbench: true, prds: false });
@@ -90,9 +90,9 @@ test('HTTP cards require a native session, filter entries/resources, and never p
 });
 
 test('HTTP card aggregation rechecks native entry and resource authority after asynchronous reads', { timeout: 15000 }, async t => {
-  const f = await fixture(t, { nativeFinance: true }), gate = f.hold(), entered = deferred();
-  f.respond = async url => { assert.equal(url.origin, 'https://synthetic-native.example.test'); entered.release(); await gate.promise; return new Response(JSON.stringify({ title: 'Synthetic withheld Finance result' })); };
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['finance'], workbench: true, prds: false });
+  const f = await fixture(t, { nativeIntelligence: true }), gate = f.hold(), entered = deferred();
+  f.respond = async url => { assert.equal(url.origin, 'https://synthetic-native.example.test'); entered.release(); await gate.promise; return new Response(JSON.stringify({ title: 'Synthetic withheld Intelligence result' })); };
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['intelligence'], workbench: true, prds: false });
   const pending = f.request(cardPath); await entered.promise;
   f.auth.setWebAccess({ userId: 'owner-a', apps: ['calendar'], workbench: true, prds: false }); gate.release();
   const value = await (await pending).json(); assert.deepEqual(value.items, []); assert.ok(!JSON.stringify(value).includes('withheld'));
@@ -131,10 +131,10 @@ test('HTTP administrator inventory follows changed catalog/provider metadata and
   const first = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(first.apps.length, 3);
   await f.writeProvider('calendar', { label: 'Changed synthetic browser location label' });
   const changed = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(changed.apps.find(app => app.id === 'calendar').locations[0].label, 'Changed synthetic browser location label');
-  f.catalog.push({ id: 'intelligence', kind: 'app', builtin: true, name: 'Synthetic Intelligence', source: 'third_party/intelligence', path: '/', icon: '/intelligence-icon.svg' }); await f.writeProvider('intelligence'); await f.saveCatalog();
-  const expanded = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(expanded.apps.length, 4); assert.ok(expanded.apps.some(app => app.id === 'intelligence'));
-  await f.writeProvider('finance', { broken: true });
-  const response = await f.request(dataPath, { user: 'administrator' }); assert.equal(response.status, 200); const partial = await response.json(); assert.equal(partial.sources.find(source => source.appId === 'finance').status, 'unavailable'); assert.ok(partial.apps.find(app => app.id === 'reminder').locations.length); assert.ok(!JSON.stringify(partial).includes('private implementation details'));
+  f.catalog.push({ id: 'memo', kind: 'app', builtin: true, name: 'Synthetic Memo', source: 'third_party/memo', path: '/', icon: '/memo-icon.svg' }); await f.writeProvider('memo'); await f.saveCatalog();
+  const expanded = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(expanded.apps.length, 4); assert.ok(expanded.apps.some(app => app.id === 'memo'));
+  await f.writeProvider('intelligence', { broken: true });
+  const response = await f.request(dataPath, { user: 'administrator' }); assert.equal(response.status, 200); const partial = await response.json(); assert.equal(partial.sources.find(source => source.appId === 'intelligence').status, 'unavailable'); assert.ok(partial.apps.find(app => app.id === 'reminder').locations.length); assert.ok(!JSON.stringify(partial).includes('private implementation details'));
 });
 
 test('HTTP browser manifests/modules require current entry access, use code hashes and never select arbitrary module URLs', { timeout: 15000 }, async t => {

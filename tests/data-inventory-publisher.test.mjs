@@ -4,14 +4,14 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, lstat, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDataInventory, inspectFinanceMounts, inspectIntelligenceRuntime, main } from '../scripts/data-inventory.mjs';
+import { createDataInventory, inspectIntelligenceRuntime, main } from '../scripts/data-inventory.mjs';
 
 const stamp = '2026-11-18T00:00:00.000Z';
 const app = (id, name = id) => ({ id, name, kind: 'app', source: `third_party/${id}` });
 
 test('publisher covers split app stores without serializing configuration secrets or payloads', () => {
   const value = createDataInventory({
-    registry: ['reminder', 'knowledge', 'travel', 'projects', 'memo', 'tingproof', 'lattice-slides', 'finance', 'future'].map(id => app(id)),
+    registry: ['reminder', 'knowledge', 'travel', 'projects', 'memo', 'tingproof', 'lattice-slides', 'future'].map(id => app(id)),
     sourceRoot: '/example/source', now: stamp,
     business: { database: '/example/platform/auth.db', eventsDatabase: '/example/platform/events.db', privateToken: 'DO_NOT_INCLUDE_SECRET', apps: {
       knowledge: { dataDir: '/example/data/knowledge', keyFile: '/example/secrets/key' },
@@ -27,7 +27,6 @@ test('publisher covers split app stores without serializing configuration secret
       { id: 'slides', source: '/example/native/.lattice', target: '.lattice', kind: 'directory' },
     ] },
     polaris: { dataRoot: '/example/data/polaris', browserProfiles: '/example/browser/state', browserCache: '/example/browser/cache', envFile: '/example/secrets/.env', codexAuthFile: '/example/secrets/auth.json' },
-    financeMounts: [{ Type: 'volume', Name: 'example_finance-data', Source: '/example/volumes/finance/_data', Destination: '/data', Config: { Env: 'DO_NOT_INCLUDE_SECRET' } }],
   });
   const find = id => value.apps.find(item => item.id === id);
   assert.equal(find('reminder').locations.length, 2);
@@ -35,8 +34,6 @@ test('publisher covers split app stores without serializing configuration secret
   assert.equal(find('memo').locations.filter(item => item.kind === 'browser').length, 2);
   assert.equal(find('memo').locations[0].hostPath, '/example/data/memo/memo.db');
   assert.equal(find('lattice-slides').locations.length, 4);
-  assert.equal(find('finance').locations[0].hostPath, '/example/volumes/finance/_data/finance.db');
-  assert.equal(find('finance').locations[0].containerPath, '/data/finance.db');
   assert.equal(find('tingproof').locations.find(item => item.label === '原始音频').kind, 'unknown');
   assert.equal(find('tingproof').locations.find(item => item.kind === 'browser').storageKey, 'IndexedDB: tingproof');
   assert.equal(find('future').locations[0].kind, 'unknown');
@@ -45,32 +42,9 @@ test('publisher covers split app stores without serializing configuration secret
   assert.ok(!JSON.stringify(value).includes('/example/secrets/'));
 });
 
-test('unavailable Docker never produces an invented Finance host path', () => {
-  const value = createDataInventory({ registry: [app('finance')], storage: { workspaceId: 'example' }, financeProjectName: 'custom-project', now: stamp });
-  const location = value.apps[0].locations[0];
-  assert.equal(location.kind, 'docker-volume');
-  assert.equal(location.volumeName, 'custom-project_finance-data');
-  assert.equal(location.hostPath, undefined);
-  assert.equal(location.containerPath, '/data/finance.db');
-});
-
 test('sensitive files cannot be reclassified as app data through configuration fields', () => {
   const value = createDataInventory({ registry: [app('reminder')], reminderSpaces: { spaces: { one: '/example/.codex/auth.json', two: '/example/secrets/provider.json', three: '/example/private.key' } }, now: stamp });
   assert.equal(value.apps[0].locations[0].kind, 'unknown');
-});
-
-test('Finance discovery queries only expected Compose labels and Mounts metadata', async () => {
-  const calls = [];
-  const mounts = [{ Type: 'volume', Name: 'example-data', Source: '/example/volume', Destination: '/data' }];
-  const result = await inspectFinanceMounts({ workspaceId: 'example' }, async args => {
-    calls.push(args);
-    return args[0] === 'ps' ? 'abc123abc123\n' : JSON.stringify(mounts);
-  });
-  assert.deepEqual(result, mounts);
-  assert.ok(calls[0].includes('label=com.docker.compose.service=finance'));
-  assert.deepEqual(calls[1], ['inspect', '--format', '{{json .Mounts}}', 'abc123abc123']);
-  assert.deepEqual(await inspectFinanceMounts({ workspaceId: 'example' }, async () => { throw new Error('Synthetic Docker failure'); }), []);
-  assert.deepEqual(await inspectFinanceMounts({ workspaceId: 'example' }, async () => 'abc123abc123 def456def456'), []);
 });
 
 async function fixture(t) {
@@ -79,7 +53,7 @@ async function fixture(t) {
   const sourceRoot = join(root, 'source'), home = join(root, 'home'), base = join(home, '.config/praxis');
   await mkdir(join(sourceRoot, 'config'), { recursive: true }); await mkdir(base, { recursive: true, mode: 0o700 });
   const save = async (path, value, mode = 0o600) => { await writeFile(path, JSON.stringify(value), { mode }); return path; };
-  await writeInstalledAppsFixture(sourceRoot, [app('reminder'), app('finance'), app('memo')]);
+  await writeInstalledAppsFixture(sourceRoot, [app('reminder'), app('memo')]);
   const spacesFile = await save(join(base, 'spaces.json'), { spaces: { one: join(root, 'nonexistent-records/one.json') } });
   const businessFile = await save(join(base, 'business.json'), { apps: { reminder: { spacesFile }, memo: { dataDir: join(root, 'nonexistent-memo') } } });
   const storageFile = await save(join(base, 'storage.json'), { workspaceId: 'example', appSources: [] });
@@ -90,7 +64,7 @@ async function fixture(t) {
 test('CLI publishes bounded private metadata without opening any configured business records', async t => {
   const f = await fixture(t);
   const result = await main(['publish'], f.options);
-  assert.equal(result.published, true); assert.equal(result.apps, 4);
+  assert.equal(result.published, true); assert.equal(result.apps, 3);
   const value = JSON.parse(await readFile(f.outputFile, 'utf8'));
   assert.equal(value.apps[0].locations[0].hostPath, join(f.root, 'nonexistent-records/one.json'));
   assert.equal((await lstat(f.outputFile)).mode & 0o777, 0o600);
@@ -122,7 +96,6 @@ test('unregistered optional app configurations produce explicit unknown location
   await main(['publish'], f.options);
   const value = JSON.parse(await readFile(f.outputFile, 'utf8'));
   assert.equal(value.apps.find(item => item.id === 'reminder').locations[0].kind, 'unknown');
-  assert.equal(value.apps.find(item => item.id === 'finance').locations[0].hostPath, undefined);
 });
 
 

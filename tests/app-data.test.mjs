@@ -29,7 +29,7 @@ test('parent validation rejects symlink aliases', async t => {
 test('plan preserves identifiers and maps every configured store to its app root', () => {
   const storage = configuration('/private/praxis'); storage.appSources = [{ id: 'tingproof', target: 'tingproof.db', source: '/old/ting/tingproof.db' }, { id: 'slides', target: 'decks', source: '/old/slides/decks' }, { id: 'slides', target: '.lattice', source: '/old/slides/.lattice' }];
   const business = { database: '/old/auth/auth.db', eventsDatabase: '/old/auth/events.db', observationsFile: '/old/obs/observations.db', apps: Object.fromEntries(['knowledge', 'memo', 'projects', 'travel', 'slides'].map(id => [id, { dataDir: `/old/${id}` }])) };
-  const plan = planAppData({ storage, business, reminderMapping: { spaces: { spaceA: '/old/reminder/reminder.db', spaceB: '/old/reminder/reminder.db' } }, slidesMapping: { spaces: { spaceA: '/old/slides/a.json' } }, polaris: { enabled: false }, financeFile: '/old/finance/finance.json' });
+  const plan = planAppData({ storage, business, reminderMapping: { spaces: { spaceA: '/old/reminder/reminder.db', spaceB: '/old/reminder/reminder.db' } }, slidesMapping: { spaces: { spaceA: '/old/slides/a.json' } }, polaris: { enabled: false } });
   assert.equal(plan.reminderMapping.spaces.spaceB, join(plan.paths.reminder, 'reminder.db'));
   assert.equal(plan.slidesMapping.spaces.spaceA, join(plan.paths.slidesBusiness, 'a.json'));
   assert.equal(plan.business.database, join(plan.paths.platform, 'auth.db'));

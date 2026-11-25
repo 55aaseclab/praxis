@@ -37,7 +37,6 @@ F25 的目标是让本地数据能够恢复、换机和换存储。应用仍读�
 | Slides受控制作 | 额外登记Git外`apps/slides-business/`目录，包含原子JSON文稿／版本／作业和内容寻址素材／产物 | 原生文稿不迁移或复制成第二事实源；新状态无活动SQLite，目录稳定性检查后纳入一致性快照 |
 | Travel / Knowledge | 应用根下独立内容目录、照片、结构化数据；Knowledge版本数据库与Travel受控行程另按各自格式登记 | 签名／高德／飞猪秘密不作为业务数据，锁和临时文件不入快照 |
 | Memo | `memo.db`指南、记录、照片与历史 | 旧设备尚未导入的记录、浏览器偏好／流程仍需设备打开导入或完整JSON导出 |
-| Finance | 显式工作目录中的JSON | 原命名卷保留为冻结回退来源，不再挂到活动服务 |
 
 JSON 复制后校验，SQLite 使用 Online Backup API；目录在复制前后检查稳定性，变化时拒绝提交并保留旧备份。源码使用 Git bundle 保留本地未推送提交，并保存允许范围内的工作差异和未跟踪文件。清单记录源码版本、实际包含项及遗漏项，不把“服务器备份成功”等同于“所有浏览器和音频都已迁移”。
 
@@ -250,7 +249,7 @@ Memo 场景指南单独登记为 `id:memo,kind:sqlite,target:memo.db`，包含�
 ```
 
 未覆盖的应用使用 `<dataRoot>/workspaces/<workspaceId>/apps/<appId>`。
-应用ID为 reminder、tingproof、knowledge、travel、lattice、memo、finance、projects、polaris、intelligence、praxis。
+应用ID为 reminder、tingproof、knowledge、travel、lattice、memo、projects、polaris、intelligence、praxis。
 每个目录必须独立于其他应用、源码、密钥、协调状态与备份库；拒绝符号链接别名。
 配置仍在私有配置目录中，不放进工作数据。覆盖可以指向NAS的独立目录，但不能增加第二个活动writer。
 
@@ -262,7 +261,6 @@ Memo 场景指南单独登记为 `id:memo,kind:sqlite,target:memo.db`，包含�
 | Travel | `itineraries`、`content/catalog`、`content/published` |
 | Lattice | `native/decks`、`native/.lattice`、`business` |
 | Memo | `memo.db`；指南、记录、照片及历史；旧浏览器记录需成功连接后导入 |
-| Finance | `finance.json`，显式绑定目录，不再依赖隐式命名卷 |
 | Projects | `projects.db` |
 | Intelligence | 正式模式为`data.json`；显式预览从源码fixtures读取，未创建工作数据 |
 | Polaris | 私有工作空间的只读观察文件，源码和镜像不携带记录 |
@@ -271,7 +269,7 @@ Memo 场景指南单独登记为 `id:memo,kind:sqlite,target:memo.db`，包含�
 更改根目录不是直接改一个环境变量：先计划、停写、迁移校验，再切换生成的配置与挂载。
 服务器、备份与管理清单校验同一套生效绑定；不一致时拒绝启动，防止重新登记回旧源码目录。
 
-首次迁移 Finance 命名卷时，停止 writer 后核对原文件，保留旧卷作为恢复来源。先保存工作根、配置和实际挂载清单，按[受管部署](MANAGED-DEPLOYMENT.md)切换应用组。新的工作根示例为 `{"memo":"/absolute/private/storage/memo"}`。
+先保存工作根、配置和实际挂载清单，按[受管部署](MANAGED-DEPLOYMENT.md)切换应用组。新的工作根示例为 `{"memo":"/absolute/private/storage/memo"}`。
 迁移日志和原配置保存在私有目录；同盘 rename 核对全部文件 inode 与大小，跨盘复制逐文件核对 SHA-256，保留原源。
 应用导出到独立工作根时须使用非覆盖式目标，核对目录内容后再绑定新位置。
 已配置内容缺失会拒绝启动，不回退到镜像里的旧内容。
@@ -297,7 +295,7 @@ Memo旧设备在打开应用并成功连接后导入，不删除失败导入的�
 
 ## 应用自有结构化数据库
 
-服务端权威结构化记录统一采用每应用独立的 SQLite 数据库。Reminder、Finance、Intelligence、Travel 与 Lattice 业务状态从运行 JSON 切到各自数据库，既有 Knowledge、Projects、Memo、TingProof 及平台数据库继续归原所有者维护。保留空间/资源 ID、修订、顺序、回执、事件、时间戳、历史扩展字段及授权。Reminder 使用按空间标识记录的 `reminder.db`，不再以 `spaces/<id>/checklist.json` 树作为运行主源。数据库命名空间不授予权限；JSON 只作显式导入/导出或兼容格式，配置数据库缺席时不得自动回退。
+服务端权威结构化记录统一采用每应用独立的 SQLite 数据库。Reminder、Intelligence、Travel 与 Lattice 业务状态保存在各自数据库中，既有 Knowledge、Projects、Memo、TingProof 及平台数据库继续归原所有者维护。保留空间/资源 ID、修订、顺序、回执、事件、时间戳、历史扩展字段及授权。Reminder 使用按空间标识记录的 `reminder.db`，不再以 `spaces/<id>/checklist.json` 树作为运行主源。数据库命名空间不授予权限；JSON 只作显式导入/导出或兼容格式，配置数据库缺席时不得自动回退。
 
 原始文档、媒体、制作源文件和导出物继续保留文件及内容摘要，需要时由数据库引用。Calendar 设备记录改用浏览器 IndexedDB，不因此变成服务端账号或宣称已纳入服务器备份；Matrix SDK 的设备加密数据库及外部 homeserver 所有权保持。Letters/Profiles 继续读取原件；Polaris 继续只读投影外部运行观测，不增加执行器。
 

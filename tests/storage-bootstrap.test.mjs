@@ -41,10 +41,10 @@ test('registered activation changes only runtime metadata and rejects stale copi
   assert.throws(() => activateRegisteredSources(config, { ...receipt, schemaVersion: 1 }, status, options), /current registered-source/);
   assert.throws(() => activateRegisteredSources(config, receipt, status, { ...options, sourceFingerprint: 'b'.repeat(64) }), /current registered-source/);
   assert.throws(() => activateRegisteredSources(config, receipt, { ...status, healthy: false }, options), /must be healthy/);
-  for (const omitted of ['finance', 'knowledge-public']) {
+  for (const omitted of ['memo', 'knowledge-public']) {
     const incomplete = names.filter(name => name !== omitted);
     assert.throws(() => activateRegisteredSources(config, { ...receipt, services: incomplete }, { ...status, services: incomplete.map(name => ({ name })) }, options), /current registered-source/);
   }
-  assert.throws(() => activateRegisteredSources(config, { ...receipt, services: names.map(name => name === 'finance' ? 'unknown-service' : name) }, status, options), /current registered-source/);
+  assert.throws(() => activateRegisteredSources(config, { ...receipt, services: names.map(name => name === 'memo' ? 'unknown-service' : name) }, status, options), /current registered-source/);
   assert.equal(config.runtime, 'native');
 });

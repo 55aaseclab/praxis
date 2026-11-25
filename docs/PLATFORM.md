@@ -31,7 +31,6 @@ Praxis 内部没有agent。外部客户端负责理解和编排，`core` 核心�
 | Slides | `/apps/slides/` | 14666 | `third_party/lattice` |
 | 听校 | `/apps/tingproof/` | 15173 | `third_party/tingproof` |
 | Projects | `/apps/projects/` | 4327 | `third_party/projects` |
-| Finance | `/apps/finance/` | 4329 | `third_party/finance` |
 | Intelligence | `/apps/intelligence/` | 4330 | `third_party/intelligence` |
 | Polaris | `/apps/polaris/` | 18787 | `third_party/polaris` |
 | Matrix Reader | `/apps/matrix-reader/` | 网页槽 | `third_party/matrix-reader` |
@@ -53,7 +52,7 @@ flowchart LR
   A --> D[(应用事实源)]
 ```
 
-`config/installed-apps.json` 仅保存已审核应用的源码引用；各应用在自己的 `praxis-app.json` 维护展示与发行版本。PRD集合仅读取应用自有 `praxis-app.json` 文档声明明确列出的文档，不开放任意文件。代码、运行配置与私人记录分开；初始化所需子模块使用`git submodule update --init third_party/<app>`，应用归属不因进入工作台而改变。
+`config/installed-apps.json` 仅保存已审核应用的源码引用；各应用在自己的 `praxis-app.json` 维护展示与发行版本。PRD集合仅读取应用自有 `praxis-app.json` 文档声明明确列出的文档，不开放任意文件。代码、运行配置与私人记录分开；初始化所需子模块使用`git submodule update --init third_party/<app>`，应用归属不因进入工作台而改变。十三个固定应用提交可公开获取；已退役的 Finance 仓库与文档去向见 [REPOSITORIES.md](REPOSITORIES.md)。
 
 ## 运行与专题导航
 

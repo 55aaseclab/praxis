@@ -61,7 +61,7 @@ Open enters the owning app at the particular object. Home returns to the same ca
 
 ## Data and implementation boundaries
 
-The app-owned provider contract supplies cards for all thirteen non-runtime apps and data inventory for all fourteen apps. Polaris is the runtime and supplies inventory and runtime trace metadata rather than workbench cards. Projections include source-backed previews, evidence and revisions. Owner-only Later/Hide state is persisted independently. See the [provider contract](../APP-PROVIDERS.md#english).
+The app-owned provider contract supplies cards for all twelve non-runtime apps and data inventory for all thirteen apps. Polaris is the runtime and supplies inventory and runtime trace metadata rather than workbench cards. Projections include source-backed previews, evidence and revisions. Owner-only Later/Hide state is persisted independently. See the [provider contract](../APP-PROVIDERS.md#english).
 
 The implementation contract requires:
 

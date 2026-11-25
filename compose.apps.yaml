@@ -199,21 +199,6 @@ services:
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4325:4325"]
     environment: { HOST: "0.0.0.0", PORT: "4325", HEALTH_URL: "http://127.0.0.1:4325/health" }
 
-  finance:
-    <<: *runtime
-    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/finance:local
-    build: { context: ./third_party/finance, dockerfile: Dockerfile.praxis }
-    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4329:4329"]
-    environment:
-      HOST: 0.0.0.0
-      PORT: "4329"
-      HEALTH_URL: http://127.0.0.1:4329/health
-      FINANCE_DATA: /data/finance.json
-      FINANCE_ALLOWED_ORIGINS: ${FINANCE_ALLOWED_ORIGINS:-}
-    # Configured working roots replace this mount through the generated app override.
-    volumes: ["finance-data:/data"]
-
-
   intelligence:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/intelligence:local
@@ -224,7 +209,3 @@ services:
       PORT: "4330"
       HEALTH_URL: http://127.0.0.1:4330/health
       INTELLIGENCE_PREVIEW: ${PRAXIS_INTELLIGENCE_PREVIEW:-1}
-
-
-volumes:
-  finance-data:

@@ -99,7 +99,7 @@ test('user deletion atomically removes account authorization and automatic space
   const personal = store.ensurePersonalSpace('target');
   store.configureWebAccessBoundary({ apps: { reminder: { spaces: ['synthetic-shared'] } } });
   store.setSpaceAppEnrollment({ spaceId: personal.id, appId: 'reminder', enabled: true });
-  store.setSpaceAppEnrollment({ spaceId: personal.id, appId: 'finance', enabled: true });
+  store.setSpaceAppEnrollment({ spaceId: personal.id, appId: 'intelligence', enabled: true });
   store.grantResource({ userId: 'target', ...rule(personal.id) });
   store.setWebAccess({ userId: 'target', apps: ['reminder'], prds: true });
   store.setPlatformAdmin({ userId: 'target', enabled: true });

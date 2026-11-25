@@ -55,7 +55,7 @@ Full-width real example, autoplay
 
 Authorize / Ask / Review: three actual steps
 
-Fourteen published components: icons, names, brief purposes, source links
+Thirteen published components: icons, names, brief purposes, source links
 
 Attention-card preview: choose what to focus on, defer or hide
 
@@ -69,9 +69,9 @@ Visible FAQ / source and documentation links
 
 Lead copy: “A self-hosted workbench for your AI agent.” Supporting paragraphs were removed in the applied revision; the animated product example returns below the H1 and actions at full width. Protecting attention is the intent; do not promise every workflow already achieves zero clicks. Individuals, families, teams and organizations are all included without an employee-monitoring pitch.
 
-The fourteen components use app-owned icons and names. Source links are public repository links, not anonymous links to private app records. Polaris is labelled as runtime observations and contributes no app card. The deployed directory is generated from the reviewed app registry; it is not another canonical app table.
+The thirteen components use app-owned icons and names. Source links are public repository links, not anonymous links to private app records. Polaris is labelled as runtime observations and contributes no app card. The deployed directory is generated from the reviewed app registry; it is not another canonical app table.
 
-The hosted flow copies the exact README OAuth prompt, opens the existing workbench for sign-in and gives a concrete Reminder example. State that an account is required and self-service registration is planned. The local flow starts all fourteen apps with `docker compose up --build -d --wait`, retrieves generated credentials and then uses the local MCP endpoint. No fake signup button, unsupported booking/agent execution or automatic OAuth completion.
+The hosted flow copies the exact README OAuth prompt, opens the existing workbench for sign-in and gives a concrete Reminder example. State that an account is required and self-service registration is planned. The local flow starts all thirteen apps with `docker compose up --build -d --wait`, retrieves generated credentials and then uses the local MCP endpoint. No fake signup button, unsupported booking/agent execution or automatic OAuth completion.
 
 ## Interaction and accessibility
 
@@ -129,10 +129,10 @@ The final source passes **442/442** platform checks, including the public-home i
 
 
 
-Passed in Chromium: both editions at 1440px and 390px, all fourteen images, no horizontal overflow, keyboard skip navigation, static reduced-motion default and play/pause, exact clipboard success, denied-clipboard recovery with unchanged button geometry, and complete content with JavaScript disabled. The new requirements opened through both workbench PRD reader editions; eighteen scoped PRD checks pass. These browser checks exercise the actual server-rendered page, not the original standalone prototype. Production readback is recorded with the release deployment.
+Passed in Chromium: both editions at 1440px and 390px, all component images, no horizontal overflow, keyboard skip navigation, static reduced-motion default and play/pause, exact clipboard success, denied-clipboard recovery with unchanged button geometry, and complete content with JavaScript disabled. The new requirements opened through both workbench PRD reader editions; eighteen scoped PRD checks pass. These browser checks exercise the actual server-rendered page, not the original standalone prototype. Production readback is recorded with the release deployment.
 
 [English desktop](public-home-desktop-en.png) · [Chinese desktop](public-home-desktop-zh-CN.png) · [English phone](public-home-phone-en.png) · [Chinese phone](public-home-phone-zh-CN.png)
 
 ## Acceptance
 
-Check both editions at 1440px and 390px, keyboard navigation, no-JavaScript content, reduced motion, exact clipboard values, stable copy-control geometry and manual-selection fallback. All fourteen names/icons/source links must be present; hosted/local instructions must remain distinct and accurate. Open the updated PRDs through the reader in both languages. Keep synthetic source checks, public deployment readback and Search Console indexing evidence distinct; Search Console submission and rankings are not established by this UI release.
+Check both editions at 1440px and 390px, keyboard navigation, no-JavaScript content, reduced motion, exact clipboard values, stable copy-control geometry and manual-selection fallback. All thirteen names/icons/source links must be present; hosted/local instructions must remain distinct and accurate. Open the updated PRDs through the reader in both languages. Keep synthetic source checks, public deployment readback and Search Console indexing evidence distinct; Search Console submission and rankings are not established by this UI release.
