@@ -411,4 +411,8 @@ Calendar 按设备、身份使用 IndexedDB，首次授权使用时保留并导�
 
 ## 0.1.157——Finance 退役源码检查
 
-按维护授权移除 Finance：`third_party/finance` 子模块、`.gitmodules` 条目、安装登记、受管 Compose 服务与卷、生成 Compose/构建上下文、数据清单兼容导出及相关测试引用全部删除；应用文档（README、双语 PRD/路线图、provider 合同）按最终公开提交 `7f6c950c0d95ec5bb123aade6fc8c7b62887888e` 存档于 `docs/finance/` 并附退役说明。合成检查覆盖：装目录仅剩十三个应用、生成 Compose 与声明一致、空间目录/登记/PKCE 授权链使用剩余应用、个人空间与越权拒绝保持、Compose 快照/存储镜像闭包/源码仓登记按新数量通过。全套平台合成检查 **526** 项：**506** 通过、17 项可选跳过、**3** 项失败仅由本会话开始前已存在的未提交测试工作变更（`tests/ai-native/campaigns.mjs` maintenance 模型）引起；该改动不属于本发行、未提交，提交树内 ai-native 套件 15/15 通过。版本按一次 PATCH 对齐 **0.1.157**（package、lockfile、中英文 PRD/路线图声明与发布行）。公开仓库 `55aaseclab/finance` 的删除属发布动作，与源码提交分开执行并单独记录；历史发行行与验证台账中的 Finance 记录保留为历史。本节不宣称业务数据迁移、生产部署回读或独立业务客户端验收。
+按维护授权移除 Finance：`third_party/finance` 子模块、`.gitmodules` 条目、安装登记、受管 Compose 服务与卷、生成 Compose/构建上下文、数据清单兼容导出及相关测试引用全部删除；应用文档（README、双语 PRD/路线图、provider 合同）按最终公开提交 `7f6c950c0d95ec5bb123aade6fc8c7b62887888e` 存档于 `docs/finance/` 并附退役说明。合成检查覆盖：装目录仅剩十三个应用、生成 Compose 与声明一致、空间目录/登记/PKCE 授权链使用剩余应用、个人空间与越权拒绝保持、Compose 快照/存储镜像闭包/源码仓登记按新数量通过。全套平台合成检查 **526** 项：**506** 通过、17 项可选跳过、**3** 项失败仅由本会话开始前已存在的未提交测试工作变更（`tests/ai-native/campaigns.mjs` maintenance 模型）引起；该改动不属于本发行、未提交，提交树内 ai-native 套件 15/15 通过。版本按一次 PATCH 对齐 **0.1.157**（package、lockfile、中英文 PRD/路线图声明与发布行）。公开仓库 `55aaseclab/finance` 的删除属发布动作，与源码提交分开执行并单独记录；历史发行行与验证台账中的 Finance 记录保留为历史。本节不宣称业务数据迁移或独立业务客户端验收。
+
+### 部署与运行回读（补充记录）
+
+受管蓝绿安装按候选镜像完成例行切换：`deploy` 后 blue 成为活动写者并运行 **0.1.157**（healthy，generation 递增），green 0.1.156 保持为健康回滚槽。受管应用组从描述与 Compose 文件移除 finance 服务，受管 `stop` 后删除其孤立容器；工作数据（私有目录中的 `finance.db` 与原 `finance.json`）原样保留在安装工作区内，未读取、未迁移、未删除。私有核心配置中失效的 finance provider origin 一并移除。匿名公开主页回读：无任何 finance 引用，应用源码链接恰为十三个应用；受管应用组状态表中 finance 不再出现，其余 11 项服务保持健康。验收记录提交不改变运行代码或应用固定版本。
