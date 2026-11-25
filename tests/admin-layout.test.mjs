@@ -898,13 +898,13 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     await page.getByRole('button', { name: text('Load more users', '加载更多用户'), exact: true }).click(); await ready(page);
     auth.setMembership({ spaceId: 'synthetic-family', userId: 'b-context-50', role: 'member' });
     await switchUser('b-context-50');
-    await page.locator('.space-app-row[data-app=calendar] a').click(); await ready(page);
+    await page.locator('.space-app-row[data-app=intelligence] a').click(); await ready(page);
     await page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click(); await ready(page);
-    assert.equal(auth.appSpaceEnabled('calendar', 'synthetic-family'), true);
+    assert.equal(auth.appSpaceEnabled('intelligence', 'synthetic-family'), true);
     await page.getByRole('button', { name: text('Disable', '停用'), exact: true }).click();
     const disabledAlert = page.waitForEvent('dialog');
     await page.locator('.confirm-dialog').getByRole('button', { name: text('Confirm', '确认'), exact: true }).click(); await disabledAlert; await ready(page);
-    assert.equal(auth.appSpaceEnabled('calendar', 'synthetic-family'), false, 'owner enable/disable succeeds while displaying a nonmember');
+    assert.equal(auth.appSpaceEnabled('intelligence', 'synthetic-family'), false, 'owner enable/disable succeeds while displaying a nonmember');
     assert.equal(alerts.length, 6, 'existing actions retain acknowledged success alerts');
     page.off('dialog', acknowledge);
     // Displaying a foreign owner must not lend that owner's write authority.

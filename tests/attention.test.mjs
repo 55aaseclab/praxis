@@ -5,7 +5,7 @@ import { setAppFacts } from '../public/app-registry.js';
 import { mergeBrowserInventory, validateDataManagement } from '../public/admin-data.js';
 
 const origin = 'https://workbench.example.test';
-const registeredFacts = ['reminder', 'projects', 'lattice-slides', 'memo', 'calendar'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + (id === 'lattice-slides' ? 'slides' : id) + '/', policy: 'grant', legacyPaths: id === 'reminder' ? ['/business/reminder/'] : [] } }));
+const registeredFacts = ['reminder', 'projects', 'lattice-slides', 'memo', 'field-notes'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + (id === 'lattice-slides' ? 'slides' : id) + '/', policy: 'grant', legacyPaths: id === 'reminder' ? ['/business/reminder/'] : [] } }));
 setAppFacts(registeredFacts);
 const card = (overrides = {}) => ({ id: 'reminder:sample:record-a', appId: 'reminder', spaceId: 'sample', resourceId: 'record-a', revision: '7', kind: 'reminder', title: 'Keep this original title', preview: 'Source-authored <script>text</script>', reason: { en: 'A reminder you set.', zh: '你设置的提醒。' }, source: { name: 'Reminder' }, primaryAction: { label: { en: 'Open reminder', zh: '打开提醒' }, href: '/business/reminder/?space=sample&item=record-a' }, evidence: [{ label: 'Original note', excerpt: 'Keep the author’s language.', href: '/business/reminder/?space=sample&item=record-a', revision: '7' }], ...overrides });
 const envelope = items => ({ schemaVersion: 1, items, sources: [{ appId: 'reminder', status: 'ready' }], partial: false, generatedAt: '2026-11-19T12:00:00.000Z' });
@@ -85,12 +85,12 @@ test('browser callbacks receive no session secrets and read only their own nativ
 
 test('unreviewed modules are refused and one broken provider cannot hide other app results', async () => {
   await assert.rejects(readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: [{ appId: 'memo', moduleUrl: 'https://other.example.test/code.mjs' }] }), importModule: () => assert.fail('Must not import remote code') }));
-  const result = await readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: ['memo', 'calendar'].map(appId => ({ appId, moduleUrl: `/app-providers/${appId}.mjs` })) }), importModule: async url => {
-    const appId = url.includes('/memo.') ? 'memo' : 'calendar';
-    return { describe: () => ({ version: 1, appId, cards: { supported: true, execution: 'browser' } }), getCards: () => appId === 'memo' ? Promise.reject(new Error('Private implementation detail')) : { status: 'ready', items: [card({ id: 'calendar:sample:date', appId: 'calendar', kind: 'result', primaryAction: { label: 'Open date', href: '/apps/calendar/' }, evidence: [] })] } };
+  const result = await readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: ['memo', 'field-notes'].map(appId => ({ appId, moduleUrl: `/app-providers/${appId}.mjs` })) }), importModule: async url => {
+    const appId = url.includes('/memo.') ? 'memo' : 'field-notes';
+    return { describe: () => ({ version: 1, appId, cards: { supported: true, execution: 'browser' } }), getCards: () => appId === 'memo' ? Promise.reject(new Error('Private implementation detail')) : { status: 'ready', items: [card({ id: 'field-notes:sample:date', appId: 'field-notes', kind: 'result', primaryAction: { label: 'Open date', href: '/apps/field-notes/' }, evidence: [] })] } };
   } });
   assert.equal(result[0].status, 'unavailable'); assert.ok(!JSON.stringify(result[0]).includes('Private implementation detail'));
-  assert.equal(result[1].items[0].appId, 'calendar');
+  assert.equal(result[1].items[0].appId, 'field-notes');
 });
 
 test('data location sources remain factual and browser failures do not retain stale paths', () => {
@@ -98,6 +98,6 @@ test('data location sources remain factual and browser failures do not retain st
   const merged = mergeBrowserInventory(value, [{ appId: 'memo', status: 'unavailable', items: [] }]);
   assert.equal(merged.apps[0].locations[0].hostPath, '/synthetic/data/tasks.json');
   assert.deepEqual(merged.apps[1].locations, []); assert.equal(merged.apps[1].status, 'unavailable');
-  validateDataManagement({ ...value, apps: [{ id: 'calendar', name: 'Calendar', locations: [{ label: 'Calendar projection', kind: 'derived' }, { label: 'Homeserver', kind: 'external', description: 'Owned by the connected service.' }] }] });
+  validateDataManagement({ ...value, apps: [{ id: 'field-notes', name: 'Field notes', locations: [{ label: 'Derived projection', kind: 'derived' }, { label: 'External archive', kind: 'external', description: 'Owned by the connected service.' }] }] });
   assert.equal(value.apps[1].locations[0].storageKey, 'sample.old');
 });

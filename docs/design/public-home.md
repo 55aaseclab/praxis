@@ -76,7 +76,7 @@
 | 结构化数据 | 使用真实且和正文一致的 `WebSite` / `SoftwareSourceCode` 信息，不虚构价格、评分、评论或承诺富结果 |
 | 分享与性能 | 双语 OG 文案、真实合成数据产品图、尺寸和 alt；正式绝对 URL 来自配置。首屏先绘制静态图，正常动态设置下自动播放；减少动态效果提供按钮，无 JS 提供动图链接、下方图标懒加载、不阻塞远程字体 |
 
-页面与既有工作台共用 canonical origin，保留 Calendar/Matrix 浏览器状态、OAuth 回调及根据登录会话选择首页/工作台的现行路由。
+页面与既有工作台共用 canonical origin，保留既有浏览器状态、OAuth 回调及根据登录会话选择首页/工作台的现行路由。
 
 依据：[Google SEO 入门](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)、[多语言页面](https://developers.google.com/search/docs/specialty/international/localized-versions)、[结构化数据要求](https://developers.google.com/search/docs/appearance/structured-data/software-app)。这些做法不保证收录、排名或富结果。
 

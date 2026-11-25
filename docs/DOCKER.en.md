@@ -21,7 +21,6 @@ In a managed installation, a TLS endpoint forwards to the web gateway. The gatew
 | Memo | 4325 | Registered server guides and records; older browser-only content requires explicit import/export |
 | Intelligence | 4330 | Explicit working roots or declared preview fixtures |
 | Polaris viewer | 18787 | Separate administrator-only viewer and read-only observations file |
-| Matrix Reader / Calendar | Web slot | Static app distributions; each app documents its browser data |
 
 For an existing installation, preserve the canonical sources registered in the private storage configuration and the business space mappings. Match the workspace ID and single writer. Restore and verify data before activating services on a new host. Use a default-deny Docker build context to exclude secrets, Git data, private databases, decks and local dependencies.
 

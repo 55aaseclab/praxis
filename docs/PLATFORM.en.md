@@ -25,8 +25,6 @@ Apps and projects open in the current tab. Browser Back returns to the previous 
 | Projects | `/apps/projects/` | 4327 | `third_party/projects` |
 | Intelligence | `/apps/intelligence/` | 4330 | `third_party/intelligence` |
 | Polaris | `/apps/polaris/` | 18787 | `third_party/polaris` |
-| Matrix Reader | `/apps/matrix-reader/` | Web slot | `third_party/matrix-reader` |
-| Calendar | `/apps/calendar/` | Web slot | `third_party/calendar` |
 | Letters | `/apps/letters/` | Web slot | `third_party/letters` |
 | Profiles | `/apps/profiles/` | Web slot | `third_party/profiles` |
 
@@ -44,7 +42,7 @@ flowchart LR
   A --> D[(App-owned data)]
 ```
 
-The installation index `config/installed-apps.json` contains only reviewed app source references; each app owns its presentation and release version in `praxis-app.json`. The PRD collection reads only documents listed by the app-owned `praxis-app.json` document declaration. Use `git submodule update --init third_party/<app>` for a required app. The thirteen pinned app commits are publicly fetchable; the retired Finance repository and documents are recorded in [REPOSITORIES.md](REPOSITORIES.md). [Source inventory](REPOSITORIES.md)
+The installation index `config/installed-apps.json` contains only reviewed app source references; each app owns its presentation and release version in `praxis-app.json`. The PRD collection reads only documents listed by the app-owned `praxis-app.json` document declaration. Use `git submodule update --init third_party/<app>` for a required app. The eleven pinned app commits are publicly fetchable; retired repositories and documents are recorded in [REPOSITORIES.md](REPOSITORIES.md). [Source inventory](REPOSITORIES.md)
 
 ## Operations
 

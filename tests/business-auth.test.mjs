@@ -697,7 +697,7 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   assert.equal(f.store.isPlatformAdmin(owner.user.id), false);
   assert.equal(f.store.getWebEntryPolicy(owner.user.id), null);
   const details = await (await read(owner, path)).json();
-  assert.equal(details.apps.length, 13);
+  assert.equal(details.apps.length, 11);
   assert.ok(details.apps.every(app => app.enabled === false));
   assert.ok(details.apps.every(app => !app.availableActions.length && !app.availableResources.length), 'new space has no effective business access');
   assert.equal((await call(owner, path + '/apps/reminder', { enabled: true }, 'PUT')).status, 200);
@@ -1011,9 +1011,9 @@ test('space catalog includes every installed app and retains business adapter ID
   const read = path => f.request(prefix + path, { headers: { Cookie: owner.cookie } });
   const call = (path, input, method = 'POST') => f.json(prefix + path, input, { method, headers: { Cookie: owner.cookie, 'X-CSRF-Token': owner.body.csrfToken } });
   const { catalog } = await (await read('')).json();
-  assert.equal(catalog.length, 13);
+  assert.equal(catalog.length, 11);
   assert.deepEqual(catalog.map(app => app.webAppId), f.store.registry.apps.map(app => app.id));
-  assert.equal(new Set(catalog.map(app => app.id)).size, 13);
+  assert.equal(new Set(catalog.map(app => app.id)).size, 11);
   for (const app of catalog) {
     const declared = f.store.registry.getApp(app.webAppId), business = declared.integration.business;
     assert.equal(app.id, business?.adapterId || declared.id);
@@ -1026,7 +1026,7 @@ test('space catalog includes every installed app and retains business adapter ID
   const slide = catalog.find(app => app.id === 'slides');
   assert.equal(slide.webAppId, 'lattice-slides'); assert.equal(slide.enrollmentAllowed, true);
   assert.equal(catalog.find(app => app.id === 'knowledge').enrollmentAllowed, false, 'unconfigured business backend remains unavailable');
-  for (const id of ['intelligence', 'calendar', 'matrix-reader']) assert.equal(catalog.find(app => app.id === id).enrollmentAllowed, true);
+  for (const id of ['intelligence']) assert.equal(catalog.find(app => app.id === id).enrollmentAllowed, true);
   for (const id of ['polaris', 'letters', 'profiles']) assert.equal(catalog.find(app => app.id === id).enrollmentAllowed, false);
   const space = await (await call('', { type: 'family' })).json(), path = `/${space.id}`;
   const details = await (await read(path)).json();
@@ -1050,10 +1050,10 @@ test('non-business space enrollment grants current members web entry without res
   };
   const space = await (await call(owner, '', { type: 'family' })).json(), path = `/${space.id}`;
   assert.deepEqual((await web(owner)).apps, []); assert.deepEqual((await web(member)).apps, []);
-  for (const appId of ['intelligence', 'calendar', 'matrix-reader']) {
+  for (const appId of ['intelligence']) {
     assert.equal((await call(owner, path + `/apps/${appId}`, { enabled: true }, 'PUT')).status, 200);
   }
-  const entries = ['calendar', 'intelligence', 'matrix-reader'];
+  const entries = ['intelligence'];
   assert.deepEqual((await web(owner)).apps, entries);
   assert.deepEqual((await web(member)).apps, [], 'a non-member receives no entry');
   assert.equal((await call(owner, path + '/members', { username: 'bob', role: 'member' })).status, 201);
@@ -1079,7 +1079,7 @@ test('non-business space enrollment grants current members web entry without res
   f.store.setWebAccess({ userId: 'bob', apps: ['intelligence'], prds: false });
   assert.deepEqual((await web(member)).apps, ['intelligence'], 'administrator entry policy remains independent and backward compatible');
   const personal = await (await call(owner, '', { type: 'personal' })).json();
-  assert.equal((await call(owner, `/${personal.id}/apps/calendar`, { enabled: true }, 'PUT')).status, 200);
+  assert.equal((await call(owner, `/${personal.id}/apps/intelligence`, { enabled: true }, 'PUT')).status, 200);
   assert.equal((await call(owner, `/${personal.id}/members`, { username: 'bob', role: 'member' })).status, 403);
 });
 
@@ -1151,10 +1151,10 @@ test('space deletion atomically removes all authorization slices and derived ent
   const apps = { reminder: { spaces: ['family-a', 'company-a'] } };
   store.configureWebAccessBoundary({ enabled: true, apps });
   store.setWebAccess({ userId: 'bob', apps: ['reminder'], prds: false });
-  store.setWebAccess({ userId: 'guest', apps: ['matrix-reader'], prds: true });
+  store.setWebAccess({ userId: 'guest', apps: ['intelligence'], prds: true });
   const space = store.createSelfServiceSpace({ type: 'family', ownerId: 'alice' });
   store.setMembership({ spaceId: space.id, userId: 'bob', role: 'member' });
-  for (const appId of ['reminder', 'intelligence', 'calendar']) store.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
+  for (const appId of ['reminder', 'intelligence']) store.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
   store.grantResource({ userId: 'bob', ...rule(space.id, ['read'], ['synthetic-record']) });
   store.grantResource({ userId: 'guest', ...rule(space.id, ['read'], ['synthetic-shared-record']) });
   const only = f.grant('bob', [rule(space.id, ['read'], ['synthetic-record'])]);
@@ -1176,7 +1176,7 @@ test('space deletion atomically removes all authorization slices and derived ent
     members: store.db.prepare('SELECT * FROM auth_members WHERE space_id<>? ORDER BY space_id,user_id').all(space.id),
     resources: store.db.prepare('SELECT * FROM auth_resources WHERE space_id<>? ORDER BY id').all(space.id),
   };
-  assert.deepEqual(store.currentWebApps('bob'), ['calendar', 'intelligence', 'reminder']);
+  assert.deepEqual(store.currentWebApps('bob'), ['intelligence', 'reminder']);
   let observedCommit = false;
   const off = store.onChange(() => {
     assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM auth_spaces WHERE id=?').get(space.id).n, 0);
@@ -1194,7 +1194,7 @@ test('space deletion atomically removes all authorization slices and derived ent
     assert.deepEqual(JSON.parse(row.rules), []); assert.notEqual(row.revoked_at, null);
   }
   assert.deepEqual(store.currentWebApps('bob'), ['reminder'], 'only enrollment-derived entries disappear');
-  assert.deepEqual(store.currentWebApps('guest'), ['matrix-reader'], 'independent administrator entry remains');
+  assert.deepEqual(store.currentWebApps('guest'), ['intelligence'], 'independent administrator entry remains');
   assert.deepEqual(store.userPermissions('bob', space.id, 'reminder', 'read'), []);
   assert.throws(() => store.authenticate(onlyTokens.access_token), { status: 401 });
   assert.throws(() => store.refresh({ refreshToken: onlyTokens.refresh_token, clientId: 'agent-a', resource: store.resource }));

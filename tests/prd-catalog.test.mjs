@@ -32,10 +32,8 @@ const metadata = [
   { id: 'knowledge', group: 'third-party', project: 'Knowledge', source: 'third_party/knowledge/docs/PRD.md' },
   { id: 'intelligence', group: 'third-party', project: 'Intelligence', source: 'third_party/intelligence/docs/PRD.md' },
   { id: 'projects', group: 'third-party', project: 'Projects', source: 'third_party/projects/docs/PRD.md' },
-  { id: 'matrix-reader', group: 'third-party', project: 'Matrix Reader', source: 'third_party/matrix-reader/PRD.md' },
   { id: 'letters', group: 'third-party', project: 'Letters', source: 'third_party/letters/PRD.md' },
   { id: 'profiles', group: 'third-party', project: 'Profiles', source: 'third_party/profiles/PRD.md' },
-  { id: 'calendar', group: 'third-party', project: 'Calendar', source: 'third_party/calendar/PRD.md' },
   { id: 'polaris', group: 'third-party', project: 'Polaris', source: 'third_party/polaris/apps/docs/site/development/prd.zh-CN.md' },
 ];
 

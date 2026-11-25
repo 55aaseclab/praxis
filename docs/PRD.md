@@ -1,6 +1,6 @@
 # Praxis 产品需求
 
-版本：0.1.157 · [English](PRD.en.md)
+版本：0.1.158 · [English](PRD.en.md)
 
 Praxis 是一个可自托管的平台，为 agent 执行工作和人使用结果设计应用。用户表达想要的结果，授权 agent 完成日常操作。应用校验操作、保存结果，并以适合人阅读、观看或收听的方式呈现。每款应用负责自己的业务对象、可对这些对象执行的操作，以及让人理解结果的界面。
 
@@ -70,7 +70,7 @@ MCP 设置页保留协议入口与能力清单，移除应用配置／近七天�
 
 测试配置设置 `communication: "paseo-send-message"`。agent 间派单、汇报、追问和协调统一走 Paseo 公开发送消息能力，包括 worker→主控及主控→父级汇报；不读对方工作文件、不反复拉日志/时间线代替消息。仍需读取框架状态、独立验证应用结果，应用记录继续权威。新任务/恢复业务任务在发消息前仍先预留全局 worker 槽，通信不授权额外并行 worker。
 
-三个合成场景持续保留身份和历史：三人旅行家庭；研究《AI 时代的漏洞管理新范式》的组织，包含 Research（导师、学生）、Productization（工程师）、Marketing 和 Finance/支持；初始模拟本金100万元、争取10%净收益的专职投资者。交易前须明确市场和期限。研究组织使用 Reminder、Knowledge、Lattice、Memo、Polaris、Calendar、Projects、Intelligence；投资者使用 Reminder、Memo、Intelligence、Polaris。应用使用以实际发现的能力为准，Polaris 仍是经授权的只读观察器，Calendar 保留设备本地边界；缺失能力明确记录，不伪造成果。团队及个人/共享范围隔离。可查询真实公开资料，交易、资金及组织操作均为合成。
+三个合成场景持续保留身份和历史：三人旅行家庭；研究《AI 时代的漏洞管理新范式》的组织，包含 Research（导师、学生）、Productization（工程师）、Marketing 和 Finance/支持；初始模拟本金100万元、争取10%净收益的专职投资者。交易前须明确市场和期限。研究组织使用 Reminder、Knowledge、Lattice、Memo、Polaris、Projects、Intelligence；投资者使用 Reminder、Memo、Intelligence、Polaris。应用使用以实际发现的能力为准，Polaris 仍是经授权的只读观察器；缺失能力明确记录，不伪造成果。团队及个人/共享范围隔离。可查询真实公开资料，交易、资金及组织操作均为合成。
 
 稳定 personality、持久化的随机情境抽样与角色自主选择共同产生变化。提供目标与验收标准，不规定逐步操作。保留失败、证据和各角色知识边界，本地笔记不替代应用权威记录。修复后原角色从原断点继续，必要时另做隔离的完整重演。首批三十个目的地是素材，不是终点。投资收益是目标，不是承诺或产品通过标准；费用、亏损、回撤与信息发布时间完整保留。
 
@@ -103,7 +103,7 @@ Maintenance 提示词仅包含已批准的最小合成技术复现、代码范�
 
 ## 公开产品主页
 
-设计匿名可读、可索引的产品主页，面向通过搜索发现 Praxis 的人。说明自托管平台、用户自选外部 agent、应用保存和呈现结果及用户控制授权的关系。以真实产品示例开篇，同时提供在线试用和完整本地 Compose 栈入口。展示全部十三个已发布组件，区分 Polaris 运行观察与应用卡片，说明自建应用；不把计划中的工作流执行当作现有能力。技术安装内容放在产品说明之后。
+设计匿名可读、可索引的产品主页，面向通过搜索发现 Praxis 的人。说明自托管平台、用户自选外部 agent、应用保存和呈现结果及用户控制授权的关系。以真实产品示例开篇，同时提供在线试用和完整本地 Compose 栈入口。展示全部十一个已发布组件，区分 Polaris 运行观察与应用卡片，说明自建应用；不把计划中的工作流执行当作现有能力。技术安装内容放在产品说明之后。
 
 英文与简体中文各有完整 HTML 和普通导航链接。生产验收要求关闭 JavaScript 仍可阅读正文、明确 canonical/语言 URL、真实搜索/分享元数据、桌面和手机可访问布局及无私有记录。已在既有工作台 canonical origin 上实现：未登录访问 origin 根路径或 `/zh-cn/` 时返回公开产品主页，已登录会话在 `/` 继续使用工作台；页面携带 canonical/hreflang/OG 元数据、JSON-LD 及 sitemap，robots 仅放行这些公开页面。原工作台「关于 Praxis」入口及其 `/about/` 页面已移除，由公开主页承接内容。组件目录从审核过的应用注册表渲染，不另维护应用表。[设计](design/public-home.md)
 
@@ -168,7 +168,7 @@ Maintenance 提示词仅包含已批准的最小合成技术复现、代码范�
 
 ## 空间概览与逐应用管理
 
-「设置 → 空间」遵循一屏一事。新空间表单保留在空间控件顶部、管理员专属用户上下文行下方。空间概览展示当前空间、成员及全部已安装审核应用（内置安装共十三款），逐项明确是否支持智能体业务操作。每个应用行提供「管理」，进入该空间中此应用的独立管理页。页面展示当前启用状态及原有启用／停用确认方式、成员在此应用的权限，以及限定为此应用的成员、资源与支持动作授权表单；不混入其他应用控件。返回概览保留空间选择，保留既有标签和空间 ID。
+「设置 → 空间」遵循一屏一事。新空间表单保留在空间控件顶部、管理员专属用户上下文行下方。空间概览展示当前空间、成员及全部已安装审核应用（内置安装共十一款），逐项明确是否支持智能体业务操作。每个应用行提供「管理」，进入该空间中此应用的独立管理页。页面展示当前启用状态及原有启用／停用确认方式、成员在此应用的权限，以及限定为此应用的成员、资源与支持动作授权表单；不混入其他应用控件。返回概览保留空间选择，保留既有标签和空间 ID。
 
 不支持智能体业务操作且使用授权式网页入口的已安装应用，启用后向当前空间成员提供网页入口，并在页面说明。启用不授予业务资源权限、智能体动作或外部委托。受保护应用仍显示「管理」，并解释不能启用的原因：Polaris 保留平台管理员边界，Letters 和 Profiles 保留文档所有者边界。支持业务操作的应用保留既有明确资源／动作授权，并须有已配置的业务适配器才可启用。即使只有部分应用实现业务适配，已安装目录仍须完整；增补能力元数据不得移除或改变既有 API 字段与参数。
 
@@ -234,7 +234,7 @@ owner 通过产品成员流程添加已有账号，明确授予应用资源及�
 
 服务端权威结构化记录统一采用每应用独立的 SQLite 数据库。Reminder、Intelligence、Travel 与 Lattice 业务状态保存在各自数据库中，既有 Knowledge、Projects、Memo、TingProof 及平台数据库继续归原所有者维护。保留空间/资源 ID、修订、顺序、回执、事件、时间戳、历史扩展字段及授权。Reminder 使用按空间标识记录的 `reminder.db`，不再以 `spaces/<id>/checklist.json` 树作为运行主源。数据库命名空间不授予权限；JSON 只作显式导入/导出或兼容格式，配置数据库缺席时不得自动回退。
 
-原始文档、媒体、制作源文件和导出物继续保留文件及内容摘要，需要时由数据库引用。Calendar 设备记录改用浏览器 IndexedDB，不因此变成服务端账号或宣称已纳入服务器备份；Matrix SDK 的设备加密数据库及外部 homeserver 所有权保持。Letters/Profiles 继续读取原件；Polaris 继续只读投影外部运行观测，不增加执行器。
+原始文档、媒体、制作源文件和导出物继续保留文件及内容摘要，需要时由数据库引用。Letters/Profiles 继续读取原件；Polaris 继续只读投影外部运行观测，不增加执行器。
 
 此次切换属于存储表示转换，不是业务内容编辑。用户已授权对现有数据做保真转换与部署：停止写者，保留不可变原件、配置/镜像回滚点，校验格式，写入新数据库，比对规范内容、身份、修订、回执与事件覆盖，完成完整性检查和空目录恢复，再切换已验证绑定并启动唯一写者。不得制造记录、改写业务含义、用空库替代缺席来源或删除旧源。DB/WAL/SHM 位于同一可写挂载目录，以 SQLite 在线备份保持一致；应用维护存储、迁移和清单合同，Praxis 通用消费。
 
@@ -273,7 +273,7 @@ Settings → 数据中的位置内容及工作区别名使用一致的预览/复
 | 扩展本地应用 | 使用双语清单登记回环地址的独立服务，即可在本机工作台打开。 |
 | 使用任一工作语言 | 从工作台进入**设置 → 通用 → 语言**，可选 English（默认）或简体中文。选择立即生效，在当前浏览器中保存，工作台与需求阅读器共用。独立工作台用户和已登录的普通成员均可修改。用户内容保留原语言。 |
 
-公开仓库提供完整的内置应用 Docker Compose 栈。全新克隆会启动全部十三个应用的原生服务、需登录的工作台及限定范围的业务接口。首次初始化生成私有所有者账号、工作区、服务密钥和持久存储。重启或重试应保留既有身份、配置与记录。用隔离的干净安装逐项验证原生入口、受保护资源、写入回读及重启持久化。迁移时保留原有的栈管理与恢复流程。
+公开仓库提供完整的内置应用 Docker Compose 栈。全新克隆会启动全部十一个应用的原生服务、需登录的工作台及限定范围的业务接口。首次初始化生成私有所有者账号、工作区、服务密钥和持久存储。重启或重试应保留既有身份、配置与记录。用隔离的干净安装逐项验证原生入口、受保护资源、写入回读及重启持久化。迁移时保留原有的栈管理与恢复流程。
 
 上述行为用合成数据验收。受管运行使用的外部服务需独立配置。
 
@@ -289,7 +289,7 @@ Settings → 数据中的位置内容及工作区别名使用一致的预览/复
 
 按已设计的[卡片方案](design/workbench-cards.md)及原型实现，完整保留结果或问题预览、可展开的来源依据、一个原生主要入口、有限队列与列表、个人「稍后看／收起这一版／撤销」，以及 Home 返回原卡和位置。两个工作台视图始终顶部对齐，语言仍放在 Settings，沿用底栏单图标切换。浏览不表示签收、接单或完成；个人呈现状态不改变原事项日期，也不成为同事可见的已读回执。
 
-十二个非 runtime 内置应用均提供所属应用负责、按权限过滤且带版本的卡片投影和当前数据清单。Polaris 是 runtime，不参与工作台卡片，但仍纳入数据清单。平台从已安装应用目录发现 provider，汇总其响应，应用或数据位置变化后更新 Settings。内容、来源版本、记录引用和原生入口由应用提供，不编造卡片、不静默遗漏应用接入。浏览器本地数据和派生来源按实际执行位置及归属报告。空、不可用、部分失败和无权限须明确区分。 Letters、Profiles 的卡片发现、原生读取和个人卡片偏好沿用同一已配置文档所有者边界，不能因它们不在通用应用入口策略中而对所有者隐藏来源。
+十个非 runtime 内置应用均提供所属应用负责、按权限过滤且带版本的卡片投影和当前数据清单。Polaris 是 runtime，不参与工作台卡片，但仍纳入数据清单。平台从已安装应用目录发现 provider，汇总其响应，应用或数据位置变化后更新 Settings。内容、来源版本、记录引用和原生入口由应用提供，不编造卡片、不静默遗漏应用接入。浏览器本地数据和派生来源按实际执行位置及归属报告。空、不可用、部分失败和无权限须明确区分。 Letters、Profiles 的卡片发现、原生读取和个人卡片偏好沿用同一已配置文档所有者边界，不能因它们不在通用应用入口策略中而对所有者隐藏来源。
 
 在 Settings → Overview 新增 Trace 节展示业务操作全流程：已授权调用、应用结果或提交、来源与输出版本、已记录的工作流或人工决定关联，以及回读或失败。仅使用有界结构化元数据和获授权的引用，不纳入凭据、原始请求正文及个人浏览／暂缓历史。缺失的历史覆盖如实说明。Overview 的「使用和体验线索」始终展开，不再使用 details/summary 折叠控件。
 
@@ -307,7 +307,7 @@ Polaris 已固化的工作流上下文作为补充来源，不能用运行历史
 
 应用发行版本统一使用三段数字 `MAJOR.MINOR.PATCH`，各应用保持独立版本值与发布节奏。声明应与应用 package 及根 lockfile 的发行版本一致；静态应用在自身清单声明版本。运行时健康／版本响应以及工作台和 PRD 的应用发行标签使用同一身份，需求修订另行标注；PRD 阅读器识别中英文显式需求修订标题，不把应用发行标题误认为文档修订。将 `0.1` 等应用发行简称明确为 `0.1.0` 时保留原有历史含义；schema 数字、协议版本、算法修订和业务记录 revision 属于其他合同，不据此改号。
 
-十三个已安装入口、十二个非 runtime 卡片来源、数据清单、双语 PRD、本机示例及原有受保护原生路由须继续基于应用自有元数据工作。全新匿名启动在应用清单尚未检出时，也能先从源码引用获取应用。重复身份、缺失或非法声明、不安全路径及版本冲突须明确拒绝，不退回过时内置表。保留私有部署覆盖项，先发布应用改动，再固定已审核的公开提交。
+十一个已安装入口、十个非 runtime 卡片来源、数据清单、双语 PRD、本机示例及原有受保护原生路由须继续基于应用自有元数据工作。全新匿名启动在应用清单尚未检出时，也能先从源码引用获取应用。重复身份、缺失或非法声明、不安全路径及版本冲突须明确拒绝，不退回过时内置表。保留私有部署覆盖项，先发布应用改动，再固定已审核的公开提交。
 
 ## 加载应用集成，不逐项枚举应用行为
 
@@ -343,7 +343,7 @@ Polaris 已固化的工作流上下文作为补充来源，不能用运行历史
 
 ## 内置应用
 
-Praxis 将维护中的应用作为独立版本的内置组件发布。目录包括提醒、知识库、Lattice 幻灯片、旅行、听校、备忘、情报、Polaris、日历、Matrix 阅读器、项目、书信和个人资料；已退役应用的存档文档保存在 [docs/finance](finance/RETIRED.md)，不再属于发行版。内置应用本身是可用的产品。它们的读、看、听体验展示产品方向，应用自有的数据、操作和界面也为开发新应用提供参考实现。各应用说明自己支持的操作及所需配置。访问取决于安装配置与用户授权。私有数据、账号和工作文件放在公开仓库之外。
+Praxis 将维护中的应用作为独立版本的内置组件发布。目录包括提醒、知识库、Lattice 幻灯片、旅行、听校、备忘、情报、Polaris、项目、书信和个人资料；已退役应用的存档文档保存在 [docs/finance](finance/RETIRED.md)、[docs/calendar](calendar/RETIRED.md) 和 [docs/matrix-reader](matrix-reader/RETIRED.md)，不再属于发行版。内置应用本身是可用的产品。它们的读、看、听体验展示产品方向，应用自有的数据、操作和界面也为开发新应用提供参考实现。各应用说明自己支持的操作及所需配置。访问取决于安装配置与用户授权。私有数据、账号和工作文件放在公开仓库之外。
 
 个人、家庭和组织应能按自己的工作方式快速构建并部署应用。AI 辅助开发和可复用的部署流程，旨在让范围很小的需求也能用专门的应用解决。新应用可以直接围绕自己的业务对象和流程构建，按需使用外部来源和服务。目前，清单可将已运行的应用登记到本机工作台。受管入口和授权后的 agent 操作需要显式集成和部署。[应用标准](APP-STANDARD.md)
 
@@ -521,6 +521,7 @@ Praxis 将维护中的应用作为独立版本的内置组件发布。目录包�
 | v0.1.155 | 2026-11-21 | 作者与实现代理 | 成员可通过设置确认框及原生会话接口退出非个人空间，原子清理限定范围的访问权限。 |
 | v0.1.156 | 2026-11-21 | 作者与实现代理 | 工作台与设置订阅已认证的会话事件 SSE 流，基于 epoch 刷新、自动重连并静默降级；Knowledge 重新发布以跟随工作台语言偏好，概览不再渲染多余的目录标签。 |
 | v0.1.157 | 2026-11-25 | 作者与实现代理 | 退役 Finance 应用：移除子模块、登记、部署与测试，文档存档于 docs/finance，并删除其公开仓库。 |
+| v0.1.158 | 2026-11-25 | 作者与实现代理 | 退役 Calendar 与 Matrix Reader 应用：移除子模块、登记与测试，文档存档于 docs/，并删除其公开仓库。 |
 
 ## 零、需求体检与澄清
 
@@ -1771,9 +1772,9 @@ Matrix Reader 在 Praxis 工作台「应用」区按应用权限显示。点击�
 
 ### International workbench and app standard / 国际化工作台与应用规范
 
-English is the primary product and documentation language. Change English first, follow with Simplified Chinese in the same contribution, and preserve users’ original content. Managed apps must expose the platform Home control on desktop and mobile. Keep the app directory and add a separate attention view that surfaces authorized, dated or flagged work with a reason and a link back to its source. Calendar provides a month and daily agenda. Paseo Web belongs to its own client and can open in an optional left pane using the user's own pairing. Maintained apps and unpublished local apps share the bilingual, accessibility and data-ownership contract. Only public project documentation is discoverable by search engines.
+English is the primary product and documentation language. Change English first, follow with Simplified Chinese in the same contribution, and preserve users’ original content. Managed apps must expose the platform Home control on desktop and mobile. Keep the app directory and add a separate attention view that surfaces authorized, dated or flagged work with a reason and a link back to its source. Paseo Web belongs to its own client and can open in an optional left pane using the user's own pairing. Maintained apps and unpublished local apps share the bilingual, accessibility and data-ownership contract. Only public project documentation is discoverable by search engines.
 
-英文是产品与文档的主语言。同一贡献先更新英文，再同步简体中文，用户内容保留原文。桌面和手机上的受管应用都提供工作台小房子。保留应用目录，另设待关注卡片视图，按权限呈现有日期或旗标的事项、出现原因及来源入口。日历提供月视图与单日议程。Paseo Web 由独立客户端负责，可在左侧按需打开，由用户自行配对。官方维护的应用与不上线的本地应用共用双语、可访问性和数据归属规范。搜索引擎只发现公开项目资料。
+英文是产品与文档的主语言。同一贡献先更新英文，再同步简体中文，用户内容保留原文。桌面和手机上的受管应用都提供工作台小房子。保留应用目录，另设待关注卡片视图，按权限呈现有日期或旗标的事项、出现原因及来源入口。Paseo Web 由独立客户端负责，可在左侧按需打开，由用户自行配对。官方维护的应用与不上线的本地应用共用双语、可访问性和数据归属规范。搜索引擎只发现公开项目资料。
 
 ### 信件与个人材料
 

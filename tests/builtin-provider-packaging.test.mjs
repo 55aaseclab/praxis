@@ -16,10 +16,10 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
 const read = path => readFile(join(root, path), 'utf8');
 
-test('platform image receives all thirteen installed provider modules through its reviewed build context', async () => {
+test('platform image receives all eleven installed provider modules through its reviewed build context', async () => {
   const catalog = (await readApps(root, { publicUrlsFile: null })).filter(app => app.builtin && app.kind === 'app');
   const dockerfile = await read('Dockerfile'), ignore = await read('.dockerignore');
-  assert.equal(catalog.length, 13);
+  assert.equal(catalog.length, 11);
   assert.match(dockerfile, /^COPY --chown=node:node third_party\/ \.\/third_party\/$/m);
   assert.ok(ignore.includes('!config/installed-apps.json'));
   for (const app of catalog) for (const filename of ['praxis-app.json', 'praxis-provider.mjs', 'apps.example.json', 'package.json', 'package-lock.json', '**/*.md']) assert.ok(ignore.includes('!' + app.source + '/' + filename));
@@ -27,14 +27,10 @@ test('platform image receives all thirteen installed provider modules through it
     assert.ok((await lstat(join(root, app.source, 'praxis-provider.mjs'))).isFile(), app.id);
     assert.ok((await lstat(join(root, app.source, 'praxis-app.json'))).isFile(), app.id);
   }
-  const calendar = await read('third_party/calendar/public/calendar.js');
-  assert.match(calendar, /from ['"]\.\/calendar-events\.js['"]/);
-  assert.match(ignore, /^!third_party\/calendar\/public\/calendar-events\.js$/m);
-  assert.ok((await lstat(join(root, 'third_party/calendar/public/calendar-events.js'))).isFile());
 });
 
 // Opt in only after the release image exists; no production volumes or networks are used.
-if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the complete app-owned catalog, providers, PRDs and Calendar module closure', { timeout: 60_000 }, async () => {
+if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the complete app-owned catalog, providers and PRDs', { timeout: 60_000 }, async () => {
   const image = process.env.PRAXIS_TEST_IMAGE;
   assert.match(image, /^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/);
   const script = `
@@ -45,7 +41,7 @@ if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the co
     import { AppProviderRegistry } from './src/business/app-providers.mjs';
     import { loadPrd } from './src/prd-catalog.mjs';
     const root = process.cwd(), apps = await readApps(root, { publicUrlsFile: null });
-    assert.equal(apps.length, 13); assert.equal(new Set(apps.map(app => app.id)).size, 13);
+    assert.equal(apps.length, 11); assert.equal(new Set(apps.map(app => app.id)).size, 11);
     for (const app of apps) {
       assert.match(app.version, /^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/);
       const icon = await resolveAppIcon(root, app.icon, { apps });
@@ -56,25 +52,16 @@ if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the co
       }
     }
     const providers = await new AppProviderRegistry({ root }).providers();
-    assert.equal(providers.length, 13); assert.ok(providers.every(provider => !provider.error));
-    assert.equal(providers.filter(provider => provider.descriptor.cards.supported).length, 12);
+    assert.equal(providers.length, 11); assert.ok(providers.every(provider => !provider.error));
+    assert.equal(providers.filter(provider => provider.descriptor.cards.supported).length, 10);
     assert.equal(providers.find(provider => provider.app.id === 'polaris').descriptor.cards.supported, false);
-    const base = resolve(root, 'third_party/calendar/public'), visited = new Set();
-    async function moduleClosure(file) {
-      assert.ok(!relative(base, file).startsWith('..')); if (visited.has(file)) return;
-      visited.add(file); assert.ok((await lstat(file)).isFile());
-      const source = await readFile(file, 'utf8');
-      for (const match of source.matchAll(/(?:from\\s*|import\\s*\\()(['"])(\\.[^'"]+)\\1/g)) await moduleClosure(resolve(dirname(file), match[2]));
-    }
-    await moduleClosure(resolve(base, 'calendar.js'));
-    assert.ok(visited.has(resolve(base, 'calendar-events.js')));
-    console.log(JSON.stringify({ apps: apps.length, providers: providers.length, cardProviders: 13, icons: apps.length, prdEditions: apps.length * 2, calendarModules: visited.size }));
+    console.log(JSON.stringify({ apps: apps.length, providers: providers.length, cardProviders: 13, icons: apps.length, prdEditions: apps.length * 2 }));
   `;
   const quote = value => "'" + String(value).replaceAll("'", "'\\''") + "'";
   const command = ['docker', 'run', '--rm', '--pull=never', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--entrypoint', 'node', image, '--input-type=module', '-e', script].map(quote).join(' ');
   const { stdout } = await execute('sg', ['docker', '-c', command], { maxBuffer: 1024 * 1024 });
   const result = JSON.parse(stdout.trim());
-  assert.deepEqual(result, { apps: 13, providers: 13, cardProviders: 12, icons: 13, prdEditions: 26, calendarModules: 2 });
+  assert.deepEqual(result, { apps: 11, providers: 11, cardProviders: 10, icons: 11, prdEditions: 22 });
 });
 test('native images use their app-owned Dockerfiles and preserve video engine availability', async () => {
   const nativeApps = DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.deployment?.native);
@@ -129,7 +116,7 @@ test('fresh provider defaults expose configured paths while excluding keys and a
   assert.ok(!serialized.includes('hostPath')); assert.ok(!serialized.includes('volumeName')); assert.ok(!serialized.includes('containerPath'));
   const config = { appProviders, apps: {} }, resolver = createDataSourceResolver({ config, root: registry.root });
   const inventory = await registry.inventory({ bindings: { apps: [] }, resolveDataSource: resolver });
-  assert.equal(inventory.apps.length, 13);
+  assert.equal(inventory.apps.length, 11);
   for (const [appId, sourceId, expected] of [
     ['intelligence', 'observations', '/synthetic/intelligence/intelligence.db'],
     ['reminder', 'managed-records:0', '/synthetic/reminder/checklist.json'], ['lattice-slides', 'managed-decks:0', '/synthetic/slides/slides.json'],

@@ -11,7 +11,7 @@ git submodule update --init --recursive
 docker compose up --build -d --wait
 ```
 
-The default Compose file starts the complete built-in distribution. Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Intelligence, Projects and Polaris have their native services. Calendar, Matrix Reader, Letters and Profiles are served by the workbench image. The `core` backend enforces browser and agent authorization.
+The default Compose file starts the complete built-in distribution. Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Intelligence, Projects and Polaris have their native services. Letters and Profiles are served by the workbench image. The `core` backend enforces browser and agent authorization.
 
 The initializer creates the installation's owner account, workspace, signing keys and empty app stores once. Retrieve the initial login information privately:
 
@@ -40,7 +40,7 @@ npm ci
 npm start
 ```
 
-For Matrix Reader in native mode, run `npm ci --prefix third_party/matrix-reader` and `npm run build --prefix third_party/matrix-reader`. Use the [built-in app guide](BUILTINS.md) to launch an isolated service-backed demo.
+Use the [built-in app guide](BUILTINS.md) to launch an isolated service-backed demo.
 
 The local workbench binds to `127.0.0.1:4321`. Open `/about/` for an overview, `/prds/` for requirements, and `/health` for a JSON status. For a local app, run its service and pass a manifest to `npm run apps:dev -- /absolute/path/to/manifest.json`. That command starts a separate loopback workbench on port 4180. [App manifest example](APP-STANDARD.md)
 
@@ -63,7 +63,7 @@ git submodule update --init --recursive
 docker compose up --build -d --wait
 ```
 
-默认 Compose 启动完整的内置发行版。Reminder、Knowledge、Lattice Slides、Travel、TingProof、Memo、Intelligence、Projects 和 Polaris 均启动自己的原生服务；日历、Matrix 阅读器、信件和个人材料由工作台镜像提供。`core` 核心后端负责浏览器及智能体的授权。
+默认 Compose 启动完整的内置发行版。Reminder、Knowledge、Lattice Slides、Travel、TingProof、Memo、Intelligence、Projects 和 Polaris 均启动自己的原生服务；信件和个人材料由工作台镜像提供。`core` 核心后端负责浏览器及智能体的授权。
 
 初始化服务仅首次生成所有者账号、工作区、签名密钥和空应用存储。私下读取初始登录信息：
 
@@ -92,7 +92,7 @@ npm ci
 npm start
 ```
 
-原生模式下的 Matrix 阅读器需要运行 `npm ci --prefix third_party/matrix-reader` 和 `npm run build --prefix third_party/matrix-reader`。需要隔离试用依赖服务的应用时，请按[内置应用指南](BUILTINS.md)启动。
+需要隔离试用依赖服务的应用时，请按[内置应用指南](BUILTINS.md)启动。
 
 本机工作台默认监听 `127.0.0.1:4321`。`/about/zh-cn/` 提供中文介绍，`/prds/` 展示需求，`/health` 返回 JSON 状态。启动自己的应用后，执行 `npm run apps:dev -- /绝对路径/manifest.json`，即可在回环地址的 4180 端口打开独立工作台。[应用清单示例](APP-STANDARD.md)
 

@@ -23,7 +23,7 @@ Open the printed **Demo workbench** URL and select the app. Use your browser’s
 | `projects` | Creates a projects database. Managed writes require a service grant. |
 | `intelligence` | Opens the app's fictional read-only preview catalog. |
 
-Calendar and Matrix Reader open from the local workbench after installing their static files. Use the Home control to return. Letters and Profiles require the configured document owner's administrator session and private read-only mounts. Polaris requires a platform administrator. See the [observer image and single-file mount](POLARIS-VIEWER.md). The managed gateway checks the account's grants for service-backed apps. For persistent installations, see each app's README and the [workbench and gateway guide](RUNNING.md).
+Letters and Profiles require the configured document owner's administrator session and private read-only mounts. Polaris requires a platform administrator. See the [observer image and single-file mount](POLARIS-VIEWER.md). The managed gateway checks the account's grants for service-backed apps. For persistent installations, see each app's README and the [workbench and gateway guide](RUNNING.md).
 
 Each component retains its own licensing terms. Several source repositories have no app-level license declaration. The Praxis platform license covers the platform code.
 
@@ -50,6 +50,6 @@ npm run app:demo -- memo 18432
 | `projects` | 创建项目数据库。受管写入需要相应的服务授权。 |
 | `intelligence` | 打开只读的虚构情报示例。 |
 
-安装静态文件后，可以从本机工作台打开日历和 Matrix 阅读器，并通过主页按钮返回。书信和个人资料需要配置的文档所有者以管理员身份登录，并通过只读挂载提供原件。Polaris 需要平台管理员权限，部署方法见[查看器镜像和单文件挂载说明](POLARIS-VIEWER.md)。受管网关会为依赖后端的应用核对账号授权。持久化安装请参阅各应用的 README 和[工作台与网关指南](RUNNING.md)。
+书信和个人资料需要配置的文档所有者以管理员身份登录，并通过只读挂载提供原件。Polaris 需要平台管理员权限，部署方法见[查看器镜像和单文件挂载说明](POLARIS-VIEWER.md)。受管网关会为依赖后端的应用核对账号授权。持久化安装请参阅各应用的 README 和[工作台与网关指南](RUNNING.md)。
 
 各组件沿用自己的许可条款。部分应用仓库未声明应用级许可证。Praxis 平台许可证适用于平台代码。

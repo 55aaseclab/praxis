@@ -5,7 +5,7 @@ import { DEFAULT_APP_REGISTRY } from '../src/default-app-registry.mjs';
 
 test('Compose snapshot is assembled from app-owned recipes and preserves isolated native volumes', async () => {
   const compose = await composeInstallation();
-  assert.equal(DEFAULT_APP_REGISTRY.apps.length, 13);
+  assert.equal(DEFAULT_APP_REGISTRY.apps.length, 11);
   assert.equal(Object.keys(compose.services).length, 13);
   for (const app of DEFAULT_APP_REGISTRY.apps) {
     const recipe = app.integration.deployment.localCompose;

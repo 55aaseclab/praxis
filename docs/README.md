@@ -63,7 +63,7 @@ Start with the app’s installation and requirements at the platform’s pinned 
 | Letters | [App guide](https://github.com/55aaseclab/letters/blob/ddbd871d9201c8525bb68a0df1244ead77f39c2e/README.md) | [应用指南](https://github.com/55aaseclab/letters/blob/ddbd871d9201c8525bb68a0df1244ead77f39c2e/README.md#简体中文) |
 | Profiles | [App guide](https://github.com/55aaseclab/profiles/blob/22c72f76f2c317bf9b65b0e4d0a9b73d78512a0e/README.md) | [应用指南](https://github.com/55aaseclab/profiles/blob/22c72f76f2c317bf9b65b0e4d0a9b73d78512a0e/README.md#简体中文) |
 | Projects | [App guide](https://github.com/55aaseclab/projects/blob/78d70f7ab283a9370747f102b37dd17ced73ccd4/README.md) | [应用指南](https://github.com/55aaseclab/projects/blob/78d70f7ab283a9370747f102b37dd17ced73ccd4/README.zh-CN.md) |
-| Calendar | [App guide](https://github.com/55aaseclab/calendar/blob/a513c5690417865d6f96f2d4fc391421aa7025d5/README.md) | [应用指南](https://github.com/55aaseclab/calendar/blob/a513c5690417865d6f96f2d4fc391421aa7025d5/README.md) |
-| Matrix Reader | [App guide](https://github.com/55aaseclab/matrix-reader/blob/03df20c80c3f9433a3decd54e71103fd4bb18925/README.md) | [应用指南](https://github.com/55aaseclab/matrix-reader/blob/03df20c80c3f9433a3decd54e71103fd4bb18925/README.md#matrix-reader-中文说明) |
+| Calendar（已退役 / retired） | [Archived guide](calendar/README.md) | [存档应用指南](calendar/README.md) |
+| Matrix Reader（已退役 / retired） | [Archived guide](matrix-reader/README.md) | [存档应用指南](matrix-reader/README.md) |
 
 [Interface verification and limitations / 界面验证与限制](LANGUAGE-COVERAGE.md)

@@ -34,9 +34,9 @@ export async function getDataInventory(context){${broken ? "throw Error('Synthet
 async function fixture(t, { nativeIntelligence = false, privateReaders = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'praxis-provider-http-'));
   const state = join(root, 'state'); await mkdir(join(root, 'config')); await mkdir(state, { mode: 0o700 });
-  const catalog = ['reminder', 'intelligence', 'calendar', ...(privateReaders ? ['matrix-reader', 'letters', 'profiles'] : [])].map(id => ({ id, kind: 'app', builtin: true, name: id, source: `third_party/${id}`, path: '/', icon: `/${id}-icon.svg`, ...(['letters', 'profiles'].includes(id) && { adminOnly: true }) }));
+  const catalog = ['reminder', 'intelligence', 'memo', ...(privateReaders ? ['knowledge', 'letters', 'profiles'] : [])].map(id => ({ id, kind: 'app', builtin: true, name: id, source: `third_party/${id}`, path: '/', icon: `/${id}-icon.svg`, ...(['letters', 'profiles'].includes(id) && { adminOnly: true }) }));
   async function saveCatalog() { await writeInstalledAppsFixture(root, catalog); }
-  async function writeProvider(id, options = {}) { await mkdir(join(root, `third_party/${id}`), { recursive: true }); await writeFile(join(root, `third_party/${id}/praxis-provider.mjs`), syntheticProvider(id, { browser: ['calendar', 'matrix-reader', 'letters', 'profiles'].includes(id), ...options })); }
+  async function writeProvider(id, options = {}) { await mkdir(join(root, `third_party/${id}`), { recursive: true }); await writeFile(join(root, `third_party/${id}/praxis-provider.mjs`), syntheticProvider(id, { browser: ['memo', 'knowledge', 'letters', 'profiles'].includes(id), ...options })); }
   await saveCatalog(); for (const { id } of catalog) await writeProvider(id);
   const reserved = createServer(); reserved.listen(0, '127.0.0.1'); await once(reserved, 'listening'); const webPort = reserved.address().port; await new Promise(resolve => reserved.close(resolve));
   const issuer = `http://127.0.0.1:${webPort}`;
@@ -55,7 +55,7 @@ async function fixture(t, { nativeIntelligence = false, privateReaders = false }
   const users = {};
   for (const id of ['owner-a', 'owner-b', 'administrator']) users[id] = auth.createUser({ id, username: `synthetic-${id}`, password });
   auth.setPlatformAdmin({ userId: 'administrator', enabled: true });
-  for (const id of ['owner-a', 'owner-b']) auth.setWebAccess({ userId: id, apps: ['reminder', 'intelligence', 'calendar'], workbench: true, prds: false });
+  for (const id of ['owner-a', 'owner-b']) auth.setWebAccess({ userId: id, apps: ['reminder', 'intelligence', 'memo'], workbench: true, prds: false });
   auth.createSpace({ id: 'synthetic-space', type: 'company', ownerId: 'administrator' });
   auth.setMembership({ spaceId: 'synthetic-space', userId: 'owner-a', role: 'member' });
   const permission = auth.grantResource({ userId: 'owner-a', spaceId: 'synthetic-space', appId: 'reminder', resources: ['allowed-record'], actions: ['read'] });
@@ -82,9 +82,9 @@ test('HTTP cards require a native session, filter entries/resources, and never p
   const value = await response.json(); assert.equal(value.items.length, 1); assert.equal(value.items[0].resourceId, 'allowed-record');
   assert.ok(!JSON.stringify(value).includes('Synthetic denied source note'));
   assert.equal(value.sources.find(source => source.appId === 'intelligence').status, 'unavailable');
-  assert.equal(value.sources.find(source => source.appId === 'calendar').status, 'browser');
+  assert.equal(value.sources.find(source => source.appId === 'memo').status, 'browser');
   assert.ok(f.sourceCalls.every(call => call.url.startsWith('https://synthetic-adapter.example.test/')));
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['calendar'], workbench: true, prds: false });
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['memo'], workbench: true, prds: false });
   assert.deepEqual((await (await f.request(cardPath)).json()).items, []);
   assert.equal(ambientRequests.length, before, 'No implicit/default host may be contacted.');
 });
@@ -94,7 +94,7 @@ test('HTTP card aggregation rechecks native entry and resource authority after a
   f.respond = async url => { assert.equal(url.origin, 'https://synthetic-native.example.test'); entered.release(); await gate.promise; return new Response(JSON.stringify({ title: 'Synthetic withheld Intelligence result' })); };
   f.auth.setWebAccess({ userId: 'owner-a', apps: ['intelligence'], workbench: true, prds: false });
   const pending = f.request(cardPath); await entered.promise;
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['calendar'], workbench: true, prds: false }); gate.release();
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['memo'], workbench: true, prds: false }); gate.release();
   const value = await (await pending).json(); assert.deepEqual(value.items, []); assert.ok(!JSON.stringify(value).includes('withheld'));
   const resourceGate = f.hold(), resourceEntered = deferred();
   f.auth.setWebAccess({ userId: 'owner-a', apps: ['reminder'], workbench: true, prds: false });
@@ -129,10 +129,10 @@ test('HTTP administrator inventory follows changed catalog/provider metadata and
   const f = await fixture(t);
   assert.equal((await f.request(dataPath, { user: null })).status, 401); assert.equal((await f.request(dataPath)).status, 403);
   const first = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(first.apps.length, 3);
-  await f.writeProvider('calendar', { label: 'Changed synthetic browser location label' });
-  const changed = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(changed.apps.find(app => app.id === 'calendar').locations[0].label, 'Changed synthetic browser location label');
-  f.catalog.push({ id: 'memo', kind: 'app', builtin: true, name: 'Synthetic Memo', source: 'third_party/memo', path: '/', icon: '/memo-icon.svg' }); await f.writeProvider('memo'); await f.saveCatalog();
-  const expanded = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(expanded.apps.length, 4); assert.ok(expanded.apps.some(app => app.id === 'memo'));
+  await f.writeProvider('memo', { label: 'Changed synthetic browser location label' });
+  const changed = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(changed.apps.find(app => app.id === 'memo').locations[0].label, 'Changed synthetic browser location label');
+  f.catalog.push({ id: 'travel', kind: 'app', builtin: true, name: 'Synthetic Travel', source: 'third_party/travel', path: '/', icon: '/travel-icon.svg' }); await f.writeProvider('travel'); await f.saveCatalog();
+  const expanded = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(expanded.apps.length, 4); assert.ok(expanded.apps.some(app => app.id === 'travel'));
   await f.writeProvider('intelligence', { broken: true });
   const response = await f.request(dataPath, { user: 'administrator' }); assert.equal(response.status, 200); const partial = await response.json(); assert.equal(partial.sources.find(source => source.appId === 'intelligence').status, 'unavailable'); assert.ok(partial.apps.find(app => app.id === 'reminder').locations.length); assert.ok(!JSON.stringify(partial).includes('private implementation details'));
 });
@@ -140,26 +140,26 @@ test('HTTP administrator inventory follows changed catalog/provider metadata and
 test('HTTP browser manifests/modules require current entry access, use code hashes and never select arbitrary module URLs', { timeout: 15000 }, async t => {
   const f = await fixture(t), web = await f.openWeb();
   assert.equal((await web('/api/workbench/providers', null)).status, 401);
-  const first = await (await web('/api/workbench/providers')).json(); assert.equal(first.providers.length, 1); assert.equal(first.providers[0].appId, 'calendar'); assert.match(first.providers[0].moduleUrl, /^\/app-providers\/calendar\.mjs\?v=[0-9a-f]{20}$/); assert.equal(first.providers[0].dataExecution, 'server');
+  const first = await (await web('/api/workbench/providers')).json(); assert.equal(first.providers.length, 1); assert.equal(first.providers[0].appId, 'memo'); assert.match(first.providers[0].moduleUrl, /^\/app-providers\/memo\.mjs\?v=[0-9a-f]{20}$/); assert.equal(first.providers[0].dataExecution, 'server');
   assert.equal((await web(first.providers[0].moduleUrl)).status, 200);
-  await f.writeProvider('calendar', { label: 'A distinct synthetic module version for cache validation' });
+  await f.writeProvider('memo', { label: 'A distinct synthetic module version for cache validation' });
   const next = await (await web('/api/workbench/providers')).json(); assert.notEqual(next.providers[0].moduleUrl, first.providers[0].moduleUrl);
   f.auth.setWebAccess({ userId: 'owner-a', apps: ['reminder'], workbench: true, prds: false }); assert.deepEqual((await (await web('/api/workbench/providers')).json()).providers, []); assert.equal((await web(next.providers[0].moduleUrl)).status, 403);
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['calendar'], workbench: true, prds: false }); f.catalog.find(app => app.id === 'calendar').source = 'https://outside.example.test/module.mjs'; await f.saveCatalog();
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['memo'], workbench: true, prds: false }); f.catalog.find(app => app.id === 'memo').source = 'https://outside.example.test/module.mjs'; await f.saveCatalog();
   assert.equal((await web('/api/workbench/providers')).status, 500); assert.equal(ambientRequests.length, 0);
 });
 
 test('HTTP private reader cards/modules and Later use the configured native administrator owner rather than ordinary apps membership', { timeout: 15000 }, async t => {
   const f = await fixture(t, { privateReaders: true });
   f.auth.setPlatformAdmin({ userId: 'owner-b', enabled: true });
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['calendar', 'matrix-reader'], workbench: true, prds: false });
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['memo', 'knowledge'], workbench: true, prds: false });
   const web = await f.openWeb({ privateDocumentOwnerId: 'administrator' });
   const owner = await (await web('/api/workbench/providers', 'administrator')).json();
-  assert.deepEqual(owner.providers.map(provider => provider.appId).sort(), ['calendar', 'letters', 'matrix-reader', 'profiles']);
+  assert.deepEqual(owner.providers.map(provider => provider.appId).sort(), ['knowledge', 'letters', 'memo', 'profiles']);
   const otherAdmin = await (await web('/api/workbench/providers', 'owner-b')).json();
-  assert.deepEqual(otherAdmin.providers.map(provider => provider.appId).sort(), ['calendar', 'matrix-reader']);
+  assert.deepEqual(otherAdmin.providers.map(provider => provider.appId).sort(), ['knowledge', 'memo']);
   const member = await (await web('/api/workbench/providers', 'owner-a')).json();
-  assert.deepEqual(member.providers.map(provider => provider.appId).sort(), ['calendar', 'matrix-reader']);
+  assert.deepEqual(member.providers.map(provider => provider.appId).sort(), ['knowledge', 'memo']);
   for (const appId of ['letters', 'profiles']) {
     const module = owner.providers.find(provider => provider.appId === appId).moduleUrl;
     assert.equal((await web(module, 'administrator')).status, 200);

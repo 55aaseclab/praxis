@@ -101,7 +101,7 @@ Use links for navigation and source destinations. Copy controls update only thei
 | Share | Locale-specific title/description, real synthetic product screenshot with dimensions and alt text, absolute URLs from the configured public origin |
 | Media | Static screenshot for first paint; autoplay after JavaScript with normal motion; reduced-motion button or no-JavaScript animation link; explicit image dimensions, lazy lower-page icons and no blocking external fonts |
 
-The page shares the existing canonical origin with the authenticated workbench. Preserve Calendar/Matrix browser storage, OAuth callbacks and the existing session-dependent root routing.
+The page shares the existing canonical origin with the authenticated workbench. Preserve existing browser storage, OAuth callbacks and the session-dependent root routing.
 
 Design basis: [Google SEO starter guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide), [localized pages](https://developers.google.com/search/docs/specialty/international/localized-versions), [structured-data requirements](https://developers.google.com/search/docs/appearance/structured-data/software-app). These practices do not guarantee indexing, ranking or rich results.
 

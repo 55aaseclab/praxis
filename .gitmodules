@@ -6,14 +6,6 @@
 	path = third_party/profiles
 	url = https://github.com/55aaseclab/profiles.git
 	branch = main
-[submodule "calendar"]
-	path = third_party/calendar
-	url = https://github.com/55aaseclab/calendar.git
-	branch = main
-[submodule "matrix-reader"]
-	path = third_party/matrix-reader
-	url = https://github.com/55aaseclab/matrix-reader.git
-	branch = main
 [submodule "reminder"]
 	path = third_party/reminder
 	url = https://github.com/55aaseclab/reminder.git

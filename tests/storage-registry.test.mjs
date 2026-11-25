@@ -8,7 +8,7 @@ import { registerWorkspace } from '../src/storage/registry.mjs';
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'praxis-lattice-registry-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  for (const id of ['reminder', 'tingproof', 'lattice', 'memo', 'travel', 'knowledge', 'intelligence', 'projects', 'calendar', 'matrix-reader', 'letters', 'profiles', 'polaris']) {
+  for (const id of ['reminder', 'tingproof', 'lattice', 'memo', 'travel', 'knowledge', 'intelligence', 'projects', 'letters', 'profiles', 'polaris']) {
     await mkdir(join(root, 'third_party', id, '.git'), { recursive: true });
   }
   for (const path of ['reminder/data/reminder.db', 'tingproof/data/tingproof.db']) {
@@ -52,8 +52,8 @@ test('all built-in source repositories and build recipes are registered with exi
   const ancillary = { id: 'private-ancillary', path: join(root, 'private', 'archived-source') };
   config.sourceRepos = [ancillary];
   const result = await registerWorkspace(config, root);
-  assert.equal(result.sourceRepos.length, 15);
-  for (const id of ['intelligence', 'projects', 'calendar', 'matrix-reader', 'letters', 'profiles', 'polaris']) {
+  assert.equal(result.sourceRepos.length, 13);
+  for (const id of ['intelligence', 'projects', 'letters', 'profiles', 'polaris']) {
     assert.deepEqual(result.sourceRepos.find(item => item.id === id), { id, path: join(root, 'third_party', id) });
   }
   assert.deepEqual(result.sourceRepos.find(item => item.id === ancillary.id), ancillary);

@@ -33,12 +33,6 @@
     },
     {
       "source": "third_party/projects"
-    },
-    {
-      "source": "third_party/calendar"
-    },
-    {
-      "source": "third_party/matrix-reader"
     }
   ]
 }

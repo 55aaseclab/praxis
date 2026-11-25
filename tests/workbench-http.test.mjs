@@ -36,10 +36,9 @@ test('fresh checkout serves the workbench without revealing an owner collection'
   assert.equal(registry.status, 200);
   const { apps } = await registry.json();
   assert.deepEqual(apps.map(app => app.id).sort(), [
-    'calendar', 'intelligence', 'knowledge', 'lattice-slides', 'matrix-reader',
-    'memo', 'projects', 'reminder', 'tingproof', 'travel',
+    'intelligence', 'knowledge', 'lattice-slides', 'memo', 'projects', 'reminder', 'tingproof', 'travel',
   ]);
-  for (const app of apps.filter(app => !['calendar', 'matrix-reader'].includes(app.id))) {
+  for (const app of apps) {
     assert.equal(app.unavailable, 'managed');
     assert.equal(app.url ?? app.path ?? app.port, undefined);
   }
@@ -67,22 +66,29 @@ test('a standalone installed directory keeps owner-only entries private and repo
   assert.equal((await request('/api/apps', { method: 'POST' })).status, 405);
 });
 
-test('installed Calendar serves its page, navigation and named assets only', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'praxis-calendar-'));
+test('an installed static app serves its page, navigation and named assets only', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'praxis-static-app-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const directory = join(root, 'third_party/calendar/public');
+  const directory = join(root, 'third_party/field-notes/public');
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, 'index.html'), '<html><head><title>Calendar</title></head><body></body></html>');
-  await writeFile(join(directory, 'calendar.js'), '// synthetic');
-  await writeFile(join(directory, 'calendar-events.js'), '// synthetic browser event helper');
-  await writeInstalledAppsFixture(root, [{ id: 'calendar', name: 'Calendar', source: 'third_party/calendar' }]);
-  const request = await start(t, { root, publicDir: new URL('../public/', import.meta.url).pathname });
-  const page = await request('/apps/calendar/');
+  await writeFile(join(directory, 'index.html'), '<html><head><title>Field notes</title></head><body></body></html>');
+  await writeFile(join(directory, 'field-notes.js'), '// synthetic');
+  await writeFile(join(directory, 'field-notes-render.js'), '// synthetic browser event helper');
+  await writeFile(join(root, 'third_party/field-notes/praxis-integration.mjs'), [
+    'export function createIntegration() {',
+    "  return { schemaVersion: 1, appId: 'field-notes', web: { slug: 'field-notes', policy: 'grant', kind: 'static', directory: 'public', assets: ['/field-notes.js', '/field-notes-render.js'] } };",
+    '}',
+  ].join('\n'));
+  await writeInstalledAppsFixture(root, [{ id: 'field-notes', name: 'Field notes', source: 'third_party/field-notes' }]);
+  const { loadAppIntegrations } = await import('../src/app-integrations.mjs');
+  const registry = await loadAppIntegrations(root);
+  const request = await start(t, { root, registry, publicDir: new URL('../public/', import.meta.url).pathname });
+  const page = await request('/apps/field-notes/');
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /data-app-id="calendar"/);
-  assert.equal((await request('/apps/calendar/calendar.js')).status, 200);
-  assert.equal((await request('/apps/calendar/calendar-events.js')).status, 200);
-  assert.equal((await request('/apps/calendar/api/records')).status, 404);
+  assert.match(await page.text(), /data-app-id="field-notes"/);
+  assert.equal((await request('/apps/field-notes/field-notes.js')).status, 200);
+  assert.equal((await request('/apps/field-notes/field-notes-render.js')).status, 200);
+  assert.equal((await request('/apps/field-notes/api/records')).status, 404);
   assert.equal((await request('/praxis-nav.js')).status, 200);
   assert.equal((await request('/')).status, 200);
 });
@@ -91,13 +97,13 @@ test('the shipped directory preserves managed grants, owner readers and the Proj
   const registered = await readApps(WORKSPACE_ROOT, { publicUrlsFile: null });
   const origin = 'https://workbench.example.test';
   const list = identity => gatewayApps(registered, identity, origin);
-  const grants = { apps: ['calendar', 'projects', 'letters', 'polaris'] };
+  const grants = { apps: ['projects', 'letters', 'polaris'] };
   const ordinary = list(grants);
-  assert.deepEqual(ordinary.map(app => app.id).sort(), ['calendar', 'projects']);
+  assert.deepEqual(ordinary.map(app => app.id).sort(), ['projects']);
   assert.equal(ordinary.find(app => app.id === 'projects').launcher, false);
-  assert.deepEqual(list({ ...grants, platformAdmin: true }).map(app => app.id).sort(), ['calendar', 'polaris', 'projects']);
+  assert.deepEqual(list({ ...grants, platformAdmin: true }).map(app => app.id).sort(), ['polaris', 'projects']);
   const owner = list({ apps: registered.map(app => app.id), platformAdmin: true, documentOwner: true });
-  assert.equal(owner.length, 13);
+  assert.equal(owner.length, 11);
   assert.equal(owner.find(app => app.id === 'lattice-slides').url, origin + '/apps/slides/');
 });
 

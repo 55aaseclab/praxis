@@ -11,7 +11,7 @@
 | 场景 | 人员 | 应用与连续性 |
 | --- | --- | --- |
 | 家庭旅行 | 规划者、探索者、重视舒适的成员 | Travel、Reminder；同一家三人跨目的地积累历史，处理意见、个人准备和真正需要行动的共享提醒。三十个初始目的地不是终点。 |
-| AI 时代的漏洞管理新范式 | Research 导师/学生、Productization 工程师、Marketing、Finance/支持 | Reminder、Knowledge、Lattice、Memo、Polaris、Calendar、Projects、Intelligence；需求→研究→工程→市场交付/反馈→财务支持，可退回、修订。研究归合成学校主体，其余归合成公司。 |
+| AI 时代的漏洞管理新范式 | Research 导师/学生、Productization 工程师、Marketing、Finance/支持 | Reminder、Knowledge、Lattice、Memo、Polaris、Projects、Intelligence；需求→研究→工程→市场交付/反馈→财务支持，可退回、修订。研究归合成学校主体，其余归合成公司。 |
 | 专职模拟投资者 | 一人 | Reminder、Memo、Intelligence、Polaris；初始模拟本金100万元、争取10%净收益，开始前必须明确 market/horizon/asOf，交易、成交、费用和资金均为合成。 |
 
 精确模型：主控 `opencode/hexhive005-main/zai-org/GLM-5.3-Flash`；worker `opencode/hexhive005-work/zai-org/GLM-5.3-Flash`；Maintenance `codex/gpt-6.1-sol`、`ultra`，不覆盖默认 context window。发现失败不替换模型。主控与 Maintenance 独立于全局 worker 单槽；Maintenance 预留/执行期间阻止新业务任务，避免边改环境边测试。每次介入均须人工确认。worker 不设 token 预算、场景不设固定到期时间。额度或 provider 故障保留进度，不因此盲目重试。
@@ -123,4 +123,4 @@ SQLite 事务跨进程序列化预留，占槽不自动过期；调用 Paseo cre
 
 `report --lang en|zh` 提供本地化摘要与稳定 JSON 字段。覆盖单元是场景 step ID，初始27个单元除业务流程外还包含九位角色逐一接入/重连和三个明确跨范围拒绝用例，分母有版本。`exclude --task ID --reason 文本` 记录 N/A 并增加版本；保留原因，不用 N/A 隐藏产品缺陷。覆盖率=已尝试适用单元/适用单元；通过率=最近通过单元/已尝试适用单元。失败和待验收分开，未开始仍是 `not_run`。全部尝试保留。自主完成率=无辅助通过任务/已尝试任务；恢复率=通过的关联修复任务/关联修复任务。没有观察时为 null，不是100%。
 
-这是初始行为矩阵，不是穷尽的 UI/API 覆盖。从实际发现的缺口经双语源码变更扩展。确定性的控制器检查不能证明真实客户端入组、人类可用性、投资盈利、实体手机、多用户负载或所有应用能力已完成，分别收集证据。Intelligence 写入、Polaris 业务可见性或 Calendar 共享能力缺失时如实报告，不提权、不造记录。源码检查与实际运行台账分开。
+这是初始行为矩阵，不是穷尽的 UI/API 覆盖。从实际发现的缺口经双语源码变更扩展。确定性的控制器检查不能证明真实客户端入组、人类可用性、投资盈利、实体手机、多用户负载或所有应用能力已完成，分别收集证据。Intelligence 写入或 Polaris 业务可见性缺失时如实报告，不提权、不造记录。源码检查与实际运行台账分开。

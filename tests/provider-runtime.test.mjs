@@ -96,7 +96,7 @@ test('reader and viewer suffix fallback still requires the app alias and declare
   assert.equal(value.bindings.length, 1); assert.equal(value.bindings[0].service, 'projects-reader'); assert.equal(value.environment.PROJECTS_DATA_DIR, '/approved');
 });
 test('missing and unsupported runtime sources have explicit states', () => {
-  const output = collectProviderRuntime({ providers: [projects, { appId: 'calendar', source: 'third_party/calendar', dataSources: [], unsupported: true }], snapshots: [] });
+  const output = collectProviderRuntime({ providers: [projects, { appId: 'field-notes', source: 'third_party/field-notes', dataSources: [], unsupported: true }], snapshots: [] });
   assert.equal(output.apps[0].status, 'unknown'); assert.equal(output.apps[1].status, 'unsupported');
   assert.deepEqual(output.apps[0].mounts, []);
 });
