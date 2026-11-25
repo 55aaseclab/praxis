@@ -420,3 +420,7 @@ Calendar 按设备、身份使用 IndexedDB，首次授权使用时保留并导�
 ## 0.1.158——Calendar 与 Matrix Reader 退役源码检查
 
 按维护授权移除 Calendar 与 Matrix Reader：两个子模块、`.gitmodules` 条目、安装登记、生成构建上下文及相关测试引用全部删除；受管 Compose 未包含两者服务（一直由工作台镜像提供）。应用文档按最终公开提交（Calendar `88385e6d153d06418524971291587d460e134a32`、Matrix Reader `e2e9dc53cfd48cef4f2a01bafa648600b837f940`）分别存档于 `docs/calendar/`、`docs/matrix-reader/` 并附退役说明。合成检查覆盖：装目录剩十一个应用、生成 Compose 与声明一致、空间目录/登记/PKCE 链改用剩余应用、静态应用服务机制改用合成应用覆盖、浏览器供数模块与关注卡片改用剩余/合成标识、ai-native 研究场景移除 Calendar 并保留能力缺口记录原则。移除 `tests/admin-navigation.test.mjs`：其覆盖的「普通成员静态应用 → 工作台磁贴 → 应用页 → 主页」流程随最后一个普通静态应用退役而不复存在；导航注入机制仍由 system-navigation 与启动器检查覆盖。全套平台合成检查 **524** 项：**509** 通过、15 项可选跳过、**3** 项失败仅由会话开始前已存在的未提交测试工作变更（`tests/ai-native/campaigns.mjs` maintenance 模型）引起；该改动不属于本发行、未提交，提交树内全部通过。版本按一次 PATCH 对齐 **0.1.158**。两个公开仓库（`55aaseclab/calendar`、`55aaseclab/matrix-reader`）的删除属发布动作，与源码提交分开执行并单独记录；历史发行行与验证台账中的相关记录保留为历史。Calendar 日程与 .ics 导出按设计仅存设备本地，Matrix 会话、密钥与消息本就归属浏览器与 homeserver，均无服务端数据需迁移。本节不宣称独立业务客户端验收。
+
+### 部署与运行回读（补充记录）
+
+受管蓝绿安装完成例行镜像切换：`deploy` 后 green 成为活动写者并运行 **0.1.158**（healthy，generation 递增），blue 0.1.157 保持为健康回滚槽。两者原本就由工作台镜像提供，无独立应用容器需要移除；受管应用组 11 项服务保持健康。匿名公开主页回读：无任何 calendar/matrix 引用，应用源码链接恰为十一个应用；`/apps/calendar/` 与 `/apps/matrix-reader/` 返回 404，`/apps/memo/` 仍为受保护 401。验收记录提交不改变运行代码或应用固定版本。
