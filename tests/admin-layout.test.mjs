@@ -517,7 +517,7 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     await page.reload(); await ready(page);
     assert.equal(new URL(page.url()).searchParams.get('app'), 'slides');
     assert.equal(await page.locator('input[name=resources]').count(), 1);
-    await back(); await manage('travel');
+    await back(); await manage('tingproof');
     assert.doesNotMatch(await page.locator('#content').innerText(), /synthetic-layout-record/);
     await page.goBack(); await ready(page);
     assert.equal(await page.locator('.space-app-row').count(), 14, 'browser Back returns to overview');

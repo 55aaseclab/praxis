@@ -697,7 +697,7 @@ test('self-service spaces enable public member PKCE consent and exactly scoped M
   assert.equal(f.store.isPlatformAdmin(owner.user.id), false);
   assert.equal(f.store.getWebEntryPolicy(owner.user.id), null);
   const details = await (await read(owner, path)).json();
-  assert.equal(details.apps.length, 9);
+  assert.equal(details.apps.length, 7);
   assert.ok(details.apps.every(app => app.enabled === false));
   assert.ok(details.apps.every(app => !app.availableActions.length && !app.availableResources.length), 'new space has no effective business access');
   assert.equal((await call(owner, path + '/apps/slides', { enabled: true }, 'PUT')).status, 200);
@@ -1011,9 +1011,9 @@ test('space catalog includes every installed app and retains business adapter ID
   const read = path => f.request(prefix + path, { headers: { Cookie: owner.cookie } });
   const call = (path, input, method = 'POST') => f.json(prefix + path, input, { method, headers: { Cookie: owner.cookie, 'X-CSRF-Token': owner.body.csrfToken } });
   const { catalog } = await (await read('')).json();
-  assert.equal(catalog.length, 9);
+  assert.equal(catalog.length, 7);
   assert.deepEqual(catalog.map(app => app.webAppId), f.store.registry.apps.map(app => app.id));
-  assert.equal(new Set(catalog.map(app => app.id)).size, 9);
+  assert.equal(new Set(catalog.map(app => app.id)).size, 7);
   for (const app of catalog) {
     const declared = f.store.registry.getApp(app.webAppId), business = declared.integration.business;
     assert.equal(app.id, business?.adapterId || declared.id);

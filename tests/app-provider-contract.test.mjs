@@ -35,7 +35,7 @@ test('card DTO requires nonempty resource identity and reason with a source-iden
 });
 test('card DTO rejects cross-app identity, oversized fields and malformed versions', () => {
   for (const patch of [
-    { appId: 'memo' }, { revision: 3 }, { revision: '' }, { revision: null }, { revision: 'x'.repeat(257) },
+    { appId: 'tingproof' }, { revision: 3 }, { revision: '' }, { revision: null }, { revision: 'x'.repeat(257) },
     { title: 'x'.repeat(1001) }, { preview: 'x'.repeat(8001) }, { resourceId: 'x'.repeat(513) },
     { kind: 'manager-score' }, { reason: { en: 'Source', zh: '' } }, { evidence: Array.from({ length: 25 }, () => ({ label: 'Too many' })) },
   ]) rejectsProvider(() => normalizeProviderCard('projects', card('projects', patch)));
@@ -48,7 +48,7 @@ test('primary actions stay inside the owning native app and reject dangerous pat
 });
 test('evidence retains cross-app and HTTPS source links without granting or fetching the target', () => {
   const evidence = [
-    { label: 'Referenced source', href: '/apps/travel/g/synthetic/route/note/', revision: '2' },
+    { label: 'Referenced source', href: '/apps/tingproof/a/synthetic/assignment/note/', revision: '2' },
     { label: 'Original publication', href: 'https://source.example/document#section', excerpt: 'Stored source excerpt.' },
   ];
   assert.deepEqual(normalizeProviderCard('projects', card('projects', { evidence })).evidence, evidence);
@@ -135,20 +135,20 @@ test('a provider cannot request undeclared data-source metadata or hide its fail
 });
 
 function projectionFixture(module, { readOperations = ['list'], permitted = ['record-1'] } = {}) {
-  let allowed = ['memo'], calls = 0;
+  let allowed = ['tingproof'], calls = 0;
   const auth = {
     requireNativeSession: token => { assert.equal(token, 'synthetic-native'); return { user: { id: 'alice', username: 'alice' } }; },
     getWebAccess: () => ({ workbench: true, apps: [...allowed] }), userPermissions: () => permitted,
     authorize: (_token, request) => { if (!permitted.includes(request.resourceId)) throw Object.assign(new Error('denied'), { status: 403 }); },
   };
-  const descriptor = { version: 1, appId: 'memo', cards: { supported: true }, readOperations, dataSources: [] };
-  const registry = { providers: async () => [{ app: { id: 'memo' }, module, descriptor }] };
+  const descriptor = { version: 1, appId: 'tingproof', cards: { supported: true }, readOperations, dataSources: [] };
+  const registry = { providers: async () => [{ app: { id: 'tingproof' }, module, descriptor }] };
   const bridge = { invokeProjection: async () => { calls++; return { items: [] }; } };
-  return { api: new AppCards({ auth, bridge, registry, config: { apps: { memo: { spaces: ['synthetic-space'] } } }, clock: () => instant }), bridge,
+  return { api: new AppCards({ auth, bridge, registry, config: { apps: { tingproof: { spaces: ['synthetic-space'] } } }, clock: () => instant }), bridge,
     calls: () => calls, withdraw: () => { allowed = []; } };
 }
 test('card aggregation rechecks resource permissions and cannot reveal an ungranted record', async () => {
-  const fixture = projectionFixture({ getCards: async () => ({ status: 'ready', items: [card('memo'), card('memo', { id: 'secret', resourceId: 'ungranted', title: 'Other user confidential title' })] }) });
+  const fixture = projectionFixture({ getCards: async () => ({ status: 'ready', items: [card('tingproof'), card('tingproof', { id: 'secret', resourceId: 'ungranted', title: 'Other user confidential title' })] }) });
   const value = await fixture.api.get('synthetic-native'); assert.equal(value.items.length, 1);
   assert.ok(!JSON.stringify(value).includes('Other user confidential title'));
 });
@@ -170,9 +170,9 @@ test('provider read callbacks cannot invoke a mutation even if a provider declar
 });
 test('withdrawal while a source read is in flight removes its titles, evidence and counts', async () => {
   const fixture = projectionFixture({ getCards: async context => {
-    await context.invoke({ spaceId: 'synthetic-space', operation: 'read_records', input: {} });
-    return { status: 'ready', items: [card('memo', { title: 'Revoked source title' })] };
-  } }, { readOperations: ['read_records'] });
+    await context.invoke({ spaceId: 'synthetic-space', operation: 'list_assignments', input: {} });
+    return { status: 'ready', items: [card('tingproof', { title: 'Revoked source title' })] };
+  } }, { readOperations: ['list_assignments'] });
   fixture.bridge.invokeProjection = async () => { fixture.withdraw(); return { items: [] }; };
   const output = await fixture.api.get('synthetic-native'); assert.deepEqual(output.items, []); assert.deepEqual(output.sources, []); assert.ok(!JSON.stringify(output).includes('Revoked source title'));
 });

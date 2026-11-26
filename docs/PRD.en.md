@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.159 · [简体中文](PRD.md)
+Version: 0.1.160 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -457,6 +457,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.157 | 2026-11-25 | Retire the Finance app: remove its submodule, registration, deployment and tests, archive its documents under docs/finance, and delete its public repository. |
 | v0.1.158 | 2026-11-25 | Retire the Calendar and Matrix Reader apps: remove their submodules, registration and tests, archive their documents under docs/, and delete their public repositories. |
 | v0.1.159 | 2026-11-26 | Retire the Reminder and Knowledge apps: remove their submodules, registration, managed services and tests, archive their documents under docs/, and delete their public repositories. |
+| v0.1.160 | 2026-11-26 | Retire the Travel and Memo apps: remove their submodules, registration, managed services and tests, archive their documents under docs/, and delete their public repositories. |
 
 ### Letters and Profiles
 

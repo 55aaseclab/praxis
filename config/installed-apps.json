@@ -5,13 +5,7 @@
       "source": "third_party/lattice"
     },
     {
-      "source": "third_party/travel"
-    },
-    {
       "source": "third_party/tingproof"
-    },
-    {
-      "source": "third_party/memo"
     },
     {
       "source": "third_party/intelligence"

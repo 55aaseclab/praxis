@@ -1,0 +1,54 @@
+# Travel
+
+> Retired from the Praxis distribution on 2026-11-25; archived documents, see [RETIRED.md](RETIRED.md).
+> 已于 2026-11-25 从 Praxis 发行版退役；文档存档说明见 [RETIRED.md](RETIRED.md)。
+
+[简体中文](README.zh-CN.md)
+
+A bilingual itinerary viewer with route lists, day plans, budgets, preparation lists and optional map and search providers. A fresh catalog has no itineraries. Authorized operator-supplied catalogs can be built independently, and scoped business requests can update configured itineraries.
+
+```sh
+npm ci
+npm run build
+npm start -- --host 127.0.0.1 --port 4323
+```
+
+Open http://127.0.0.1:4323/. To publish private trips set both `TRAVEL_SEED_DIR` and `TRAVEL_PUBLIC_DIR` to directories outside Git. The built-in source includes the empty catalog and the Material Icons licensing notice. Run `npm test` for the synthetic suite.
+
+## Managed installation
+
+The configured web space may have an empty trip list, for example `{"version":1,"webSpace":"personal","spaces":{"personal":[]}}`. It serves an empty native catalog and signed itinerary list. No trip record is created at startup. To add a first imported catalog, supply its source JSON and metadata using the authorized content workflow, add the trip ID to the same private space map, then restart Travel. Keep `TRAVEL_DATA_DIR`, the signing key and the space ID unchanged so existing edits remain associated with their original source.
+
+## Praxis integration
+
+The app-owned [provider contract](docs/PRAXIS-PROVIDER.md) supplies authorized source-backed cards and data-source metadata without exposing a new HTTP endpoint. Run `npm run test:provider` for the isolated provider checks.
+
+## Praxis registration
+
+App release: `0.1.18`. The app owns [`praxis-app.json`](praxis-app.json), its English and Simplified Chinese presentation, the icon at `public/praxis-icon.svg`, the declared PRD locations and any legacy icon aliases. `schemaVersion: 1` identifies the registration format; it is separate from this app release and from data, protocol and document revisions. Package and lockfile release metadata, where present, agree with the declaration.
+
+[`apps.example.json`](apps.example.json) registers a local alias by referencing `./praxis-app.json` and `http://127.0.0.1:4323/`. Start the standalone service described above before using the example; registration does not start a backend or grant account, administrator or business-data access. Installation origins, data locations and access policy remain separately configured.
+
+## App-owned container build
+
+`Dockerfile.praxis` builds this application from its own repository, without a Praxis checkout or an external build context:
+
+```sh
+docker build -f Dockerfile.praxis -t praxis-travel:local .
+```
+
+Use the application configuration and persistent data locations documented above when running the image. The Praxis installation consumes the same app-owned build and deployment declaration.
+
+## 应用自有容器构建
+
+`Dockerfile.praxis` 可直接从本应用仓库构建，无需 Praxis 源码或额外构建上下文：
+
+```sh
+docker build -f Dockerfile.praxis -t praxis-travel:local .
+```
+
+运行镜像时沿用上文的应用配置与持久数据位置。Praxis 安装流程使用同一份应用自有构建文件与部署声明。
+
+## SQLite storage and conversion
+
+Structured runtime records use the app database. The explicit operator command is `npm run storage:migrate -- --spec /absolute/private/sources.json --database /absolute/private/app.db --receipt /absolute/private/receipt.json --writers-stopped`. The private spec is an array of `{file, spaceId, documentId}` source references. Stop every writer, keep original files, and verify the receipt before activating the new binding. Existing JSON inputs remain explicit compatibility/import sources; a configured database never silently falls back to them. `--export --database /absolute/private/app.db --space SPACE --document state --output /absolute/private/new-export.json` exports an exact logical namespace for recovery. Files/assets keep their existing ownership.

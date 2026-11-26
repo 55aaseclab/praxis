@@ -1,6 +1,6 @@
 import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 // HTTP wiring fixtures only: native app behavior is verified in each owning repo.
-// Never contact installed native services, including a default Memo port.
+// Never contact installed native services, including a default TingProof port.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -23,24 +23,24 @@ const dataPath = '/api/business/console/data';
 const nativeRecord = { resourceId: 'allowed-record', text: 'Synthetic source note', date: '2026-11-20', done: false };
 function deferred() { let release; const promise = new Promise(resolve => { release = resolve; }); return { promise, release }; }
 function syntheticProvider(appId, { label = 'Synthetic data location', broken = false, browser = false } = {}) {
-  const descriptor = { version: 1, appId, name: appId, cards: { supported: true, ...(browser && { execution: 'browser' }) }, ...(appId !== 'memo' && !browser && { resourceMode: 'native-view', nativeResourceId: 'overview', nativeReads: ['/api/data'] }), readOperations: appId === 'memo' ? ['list_topics'] : [], dataSources: [{ id: 'browser', label, kind: 'browser', location: { kind: 'browser', storageKey: `synthetic.${appId}` } }] };
+  const descriptor = { version: 1, appId, name: appId, cards: { supported: true, ...(browser && { execution: 'browser' }) }, ...(appId !== 'tingproof' && !browser && appId !== 'lattice-slides' && { resourceMode: 'native-view', nativeResourceId: 'overview', nativeReads: ['/api/data'] }), readOperations: appId === 'tingproof' ? ['list_assignments'] : [], dataSources: [{ id: 'browser', label, kind: 'browser', location: { kind: 'browser', storageKey: `synthetic.${appId}` } }] };
   return `const descriptor=${JSON.stringify(descriptor)};
 export function describe(){return structuredClone(descriptor)}
 function card(resourceId,title,date){return{id:${JSON.stringify(appId + ':sample:')}+resourceId,appId:${JSON.stringify(appId)},spaceId:'synthetic-space',resourceId,revision:'1',kind:'result',title,reason:{en:'A synthetic source result.',zh:'合成来源结果。'},source:{name:${JSON.stringify(appId)}},...(date?{date}:{}),primaryAction:{label:{en:'Open result',zh:'打开结果'},href:'/apps/${appId}/#record='+encodeURIComponent(resourceId)},evidence:[]}}
-export async function getCards(context){${browser ? "return{status:'empty',items:[]}" : appId === 'memo' ? "const value=await context.invoke({spaceId:'synthetic-space',operation:'list_topics',input:{}});return{status:'ready',items:value.items.map(row=>card(row.resourceId,row.item.text,row.item.date))}" : "const value=await context.readNative({path:'/api/data',resourceId:'overview'});return{status:'ready',items:[card('overview',value.title)]}"}}
+export async function getCards(context){${browser ? "return{status:'empty',items:[]}" : appId === 'tingproof' ? "const value=await context.invoke({spaceId:'synthetic-space',operation:'list_assignments',input:{}});return{status:'ready',items:value.items.map(row=>card(row.resourceId,row.item.text,row.item.date))}" : "const value=await context.readNative({path:'/api/data',resourceId:'overview'});return{status:'ready',items:[card('overview',value.title)]}"}}
 export async function getDataInventory(context){${broken ? "throw Error('Synthetic private implementation details')" : "const source=descriptor.dataSources[0],location=await context.resolveDataSource(structuredClone(source));return{status:'ready',items:[{label:source.label,kind:source.kind,...location}]}"}}
 `;
 }
 async function fixture(t, { nativeIntelligence = false, privateReaders = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'praxis-provider-http-'));
   const state = join(root, 'state'); await mkdir(join(root, 'config')); await mkdir(state, { mode: 0o700 });
-  const catalog = ['travel', 'intelligence', 'memo', ...(privateReaders ? ['projects', 'letters', 'profiles'] : [])].map(id => ({ id, kind: 'app', builtin: true, name: id, source: `third_party/${id}`, path: '/', icon: `/${id}-icon.svg`, ...(['letters', 'profiles'].includes(id) && { adminOnly: true }) }));
+  const catalog = ['lattice-slides', 'intelligence', 'tingproof', ...(privateReaders ? ['projects', 'letters', 'profiles'] : [])].map(id => ({ id, kind: 'app', builtin: true, name: id, source: `third_party/${id}`, path: '/', icon: `/${id}-icon.svg`, ...(['letters', 'profiles'].includes(id) && { adminOnly: true }) }));
   async function saveCatalog() { await writeInstalledAppsFixture(root, catalog); }
-  async function writeProvider(id, options = {}) { await mkdir(join(root, `third_party/${id}`), { recursive: true }); await writeFile(join(root, `third_party/${id}/praxis-provider.mjs`), syntheticProvider(id, { browser: ['travel', 'projects', 'letters', 'profiles'].includes(id), ...options })); }
+  async function writeProvider(id, options = {}) { await mkdir(join(root, `third_party/${id}`), { recursive: true }); await writeFile(join(root, `third_party/${id}/praxis-provider.mjs`), syntheticProvider(id, { browser: ['lattice-slides', 'letters', 'profiles'].includes(id), ...options })); }
   await saveCatalog(); for (const { id } of catalog) await writeProvider(id);
   const reserved = createServer(); reserved.listen(0, '127.0.0.1'); await once(reserved, 'listening'); const webPort = reserved.address().port; await new Promise(resolve => reserved.close(resolve));
   const issuer = `http://127.0.0.1:${webPort}`;
-  const config = { issuer, providerRoot: root, database: join(state, 'auth.sqlite'), eventsDatabase: join(state, 'events.sqlite'), observationsFile: null, webGateway: { enabled: true }, allowedHosts: [], allowedOrigins: [], apps: { memo: { url: 'https://synthetic-adapter.example.test/api/business', key: Buffer.alloc(32, 7), spaces: ['synthetic-space'] } }, appProviders: { ...(nativeIntelligence && { intelligence: { url: 'https://synthetic-native.example.test/' } }), ...(privateReaders && { letters: { ownerId: 'administrator' }, profiles: { ownerId: 'administrator' } }) } };
+  const config = { issuer, providerRoot: root, database: join(state, 'auth.sqlite'), eventsDatabase: join(state, 'events.sqlite'), observationsFile: null, webGateway: { enabled: true }, allowedHosts: [], allowedOrigins: [], apps: { tingproof: { url: 'https://synthetic-adapter.example.test/api/business', key: Buffer.alloc(32, 7), spaces: ['synthetic-space'] } }, appProviders: { ...(nativeIntelligence && { intelligence: { url: 'https://synthetic-native.example.test/' } }), ...(privateReaders && { letters: { ownerId: 'administrator' }, profiles: { ownerId: 'administrator' } }) } };
   let auth = new AuthStore({ file: config.database, issuer }), core, web, coreOrigin;
   const sourceCalls = [], releases = new Set(); let respond;
   const sourceFetch = async (input, options = {}) => {  
@@ -49,16 +49,16 @@ async function fixture(t, { nativeIntelligence = false, privateReaders = false }
     sourceCalls.push({ url: url.href, method: options.method || 'GET', body });
     if (respond) return respond(url, options, body);
     if (url.origin === 'https://synthetic-native.example.test') return new Response(JSON.stringify({ title: 'Synthetic native Intelligence result' }), { headers: { 'Content-Type': 'application/json' } });
-    assert.equal(body.operation, 'list_topics');
-    return new Response(JSON.stringify({ spaceId: 'synthetic-space', revision: 'snapshot-one', items: [nativeRecord, { resourceId: 'denied-record', text: 'Synthetic denied source note', date: '2026-11-21', done: false }].map(item => ({ resourceId: item.resourceId, revision: '1', collection: 'plans', item: { text: item.text, date: item.date, done: item.done } })) }), { headers: { 'Content-Type': 'application/json' } });
+    assert.equal(body.operation, 'list_assignments');
+    return new Response(JSON.stringify({ items: [nativeRecord, { resourceId: 'denied-record', text: 'Synthetic denied source note', date: '2026-11-21', done: false }].map(item => ({ resourceId: item.resourceId, revision: '1', collection: 'assignments', item: { text: item.text, date: item.date, done: item.done } })) }), { headers: { 'Content-Type': 'application/json' } });
   };
   const users = {};
   for (const id of ['owner-a', 'owner-b', 'administrator']) users[id] = auth.createUser({ id, username: `synthetic-${id}`, password });
   auth.setPlatformAdmin({ userId: 'administrator', enabled: true });
-  for (const id of ['owner-a', 'owner-b']) auth.setWebAccess({ userId: id, apps: ['travel', 'intelligence', 'memo'], workbench: true, prds: false });
+  for (const id of ['owner-a', 'owner-b']) auth.setWebAccess({ userId: id, apps: ['lattice-slides', 'intelligence', 'tingproof'], workbench: true, prds: false });
   auth.createSpace({ id: 'synthetic-space', type: 'company', ownerId: 'administrator' });
   auth.setMembership({ spaceId: 'synthetic-space', userId: 'owner-a', role: 'member' });
-  const permission = auth.grantResource({ userId: 'owner-a', spaceId: 'synthetic-space', appId: 'memo', resources: ['allowed-record'], actions: ['read'] });
+  const permission = auth.grantResource({ userId: 'owner-a', spaceId: 'synthetic-space', appId: 'tingproof', resources: ['allowed-record'], actions: ['read'] });
   const sessions = Object.fromEntries(Object.entries(users).map(([id, user]) => [id, auth.login({ username: user.username, password }).sessionToken]));
   async function openCore(port = 0) {
     core = createBusinessServer({ auth, config, fetchImpl: sourceFetch, consoleFetchImpl: async () => { throw new Error('No default service probes permitted.'); }, pollMs: 60000 });
@@ -82,9 +82,9 @@ test('HTTP cards require a native session, filter entries/resources, and never p
   const value = await response.json(); assert.equal(value.items.length, 1); assert.equal(value.items[0].resourceId, 'allowed-record');
   assert.ok(!JSON.stringify(value).includes('Synthetic denied source note'));
   assert.equal(value.sources.find(source => source.appId === 'intelligence').status, 'unavailable');
-  assert.equal(value.sources.find(source => source.appId === 'travel').status, 'browser');
+  assert.equal(value.sources.find(source => source.appId === 'lattice-slides').status, 'browser');
   assert.ok(f.sourceCalls.every(call => call.url.startsWith('https://synthetic-adapter.example.test/')));
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['travel'], workbench: true, prds: false });
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['lattice-slides'], workbench: true, prds: false });
   assert.deepEqual((await (await f.request(cardPath)).json()).items, []);
   assert.equal(ambientRequests.length, before, 'No implicit/default host may be contacted.');
 });
@@ -94,10 +94,10 @@ test('HTTP card aggregation rechecks native entry and resource authority after a
   f.respond = async url => { assert.equal(url.origin, 'https://synthetic-native.example.test'); entered.release(); await gate.promise; return new Response(JSON.stringify({ title: 'Synthetic withheld Intelligence result' })); };
   f.auth.setWebAccess({ userId: 'owner-a', apps: ['intelligence'], workbench: true, prds: false });
   const pending = f.request(cardPath); await entered.promise;
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['memo'], workbench: true, prds: false }); gate.release();
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['tingproof'], workbench: true, prds: false }); gate.release();
   const value = await (await pending).json(); assert.deepEqual(value.items, []); assert.ok(!JSON.stringify(value).includes('withheld'));
   const resourceGate = f.hold(), resourceEntered = deferred();
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['memo'], workbench: true, prds: false });
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['tingproof'], workbench: true, prds: false });
   f.respond = async () => { resourceEntered.release(); await resourceGate.promise; return new Response(JSON.stringify({ spaceId: 'synthetic-space', revision: '1', items: [{ resourceId: 'allowed-record', revision: '1', collection: 'plans', item: { text: 'Synthetic revoked resource', date: '2026-11-20', done: false } }] })); };
   const resourcePending = f.request(cardPath); await resourceEntered.promise; f.auth.revokeResource(f.permission.id); resourceGate.release();
   const revoked = await (await resourcePending).json(); assert.deepEqual(revoked.items, []); assert.ok(!JSON.stringify(revoked).includes('Synthetic revoked resource'));
@@ -109,7 +109,7 @@ test('HTTP personal preferences enforce CSRF, owners, revisions and idempotency,
   const traceCount = () => f.core.core.events.db.prepare('SELECT COUNT(*) AS n FROM business_traces').get().n;
   const beforeTrace = traceCount();
   assert.deepEqual(await (await f.request(preferencePath)).json(), { revision: 0, items: [] });
-  const body = { cardId: 'memo:sample:allowed-record', cardRevision: '1', state: 'later', until: new Date(Date.now() + 3600000).toISOString(), expectedRevision: 0, idempotencyKey: 'synthetic-private-choice' };
+  const body = { cardId: 'tingproof:sample:allowed-record', cardRevision: '1', state: 'later', until: new Date(Date.now() + 3600000).toISOString(), expectedRevision: 0, idempotencyKey: 'synthetic-private-choice' };
   const post = (input, options = {}) => f.request(preferencePath, { method: 'POST', csrf: token, body: JSON.stringify(input), headers: { 'Content-Type': 'application/json', Origin: f.issuer }, ...options });
   assert.equal((await post(body, { csrf: undefined })).status, 403);
   assert.equal((await post(body, { headers: { 'Content-Type': 'application/json', Origin: 'https://other.example.test' } })).status, 403);
@@ -129,8 +129,8 @@ test('HTTP administrator inventory follows changed catalog/provider metadata and
   const f = await fixture(t);
   assert.equal((await f.request(dataPath, { user: null })).status, 401); assert.equal((await f.request(dataPath)).status, 403);
   const first = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(first.apps.length, 3);
-  await f.writeProvider('memo', { label: 'Changed synthetic browser location label' });
-  const changed = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(changed.apps.find(app => app.id === 'memo').locations[0].label, 'Changed synthetic browser location label');
+  await f.writeProvider('lattice-slides', { label: 'Changed synthetic browser location label' });
+  const changed = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(changed.apps.find(app => app.id === 'lattice-slides').locations[0].label, 'Changed synthetic browser location label');
   f.catalog.push({ id: 'projects', kind: 'app', builtin: true, name: 'Synthetic Projects', source: 'third_party/projects', path: '/', icon: '/projects-icon.svg' }); await f.writeProvider('projects'); await f.saveCatalog();
   const expanded = await (await f.request(dataPath, { user: 'administrator' })).json(); assert.equal(expanded.apps.length, 4); assert.ok(expanded.apps.some(app => app.id === 'projects'));
   await f.writeProvider('intelligence', { broken: true });
@@ -140,26 +140,26 @@ test('HTTP administrator inventory follows changed catalog/provider metadata and
 test('HTTP browser manifests/modules require current entry access, use code hashes and never select arbitrary module URLs', { timeout: 15000 }, async t => {
   const f = await fixture(t), web = await f.openWeb();
   assert.equal((await web('/api/workbench/providers', null)).status, 401);
-  const first = await (await web('/api/workbench/providers')).json(); assert.equal(first.providers.length, 1); assert.equal(first.providers[0].appId, 'travel'); assert.match(first.providers[0].moduleUrl, /^\/app-providers\/travel\.mjs\?v=[0-9a-f]{20}$/); assert.equal(first.providers[0].dataExecution, 'server');
+  const first = await (await web('/api/workbench/providers')).json(); assert.equal(first.providers.length, 1); assert.equal(first.providers[0].appId, 'lattice-slides'); assert.match(first.providers[0].moduleUrl, /^\/app-providers\/lattice-slides\.mjs\?v=[0-9a-f]{20}$/); assert.equal(first.providers[0].dataExecution, 'server');
   assert.equal((await web(first.providers[0].moduleUrl)).status, 200);
-  await f.writeProvider('travel', { label: 'A distinct synthetic module version for cache validation' });
+  await f.writeProvider('lattice-slides', { label: 'A distinct synthetic module version for cache validation' });
   const next = await (await web('/api/workbench/providers')).json(); assert.notEqual(next.providers[0].moduleUrl, first.providers[0].moduleUrl);
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['memo'], workbench: true, prds: false }); assert.deepEqual((await (await web('/api/workbench/providers')).json()).providers, []); assert.equal((await web(next.providers[0].moduleUrl)).status, 403);
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['travel'], workbench: true, prds: false }); f.catalog.find(app => app.id === 'travel').source = 'https://outside.example.test/module.mjs'; await f.saveCatalog();
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['tingproof'], workbench: true, prds: false }); assert.deepEqual((await (await web('/api/workbench/providers')).json()).providers, []); assert.equal((await web(next.providers[0].moduleUrl)).status, 403);
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['lattice-slides'], workbench: true, prds: false }); f.catalog.find(app => app.id === 'lattice-slides').source = 'https://outside.example.test/module.mjs'; await f.saveCatalog();
   assert.equal((await web('/api/workbench/providers')).status, 500); assert.equal(ambientRequests.length, 0);
 });
 
 test('HTTP private reader cards/modules and Later use the configured native administrator owner rather than ordinary apps membership', { timeout: 15000 }, async t => {
   const f = await fixture(t, { privateReaders: true });
   f.auth.setPlatformAdmin({ userId: 'owner-b', enabled: true });
-  f.auth.setWebAccess({ userId: 'owner-a', apps: ['travel', 'projects'], workbench: true, prds: false });
+  f.auth.setWebAccess({ userId: 'owner-a', apps: ['lattice-slides', 'projects'], workbench: true, prds: false });
   const web = await f.openWeb({ privateDocumentOwnerId: 'administrator' });
   const owner = await (await web('/api/workbench/providers', 'administrator')).json();
-  assert.deepEqual(owner.providers.map(provider => provider.appId).sort(), ['letters', 'profiles', 'projects', 'travel']);
+  assert.deepEqual(owner.providers.map(provider => provider.appId).sort(), ['lattice-slides', 'letters', 'profiles']);
   const otherAdmin = await (await web('/api/workbench/providers', 'owner-b')).json();
-  assert.deepEqual(otherAdmin.providers.map(provider => provider.appId).sort(), ['projects', 'travel']);
+  assert.deepEqual(otherAdmin.providers.map(provider => provider.appId).sort(), ['lattice-slides']);
   const member = await (await web('/api/workbench/providers', 'owner-a')).json();
-  assert.deepEqual(member.providers.map(provider => provider.appId).sort(), ['projects', 'travel']);
+  assert.deepEqual(member.providers.map(provider => provider.appId).sort(), ['lattice-slides']);
   for (const appId of ['letters', 'profiles']) {
     const module = owner.providers.find(provider => provider.appId === appId).moduleUrl;
     assert.equal((await web(module, 'administrator')).status, 200);

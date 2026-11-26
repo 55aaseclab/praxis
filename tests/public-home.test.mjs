@@ -60,7 +60,7 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.match(html, /<nav[^>]*>[\s\S]*?docs\/README\.md">Documentation<\/a>[\s\S]*?CONTRIBUTING\.md">Contribute<\/a>/);
   assert.match(html, /data-animation="\/home-images\/workbench-en\.gif"/);
   assert.match(html, /<noscript><a class="demo-toggle demo-fallback" href="\/home-images\/workbench-en\.gif"/);
-  for (const id of ['lattice-slides', 'travel', 'tingproof', 'memo', 'intelligence', 'polaris', 'letters', 'profiles', 'projects']) {
+  for (const id of ['lattice-slides', 'tingproof', 'intelligence', 'polaris', 'letters', 'profiles', 'projects']) {
     assert.match(html, new RegExp(`github\\.com/55aaseclab/${id === 'lattice-slides' ? 'lattice' : id}"`));
   }
   assert.match(html, /img src="data:image\/svg\+xml;base64,/);
@@ -120,7 +120,7 @@ test('anonymous visitors get the public product homepage and signed-in users kee
   assert.doesNotMatch(robotsText, /about/);
 
   assert.equal((await request('/about/', null)).status, 401);
-  assert.equal((await request('/apps/travel/', null)).status, 401);
+  assert.equal((await request('/apps/tingproof/', null)).status, 401);
 });
 
 

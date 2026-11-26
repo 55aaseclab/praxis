@@ -11,11 +11,11 @@ const app = (id, name = id) => ({ id, name, kind: 'app', source: `third_party/${
 
 test('publisher covers split app stores without serializing configuration secrets or payloads', () => {
   const value = createDataInventory({
-    registry: ['travel', 'projects', 'memo', 'tingproof', 'lattice-slides', 'future'].map(id => app(id)),
+    registry: ['projects', 'tingproof', 'lattice-slides', 'intelligence', 'future'].map(id => app(id)),
     sourceRoot: '/example/source', now: stamp,
     business: { database: '/example/platform/auth.db', eventsDatabase: '/example/platform/events.db', privateToken: 'DO_NOT_INCLUDE_SECRET', apps: {
-      projects: { dataDir: '/example/data/projects' }, memo: { dataDir: '/example/data/memo' },
-      travel: { dataDir: '/example/data/travel' }, slides: { dataDir: '/example/data/slides' },
+      projects: { dataDir: '/example/data/projects' }, intelligence: { dataDir: '/example/data/intelligence' },
+      slides: { dataDir: '/example/data/slides' },
     } },
         slidesSpaces: { spaces: { one: '/example/data/slides/one.json' } },
     storage: { appSources: [
@@ -26,8 +26,8 @@ test('publisher covers split app stores without serializing configuration secret
     polaris: { dataRoot: '/example/data/polaris', browserProfiles: '/example/browser/state', browserCache: '/example/browser/cache', envFile: '/example/secrets/.env', codexAuthFile: '/example/secrets/auth.json' },
   });
   const find = id => value.apps.find(item => item.id === id);
-  assert.equal(find('memo').locations.filter(item => item.kind === 'browser').length, 2);
-  assert.equal(find('memo').locations[0].hostPath, '/example/data/memo/memo.db');
+  assert.ok(find('tingproof').locations.filter(item => item.kind === 'browser').length >= 1);
+  assert.equal(find('projects').locations[0].hostPath, '/example/data/projects/projects.db');
   assert.equal(find('lattice-slides').locations.length, 4);
   assert.equal(find('tingproof').locations.find(item => item.label === '原始音频').kind, 'unknown');
   assert.equal(find('tingproof').locations.find(item => item.kind === 'browser').storageKey, 'IndexedDB: tingproof');
@@ -48,8 +48,8 @@ async function fixture(t) {
   const sourceRoot = join(root, 'source'), home = join(root, 'home'), base = join(home, '.config/praxis');
   await mkdir(join(sourceRoot, 'config'), { recursive: true }); await mkdir(base, { recursive: true, mode: 0o700 });
   const save = async (path, value, mode = 0o600) => { await writeFile(path, JSON.stringify(value), { mode }); return path; };
-  await writeInstalledAppsFixture(sourceRoot, [app('memo'), app('intelligence')]);
-  const businessFile = await save(join(base, 'business.json'), { apps: { memo: { dataDir: join(root, 'nonexistent-memo') } } });
+  await writeInstalledAppsFixture(sourceRoot, [app('projects'), app('intelligence')]);
+  const businessFile = await save(join(base, 'business.json'), { apps: { projects: { dataDir: join(root, 'nonexistent-projects') } } });
   const storageFile = await save(join(base, 'storage.json'), { workspaceId: 'example', appSources: [] });
   const outputFile = join(base, 'data-inventory/locations.json');
   return { root, sourceRoot, home, base, businessFile, storageFile, outputFile, options: { sourceRoot, home, now: stamp, runDocker: async () => '', print: () => {} } };
@@ -60,7 +60,7 @@ test('CLI publishes bounded private metadata without opening any configured busi
   const result = await main(['publish'], f.options);
   assert.equal(result.published, true); assert.equal(result.apps, 3);
   const value = JSON.parse(await readFile(f.outputFile, 'utf8'));
-  assert.equal(value.apps[0].locations[0].hostPath, join(f.root, 'nonexistent-memo/memo.db'));
+  assert.equal(value.apps[0].locations[0].hostPath, join(f.root, 'nonexistent-projects/projects.db'));
   assert.equal((await lstat(f.outputFile)).mode & 0o777, 0o600);
   assert.equal((await lstat(join(f.base, 'data-inventory'))).mode & 0o777, 0o700);
   await main(['publish'], f.options);
@@ -71,10 +71,10 @@ test('CLI rejects destinations inside source, private credentials, live data or 
   const f = await fixture(t);
   const config = JSON.parse(await readFile(f.businessFile, 'utf8'));
   const mapping = join(f.base, 'another-app/config.json');
-  config.apps.travel = { businessConfigFile: mapping };
+  config.apps.tingproof = { businessConfigFile: mapping };
   await writeFile(f.businessFile, JSON.stringify(config), { mode: 0o600 });
   const original = await readFile(f.businessFile, 'utf8');
-  for (const output of [join(f.sourceRoot, 'inventory.json'), join(f.home, '.codex/auth.json'), f.businessFile, mapping, join(f.root, 'nonexistent-memo/inventory.json')]) {
+  for (const output of [join(f.sourceRoot, 'inventory.json'), join(f.home, '.codex/auth.json'), f.businessFile, mapping, join(f.root, 'nonexistent-projects/inventory.json')]) {
     await assert.rejects(main(['publish', '--output', output], f.options));
   }
   assert.equal(await readFile(f.businessFile, 'utf8'), original);
@@ -96,12 +96,12 @@ test('unregistered optional app configurations produce explicit unknown location
 test('workspace prefix comes from authoritative configuration without shortening stored paths', () => {
   const workspaceId = '11111111-1111-4111-8111-111111111111';
   const dataRoot = '/example/private/praxis', workspaceRoot = join(dataRoot, 'workspaces', workspaceId);
-  const hostPath = join(workspaceRoot, 'apps/memo/memo.db');
-  const value = createDataInventory({ registry: [app('memo')], storage: { dataRoot, workspaceId }, business: { apps: { memo: { dataDir: join(workspaceRoot, 'apps/memo') } } }, now: stamp });
+  const hostPath = join(workspaceRoot, 'apps/projects/projects.db');
+  const value = createDataInventory({ registry: [app('projects')], storage: { dataRoot, workspaceId }, business: { apps: { projects: { dataDir: join(workspaceRoot, 'apps/projects') } } }, now: stamp });
   assert.equal(value.workspaceRoot, workspaceRoot);
   assert.equal(value.apps[0].locations[0].hostPath, hostPath);
   for (const storage of [{ dataRoot, workspaceId: '../other' }, { dataRoot: '../relative', workspaceId }, { dataRoot: '/example/secrets/private', workspaceId }, { workspaceId }]) {
-    assert.equal(createDataInventory({ registry: [app('memo')], storage, now: stamp }).workspaceRoot, undefined);
+    assert.equal(createDataInventory({ registry: [app('projects')], storage, now: stamp }).workspaceRoot, undefined);
   }
 });
 

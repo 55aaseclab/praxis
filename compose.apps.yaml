@@ -74,7 +74,6 @@ services:
       PRAXIS_WEB_GATEWAY: ${PRAXIS_WEB_GATEWAY:-false}
       PRAXIS_CANONICAL_URL: ${PRAXIS_CANONICAL_URL:-}
       PRAXIS_ORIGIN_HOST: ${PRAXIS_ORIGIN_HOST:-}
-      PRAXIS_TRAVEL_SHARES_FILE: ${PRAXIS_TRAVEL_SHARES_FILE:-}
     volumes:
       - type: bind
         source: ${PRAXIS_OBSERVATIONS_DIR}
@@ -85,13 +84,6 @@ services:
         target: /run/praxis/public-urls.json
         read_only: true
         bind: { create_host_path: false }
-
-  travel:
-    <<: *runtime
-    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/travel:local
-    build: { context: ./third_party/travel, dockerfile: Dockerfile.praxis }
-    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4323:4323"]
-    environment: { HOST: "0.0.0.0", PORT: "4323", HEALTH_URL: "http://127.0.0.1:4323/" }
 
   tingproof:
     <<: *runtime
@@ -159,13 +151,6 @@ services:
       HEALTH_URL: http://127.0.0.1:14666/
       PUBLIC_BASE_PATH: /apps/slides
     volumes: *slides-volumes
-
-  memo:
-    <<: *runtime
-    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/memo:local
-    build: { context: ./third_party/memo, dockerfile: Dockerfile.praxis }
-    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4325:4325"]
-    environment: { HOST: "0.0.0.0", PORT: "4325", HEALTH_URL: "http://127.0.0.1:4325/health" }
 
   intelligence:
     <<: *runtime

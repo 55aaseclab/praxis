@@ -5,10 +5,10 @@ import { setAppFacts } from '../public/app-registry.js';
 import { mergeBrowserInventory, validateDataManagement } from '../public/admin-data.js';
 
 const origin = 'https://workbench.example.test';
-const registeredFacts = ['projects', 'lattice-slides', 'memo', 'field-notes'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + (id === 'lattice-slides' ? 'slides' : id) + '/', policy: 'grant', legacyPaths: [] } }));
+const registeredFacts = ['projects', 'lattice-slides', 'tingproof', 'field-notes'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + (id === 'lattice-slides' ? 'slides' : id) + '/', policy: 'grant', legacyPaths: [] } }));
 setAppFacts(registeredFacts);
-const card = (overrides = {}) => ({ id: 'memo:sample:record-a', appId: 'memo', spaceId: 'sample', resourceId: 'record-a', revision: '7', kind: 'reminder', title: 'Keep this original title', preview: 'Source-authored <script>text</script>', reason: { en: 'A record you flagged.', zh: '你标记的记录。' }, source: { name: 'Memo' }, primaryAction: { label: { en: 'Open record', zh: '打开记录' }, href: '/apps/memo/' }, evidence: [{ label: 'Original note', excerpt: 'Keep the author’s language.', href: '/apps/memo/', revision: '7' }], ...overrides });
-const envelope = items => ({ schemaVersion: 1, items, sources: [{ appId: 'memo', status: 'ready' }], partial: false, generatedAt: '2026-11-19T12:00:00.000Z' });
+const card = (overrides = {}) => ({ id: 'projects:sample:record-a', appId: 'projects', spaceId: 'sample', resourceId: 'record-a', revision: '7', kind: 'reminder', title: 'Keep this original title', preview: 'Source-authored <script>text</script>', reason: { en: 'A record you flagged.', zh: '你标记的记录。' }, source: { name: 'Projects' }, primaryAction: { label: { en: 'Open record', zh: '打开记录' }, href: '/apps/projects/' }, evidence: [{ label: 'Original note', excerpt: 'Keep the author’s language.', href: '/apps/projects/', revision: '7' }], ...overrides });
+const envelope = items => ({ schemaVersion: 1, items, sources: [{ appId: 'projects', status: 'ready' }], partial: false, generatedAt: '2026-11-19T12:00:00.000Z' });
 const reply = value => ({ ok: true, json: async () => value });
 
 test('card projections preserve authored content while localizing only declared labels', () => {
@@ -21,10 +21,10 @@ test('card projections preserve authored content while localizing only declared 
 });
 
 test('native actions stay in their app while evidence supports safe original sources', () => {
-  for (const href of ['https://other.example.test/apps/memo/', '/apps/projects/', '/api/business/admin/users', 'javascript:alert(1)', '//other.example.test/apps/memo/', '/apps/memo/../../admin/']) {
-    assert.throws(() => nativeHref(href, 'memo', origin), undefined, href);
+  for (const href of ['https://other.example.test/apps/projects/', '/apps/lattice-slides/', '/api/business/admin/users', 'javascript:alert(1)', '//other.example.test/apps/projects/', '/apps/projects/../../admin/']) {
+    assert.throws(() => nativeHref(href, 'projects', origin), undefined, href);
   }
-  for (const href of ['/api/business/admin/users', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,example', '//other.example.test/apps/memo/', '/apps/memo/a/%2e%2e/', '/apps/memo/../../admin/']) {
+  for (const href of ['/api/business/admin/users', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,example', '//other.example.test/apps/projects/', '/apps/projects/a/%2e%2e/', '/apps/projects/../../admin/']) {
     assert.throws(() => validateCard(card({ evidence: [{ label: 'Source', href }] }), origin), undefined, href);
   }
   for (const href of ['https://other.example.test/source', '/apps/projects/']) assert.equal(validateCard(card({ evidence: [{ label: 'Source', href }] }), origin).evidence[0].href, href);
@@ -60,16 +60,16 @@ test('browser callbacks receive no session secrets and read only their own nativ
   const requests = [];
   const fetchImpl = async (url, init) => {
     requests.push({ url, init });
-    if (url === '/api/workbench/providers') return reply({ schemaVersion: 1, providers: [{ appId: 'memo', moduleUrl: '/app-providers/memo.mjs' }] });
+    if (url === '/api/workbench/providers') return reply({ schemaVersion: 1, providers: [{ appId: 'projects', moduleUrl: '/app-providers/projects.mjs' }] });
     return { ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ records: [] }) };
   };
   const result = await readBrowserProviders({ kind: 'cards', origin, identity: { userId: 'synthetic-user', username: 'sample', csrfToken: 'do-not-pass', secret: 'do-not-pass' }, fetchImpl, importModule: async url => {
-    assert.equal(url, origin + '/app-providers/memo.mjs');
+    assert.equal(url, origin + '/app-providers/projects.mjs');
     return {
-      describe: () => ({ version: 1, appId: 'memo', cards: { supported: true, execution: 'browser' }, dataSources: [] }),
+      describe: () => ({ version: 1, appId: 'projects', cards: { supported: true, execution: 'browser' }, dataSources: [] }),
       getCards: async context => {
         assert.deepEqual(context.identity, { userId: 'synthetic-user', username: 'sample' });
-        await assert.rejects(context.read('/apps/projects/api/project'));
+        await assert.rejects(context.read('/apps/slides/api/deck'));
         await assert.rejects(context.read('https://other.example.test/'));
         await context.read('/api/records');
         return { status: 'empty', items: [] };
@@ -77,25 +77,25 @@ test('browser callbacks receive no session secrets and read only their own nativ
     };
   } });
   assert.equal(result[0].status, 'empty');
-  assert.equal(requests[1].url, origin + '/apps/memo/api/records');
+  assert.equal(requests[1].url, origin + '/apps/projects/api/records');
   assert.equal(requests[1].init.method, 'GET'); assert.equal(requests[1].init.redirect, 'error');
   assert.equal(requests[1].init.headers, undefined);
-  assert.throws(() => providerReadHref('//other.example.test/', 'memo', origin));
+  assert.throws(() => providerReadHref('//other.example.test/', 'projects', origin));
 });
 
 test('unreviewed modules are refused and one broken provider cannot hide other app results', async () => {
-  await assert.rejects(readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: [{ appId: 'memo', moduleUrl: 'https://other.example.test/code.mjs' }] }), importModule: () => assert.fail('Must not import remote code') }));
-  const result = await readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: ['memo', 'field-notes'].map(appId => ({ appId, moduleUrl: `/app-providers/${appId}.mjs` })) }), importModule: async url => {
-    const appId = url.includes('/memo.') ? 'memo' : 'field-notes';
-    return { describe: () => ({ version: 1, appId, cards: { supported: true, execution: 'browser' } }), getCards: () => appId === 'memo' ? Promise.reject(new Error('Private implementation detail')) : { status: 'ready', items: [card({ id: 'field-notes:sample:date', appId: 'field-notes', kind: 'result', primaryAction: { label: 'Open date', href: '/apps/field-notes/' }, evidence: [] })] } };
+  await assert.rejects(readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: [{ appId: 'projects', moduleUrl: 'https://other.example.test/code.mjs' }] }), importModule: () => assert.fail('Must not import remote code') }));
+  const result = await readBrowserProviders({ kind: 'cards', origin, fetchImpl: async () => reply({ schemaVersion: 1, providers: ['projects', 'field-notes'].map(appId => ({ appId, moduleUrl: `/app-providers/${appId}.mjs` })) }), importModule: async url => {
+    const appId = url.includes('/projects.') ? 'projects' : 'field-notes';
+    return { describe: () => ({ version: 1, appId, cards: { supported: true, execution: 'browser' } }), getCards: () => appId === 'projects' ? Promise.reject(new Error('Private implementation detail')) : { status: 'ready', items: [card({ id: 'field-notes:sample:date', appId: 'field-notes', kind: 'result', primaryAction: { label: 'Open date', href: '/apps/field-notes/' }, evidence: [] })] } };
   } });
   assert.equal(result[0].status, 'unavailable'); assert.ok(!JSON.stringify(result[0]).includes('Private implementation detail'));
   assert.equal(result[1].items[0].appId, 'field-notes');
 });
 
 test('data location sources remain factual and browser failures do not retain stale paths', () => {
-  const value = { schemaVersion: 1, generatedAt: '2026-11-19T12:00:00.000Z', apps: [{ id: 'travel', name: 'Travel', locations: [{ label: 'Trip store', kind: 'json', hostPath: '/synthetic/data/trips.json' }] }, { id: 'memo', name: 'Memo', locations: [{ label: 'Old browser key', kind: 'browser', storageKey: 'sample.old' }] }] };
-  const merged = mergeBrowserInventory(value, [{ appId: 'memo', status: 'unavailable', items: [] }]);
+  const value = { schemaVersion: 1, generatedAt: '2026-11-19T12:00:00.000Z', apps: [{ id: 'travel-archive', name: 'Travel archive', locations: [{ label: 'Trip store', kind: 'json', hostPath: '/synthetic/data/trips.json' }] }, { id: 'tingproof', name: 'TingProof', locations: [{ label: 'Old browser key', kind: 'browser', storageKey: 'sample.old' }] }] };
+  const merged = mergeBrowserInventory(value, [{ appId: 'tingproof', status: 'unavailable', items: [] }]);
   assert.equal(merged.apps[0].locations[0].hostPath, '/synthetic/data/trips.json');
   assert.deepEqual(merged.apps[1].locations, []); assert.equal(merged.apps[1].status, 'unavailable');
   validateDataManagement({ ...value, apps: [{ id: 'field-notes', name: 'Field notes', locations: [{ label: 'Derived projection', kind: 'derived' }, { label: 'External archive', kind: 'external', description: 'Owned by the connected service.' }] }] });

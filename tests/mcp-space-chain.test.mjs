@@ -11,8 +11,9 @@ import { exchangeAuthorization } from '@modelcontextprotocol/sdk/client/auth.js'
 import { AuthStore, hashVerifier } from '../src/business/auth.mjs';
 import { createBusinessServer } from '../src/business/server.mjs';
 import { createPublicMcpHandler } from '../src/public-mcp.mjs';
-import { createMemoServer } from '../third_party/memo/src/server.mjs';
-import { MemoStore } from '../third_party/memo/src/store.mjs';
+import { BusinessService } from '../third_party/projects/src/business.mjs';
+import { createServer as createProjectsServer } from '../third_party/projects/src/server.mjs';
+import { ProjectStore } from '../third_party/projects/src/store.mjs';
 
 // Real protocol/client and signed native service; every file and identity is an
 // isolated synthetic fixture. This is technical evidence, not business acceptance.
@@ -20,8 +21,8 @@ test('public guidance, designated OAuth tokens and SDK calls carry the same auth
   const directory = await mkdtemp(join(tmpdir(), 'praxis-mcp-space-chain-'));
   const keyFile = join(directory, 'adapter.key'), key = randomBytes(48), spaceId = 'synthetic-designated-space';
   await writeFile(keyFile, key, { mode: 0o600 });
-  const nativeStore = new MemoStore({ file: join(directory, 'memo.db') });
-  const native = createMemoServer({ store: nativeStore, key, spaces: [spaceId], managed: true });
+  const nativeStore = new ProjectStore(join(directory, 'projects.db'));
+  const native = createProjectsServer({ store: nativeStore, business: new BusinessService({ store: nativeStore, key, spaces: [spaceId] }) });
   await new Promise(resolve => native.listen(0, '127.0.0.1', resolve));
   let core, publicGuide;
   const server = createServer(async (request, response) => {
@@ -34,7 +35,7 @@ test('public guidance, designated OAuth tokens and SDK calls carry the same auth
   publicGuide = createPublicMcpHandler({ origin });
   core = createBusinessServer({ auth, pollMs: 60000, config: {
     issuer: origin, database: auth.file, eventsDatabase: join(directory, 'events.sqlite'), observationsFile: join(directory, 'observations.sqlite'),
-    allowedHosts: [new URL(origin).host], apps: { memo: { managed: true, keyFile, spaces: [spaceId, 'synthetic-unconsented-space'], url: `http://127.0.0.1:${native.address().port}/api/business` } },
+    allowedHosts: [new URL(origin).host], apps: { projects: { managed: true, keyFile, spaces: [spaceId, 'synthetic-unconsented-space'], url: `http://127.0.0.1:${native.address().port}/api/business` } },
   } });
   t.after(async () => {
     await Promise.allSettled(clients.map(client => client.close())); publicGuide.close();
@@ -73,7 +74,7 @@ test('public guidance, designated OAuth tokens and SDK calls carry the same auth
   const cookie = login.headers.get('set-cookie').split(';')[0], session = await login.json();
   const verifier = 'synthetic-space-chain-pkce-'.repeat(3);
   async function consentCode() {
-    const path = '/oauth/authorize?' + new URLSearchParams({ client_id: 'synthetic-sdk', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: origin + '/mcp', scope: 'memo:read', state: 'synthetic-space-chain', space_id: spaceId });
+    const path = '/oauth/authorize?' + new URLSearchParams({ client_id: 'synthetic-sdk', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: origin + '/mcp', scope: 'projects:read', state: 'synthetic-space-chain', space_id: spaceId });
     const page = await fetch(origin + path, { headers: { Cookie: cookie } });
     assert.equal(page.status, 200); const html = await page.text();
     assert.match(html, new RegExp(`<option value="${spaceId}" selected>`));
@@ -89,8 +90,8 @@ test('public guidance, designated OAuth tokens and SDK calls carry the same auth
   assert.equal(rawResponse.status, 200); const rawToken = await rawResponse.json();
   assert.equal(rawToken.space_id, spaceId);
   const rawClient = await connect('/mcp', rawToken.access_token);
-  const rawRead = await rawClient.callTool({ name: 'memo_list_topics', arguments: { spaceId: rawToken.space_id } });
-  assert.notEqual(rawRead.isError, true); assert.deepEqual(rawRead.structuredContent.topics.map(topic => topic.topicId), ['rights', 'rental'], 'Memo seeds its fixed topic resources');
+  const rawRead = await rawClient.callTool({ name: 'projects_list', arguments: { spaceId: rawToken.space_id } });
+  assert.notEqual(rawRead.isError, true); assert.deepEqual(rawRead.structuredContent.items, []);
   const refreshed = await json('/oauth/token', { grant_type: 'refresh_token', refresh_token: rawToken.refresh_token, client_id: 'synthetic-sdk', resource: origin + '/mcp' });
   assert.equal(refreshed.status, 200); assert.equal((await refreshed.json()).space_id, spaceId);
 
@@ -106,22 +107,22 @@ test('public guidance, designated OAuth tokens and SDK calls carry the same auth
   const capabilityResult = await sdkClient.callTool({ name: 'praxis_refresh_capabilities', arguments: {} });
   assert.notEqual(capabilityResult.isError, true);
   const capabilities = capabilityResult.structuredContent;
-  assert.deepEqual(capabilities.spaces, [{ spaceId, apps: [{ id: 'memo', actions: ['read'] }] }]);
-  const fallbackRead = await sdkClient.callTool({ name: 'memo_list_topics', arguments: { spaceId: capabilities.spaces[0].spaceId } });
-  assert.notEqual(fallbackRead.isError, true); assert.deepEqual(fallbackRead.structuredContent.topics.map(topic => topic.topicId), ['rights', 'rental']);
-  assert.equal((await sdkClient.callTool({ name: 'memo_list_topics', arguments: { spaceId: 'synthetic-unconsented-space' } })).isError, true);
-  assert.equal(calls.filter(call => call.name === 'memo_list_topics' && call.arguments.spaceId === spaceId).length, 2, 'actual SDK tools/call requests carry raw and recovered IDs');
+  assert.deepEqual(capabilities.spaces, [{ spaceId, apps: [{ id: 'projects', actions: ['read'] }] }]);
+  const fallbackRead = await sdkClient.callTool({ name: 'projects_list', arguments: { spaceId: capabilities.spaces[0].spaceId } });
+  assert.notEqual(fallbackRead.isError, true); assert.deepEqual(fallbackRead.structuredContent.items, []);
+  assert.equal((await sdkClient.callTool({ name: 'projects_list', arguments: { spaceId: 'synthetic-unconsented-space' } })).isError, true);
+  assert.equal(calls.filter(call => call.name === 'projects_list' && call.arguments.spaceId === spaceId).length, 2, 'actual SDK tools/call requests carry raw and recovered IDs');
 
   // A legacy two-space connection remains valid when one enrollment is removed;
   // capability refresh must recompute its projection rather than keep old IDs.
-  const grant = auth.createGrant({ userId: 'synthetic-owner', clientId: 'synthetic-sdk', rules: [spaceId, 'synthetic-unconsented-space'].map(id => ({ appId: 'memo', spaceId: id, actions: ['read'], resources: ['*'] })) });
+  const grant = auth.createGrant({ userId: 'synthetic-owner', clientId: 'synthetic-sdk', rules: [spaceId, 'synthetic-unconsented-space'].map(id => ({ appId: 'projects', spaceId: id, actions: ['read'], resources: ['*'] })) });
   const legacy = await connect('/mcp', auth.issueToken({ grantId: grant.id }).accessToken);
   const before = await legacy.callTool({ name: 'praxis_refresh_capabilities', arguments: {} });
   assert.equal(before.structuredContent.spaces.length, 2);
-  auth.setSpaceAppEnrollment({ spaceId, appId: 'memo', enabled: false });
+  auth.setSpaceAppEnrollment({ spaceId, appId: 'projects', enabled: false });
   const after = await legacy.callTool({ name: 'praxis_refresh_capabilities', arguments: {} });
   assert.notEqual(after.isError, true);
-  assert.deepEqual(after.structuredContent.spaces, [{ spaceId: 'synthetic-unconsented-space', apps: [{ id: 'memo', actions: ['read'] }] }]);
+  assert.deepEqual(after.structuredContent.spaces, [{ spaceId: 'synthetic-unconsented-space', apps: [{ id: 'projects', actions: ['read'] }] }]);
   assert.doesNotMatch(after.structuredContent.instructions, new RegExp(spaceId));
   assert.equal((await legacy.callTool({ name: 'memo_list_topics', arguments: { spaceId } })).isError, true, 'removed catalog entry cannot be used through a stale SDK connection');
 });

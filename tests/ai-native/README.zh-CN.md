@@ -10,9 +10,9 @@
 
 | 场景 | 人员 | 应用与连续性 |
 | --- | --- | --- |
-| 家庭旅行 | 规划者、探索者、重视舒适的成员 | Travel、Memo；同一家三人跨目的地积累历史，处理意见、个人准备和真正需要行动的共享事项。三十个初始目的地不是终点。 |
-| AI 时代的漏洞管理新范式 | Research 导师/学生、Productization 工程师、Marketing、Finance/支持 | Lattice、Memo、Polaris、Projects、Intelligence；需求→研究→工程→市场交付/反馈→财务支持，可退回、修订。研究归合成学校主体，其余归合成公司。 |
-| 专职模拟投资者 | 一人 | Memo、Intelligence、Polaris；初始模拟本金100万元、争取10%净收益，开始前必须明确 market/horizon/asOf，交易、成交、费用和资金均为合成。 |
+| 家庭旅行 | 规划者、探索者、重视舒适的成员 | TingProof、Projects；同一家三人跨目的地积累历史，处理意见、个人准备和真正需要行动的共享事项。三十个初始目的地不是终点。 |
+| AI 时代的漏洞管理新范式 | Research 导师/学生、Productization 工程师、Marketing、Finance/支持 | Lattice、Polaris、Projects、Intelligence；需求→研究→工程→市场交付/反馈→财务支持，可退回、修订。研究归合成学校主体，其余归合成公司。 |
+| 专职模拟投资者 | 一人 | Intelligence、Polaris；初始模拟本金100万元、争取10%净收益，开始前必须明确 market/horizon/asOf，交易、成交、费用和资金均为合成。 |
 
 精确模型：主控 `opencode/hexhive005-main/zai-org/GLM-5.3-Flash`；worker `opencode/hexhive005-work/zai-org/GLM-5.3-Flash`；Maintenance `codex/gpt-6.1-sol`、`ultra`，不覆盖默认 context window。发现失败不替换模型。主控与 Maintenance 独立于全局 worker 单槽；Maintenance 预留/执行期间阻止新业务任务，避免边改环境边测试。每次介入均须人工确认。worker 不设 token 预算、场景不设固定到期时间。额度或 provider 故障保留进度，不因此盲目重试。
 

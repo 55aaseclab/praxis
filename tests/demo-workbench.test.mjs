@@ -34,7 +34,7 @@ test('demo workbench links the app served by its own process', { timeout: 10000 
   const intelligence = apps.find(app => app.id === 'intelligence');
   assert.equal(intelligence.launcher, true);
   assert.equal(await (await fetch(intelligence.url)).text(), 'synthetic app');
-  assert.equal(apps.find(app => app.id === 'memo').unavailable, 'managed');
+  assert.equal(apps.find(app => app.id === 'projects').unavailable, 'managed');
   assert.ok(!apps.some(app => ['letters', 'profiles', 'polaris'].includes(app.id)));
 });
 

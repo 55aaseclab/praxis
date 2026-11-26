@@ -8,7 +8,7 @@ import { MAX_NAVIGATION_BYTES, navigationContext, isNavigationHtml, collectNavig
 const canonical = 'https://navigation.synthetic.example';
 const source = '<!doctype html><html><head><meta charset="utf-8"><title>合成页面</title></head><body><h1>Independent app</h1></body></html>';
 const htmlHeaders = { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; base-uri 'none'" };
-const context = { canonicalOrigin: canonical, mode: 'app', appId: 'travel', headers: htmlHeaders };
+const context = { canonicalOrigin: canonical, mode: 'app', appId: 'tingproof', headers: htmlHeaders };
 const transform = (value = source, options = {}) => injectSystemNavigation(Buffer.isBuffer(value) ? value : Buffer.from(value), { ...context, ...options });
 const unavailable = { status: 503, code: 'NAVIGATION_UNAVAILABLE' };
 
@@ -26,9 +26,9 @@ test('navigation parses actual markup and preserves independent app source, incl
   assert.equal(marked.length, 2);
   for (const node of marked) assert.equal(node.parentNode.tagName, 'head');
   const script = marked.find(node => node.tagName === 'script'), style = marked.find(node => node.tagName === 'link');
-  assert.deepEqual(attributes(script), { type: 'module', src: `${canonical}/praxis-nav.js`, 'data-praxis-platform-nav': '', 'data-mode': 'app', 'data-app-id': 'travel' });
+  assert.deepEqual(attributes(script), { type: 'module', src: `${canonical}/praxis-nav.js`, 'data-praxis-platform-nav': '', 'data-mode': 'app', 'data-app-id': 'tingproof' });
   assert.equal(attributes(style).href, `${canonical}/praxis-nav.css`);
-  assert.equal(output.replace(/<link rel="stylesheet" href="https:\/\/navigation\.synthetic\.example\/praxis-nav\.css" data-praxis-platform-nav>/, '').replace(/<script type="module" src="https:\/\/navigation\.synthetic\.example\/praxis-nav\.js" data-praxis-platform-nav data-mode="app" data-app-id="travel"><\/script>/, ''), original);
+  assert.equal(output.replace(/<link rel="stylesheet" href="https:\/\/navigation\.synthetic\.example\/praxis-nav\.css" data-praxis-platform-nav>/, '').replace(/<script type="module" src="https:\/\/navigation\.synthetic\.example\/praxis-nav\.js" data-praxis-platform-nav data-mode="app" data-app-id="tingproof"><\/script>/, ''), original);
   assert.equal((await transform(output)).toString(), output);
   assert.doesNotMatch(output, /pxs_|username|csrfToken/);
 });
@@ -44,8 +44,8 @@ test('valid implicit HTML and admin markers work without serializing app markup'
   assert.match(prds, /data-mode="prds"/); assert.doesNotMatch(prds, /data-app-id=/);
   assert.equal((await transform(prds, { mode: 'prds', appId: undefined })).toString(), prds);
   await assert.rejects(transform(source, { mode: 'app', appId: 'unknown' }), unavailable);
-  await assert.rejects(transform(source, { mode: 'admin', appId: 'travel' }), unavailable);
-  await assert.rejects(transform(source, { mode: 'prds', appId: 'travel' }), unavailable);
+  await assert.rejects(transform(source, { mode: 'admin', appId: 'tingproof' }), unavailable);
+  await assert.rejects(transform(source, { mode: 'prds', appId: 'tingproof' }), unavailable);
   await assert.rejects(transform(''), unavailable);
   await assert.rejects(transform(source.replace('</head>', '<script data-praxis-platform-nav src="/spoof.js"></script></head>')), unavailable);
 });
@@ -81,15 +81,15 @@ test('charset, compression and modified response validators have bounded safe be
 
 test('only document entry requests and actual successful HTML are transform candidates', () => {
   const req = { method: 'GET', headers: {} };
-  assert.deepEqual(navigationContext(req, '/trip/first-day', 'travel'), { mode: 'app', appId: 'travel' });
+  assert.deepEqual(navigationContext(req, '/assignment/first-day', 'tingproof'), { mode: 'app', appId: 'tingproof' });
   assert.deepEqual(navigationContext(req, '/business/tingproof/'), { mode: 'business', appId: 'tingproof' });
   assert.deepEqual(navigationContext(req, '/admin/'), { mode: 'admin' });
   assert.deepEqual(navigationContext(req, '/prds/'), { mode: 'prds' });
   assert.deepEqual(navigationContext(req, '/prds/sample-app/'), { mode: 'prds' });
-  for (const path of ['/api/items', '/assets/app.js', '/static/picture', '/workbench/api/items', '/image.png']) assert.equal(navigationContext(req, path, 'travel'), null, path);
+  for (const path of ['/api/items', '/assets/app.js', '/static/picture', '/workbench/api/items', '/image.png']) assert.equal(navigationContext(req, path, 'tingproof'), null, path);
   assert.equal(navigationContext(req, '/lattice/portal/decks/1', 'lattice-slides'), null, 'Lattice owns its portal exclusion');
-  for (const path of ['/business/', '/business/tingproof', '/business/tingproof/private', '/admin/private', '/share/travel/token/trip', '/prds', '/prds/source.md', '/prds/private/file/']) assert.equal(navigationContext(req, path), null, path);
-  for (const request of [{ method: 'POST', headers: {} }, { method: 'HEAD', headers: {} }, { method: 'GET', headers: { range: 'bytes=0-2' } }, { method: 'GET', headers: { upgrade: 'websocket' } }, { method: 'GET', headers: { 'sec-fetch-dest': 'script' } }]) assert.equal(navigationContext(request, '/', 'travel'), null);
+  for (const path of ['/business/', '/business/tingproof', '/business/tingproof/private', '/admin/private', '/share/tingproof/token/trip', '/prds', '/prds/source.md', '/prds/private/file/']) assert.equal(navigationContext(req, path), null, path);
+  for (const request of [{ method: 'POST', headers: {} }, { method: 'HEAD', headers: {} }, { method: 'GET', headers: { range: 'bytes=0-2' } }, { method: 'GET', headers: { upgrade: 'websocket' } }, { method: 'GET', headers: { 'sec-fetch-dest': 'script' } }]) assert.equal(navigationContext(request, '/', 'tingproof'), null);
   assert.equal(isNavigationHtml({ statusCode: 200, headers: htmlHeaders }), true);
   for (const value of [{ statusCode: 304, headers: htmlHeaders }, { statusCode: 200, headers: { 'content-type': 'application/json' } }, { statusCode: 200, headers: { ...htmlHeaders, 'content-disposition': 'attachment' } }, { statusCode: 206, headers: htmlHeaders }]) assert.equal(isNavigationHtml(value), false);
 });

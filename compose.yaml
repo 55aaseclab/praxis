@@ -189,15 +189,7 @@
           "condition": "service_healthy",
           "required": true
         },
-        "travel": {
-          "condition": "service_healthy",
-          "required": true
-        },
         "tingproof": {
-          "condition": "service_healthy",
-          "required": true
-        },
-        "memo": {
           "condition": "service_healthy",
           "required": true
         },
@@ -494,92 +486,6 @@
         }
       ]
     },
-    "travel": {
-      "build": {
-        "args": {
-          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
-          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
-        },
-        "context": "./third_party/travel",
-        "dockerfile": "Dockerfile.praxis"
-      },
-      "cap_drop": [
-        "ALL"
-      ],
-      "command": [
-        "node",
-        "src/server.js"
-      ],
-      "configs": [
-        {
-          "source": "native-launcher",
-          "target": "/opt/praxis/launch-builtin.mjs"
-        }
-      ],
-      "depends_on": {
-        "core": {
-          "condition": "service_started",
-          "required": true
-        }
-      },
-      "entrypoint": [
-        "node",
-        "/opt/praxis/launch-builtin.mjs"
-      ],
-      "environment": {
-        "HEALTH_URL": "http://127.0.0.1:4323/health"
-      },
-      "healthcheck": {
-        "interval": "10s",
-        "retries": 6,
-        "start_period": "10s",
-        "test": [
-          "CMD",
-          "node",
-          "-e",
-          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-        ],
-        "timeout": "5s"
-      },
-      "image": "praxis-builtins/travel:local",
-      "init": true,
-      "logging": {
-        "driver": "json-file",
-        "options": {
-          "max-file": "3",
-          "max-size": "10m"
-        }
-      },
-      "network_mode": "service:core",
-      "read_only": true,
-      "restart": "unless-stopped",
-      "security_opt": [
-        "no-new-privileges:true"
-      ],
-      "stop_grace_period": "30s",
-      "tmpfs": [
-        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
-      ],
-      "volumes": [
-        {
-          "read_only": true,
-          "source": "travel-config",
-          "target": "/config",
-          "type": "volume",
-          "volume": {
-            "nocopy": true
-          }
-        },
-        {
-          "source": "travel-data",
-          "target": "/data/travel",
-          "type": "volume",
-          "volume": {
-            "nocopy": true
-          }
-        }
-      ]
-    },
     "tingproof": {
       "build": {
         "args": {
@@ -659,92 +565,6 @@
         {
           "source": "tingproof-data",
           "target": "/data/tingproof",
-          "type": "volume",
-          "volume": {
-            "nocopy": true
-          }
-        }
-      ]
-    },
-    "memo": {
-      "build": {
-        "args": {
-          "PRAXIS_GID": "${PRAXIS_GID:-1000}",
-          "PRAXIS_UID": "${PRAXIS_UID:-1000}"
-        },
-        "context": "./third_party/memo",
-        "dockerfile": "Dockerfile.praxis"
-      },
-      "cap_drop": [
-        "ALL"
-      ],
-      "command": [
-        "node",
-        "src/main.mjs"
-      ],
-      "configs": [
-        {
-          "source": "native-launcher",
-          "target": "/opt/praxis/launch-builtin.mjs"
-        }
-      ],
-      "depends_on": {
-        "core": {
-          "condition": "service_started",
-          "required": true
-        }
-      },
-      "entrypoint": [
-        "node",
-        "/opt/praxis/launch-builtin.mjs"
-      ],
-      "environment": {
-        "HEALTH_URL": "http://127.0.0.1:4325/health"
-      },
-      "healthcheck": {
-        "interval": "10s",
-        "retries": 6,
-        "start_period": "10s",
-        "test": [
-          "CMD",
-          "node",
-          "-e",
-          "fetch(process.env.HEALTH_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-        ],
-        "timeout": "5s"
-      },
-      "image": "praxis-builtins/memo:local",
-      "init": true,
-      "logging": {
-        "driver": "json-file",
-        "options": {
-          "max-file": "3",
-          "max-size": "10m"
-        }
-      },
-      "network_mode": "service:core",
-      "read_only": true,
-      "restart": "unless-stopped",
-      "security_opt": [
-        "no-new-privileges:true"
-      ],
-      "stop_grace_period": "30s",
-      "tmpfs": [
-        "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
-      ],
-      "volumes": [
-        {
-          "read_only": true,
-          "source": "memo-config",
-          "target": "/config",
-          "type": "volume",
-          "volume": {
-            "nocopy": true
-          }
-        },
-        {
-          "source": "memo-data",
-          "target": "/data/memo",
           "type": "volume",
           "volume": {
             "nocopy": true
@@ -1025,12 +845,8 @@
     "slides-decks": {},
     "slides-exports": {},
     "slides-state": {},
-    "travel-config": {},
-    "travel-data": {},
     "tingproof-config": {},
     "tingproof-data": {},
-    "memo-config": {},
-    "memo-data": {},
     "intelligence-config": {},
     "intelligence-data": {},
     "polaris-config": {},

@@ -9,32 +9,32 @@ import { relocateVerified, rollbackRelocation, validateRelocations } from '../sr
 const configuration = root => ({ dataRoot: root, workspaceId: '11111111-1111-4111-8111-111111111111', stateRoot: join(root, 'state'), repositories: [{ type: 'local', path: join(root, 'backups'), passwordFile: join(root, 'config/key') }], appSources: [] });
 test('default and per-app roots drive all working paths without changing another app', () => {
   const c = configuration('/private/praxis'), normal = resolveAppPaths(c);
-  c.workingData = { version: 1, roots: { memo: '/mnt/nas/private/memo' } };
+  c.workingData = { version: 1, roots: { projects: '/mnt/nas/private/projects' } };
   const changed = resolveAppPaths(c);
-  assert.equal(changed.memo, '/mnt/nas/private/memo');
+  assert.equal(changed.projects, '/mnt/nas/private/projects');
   assert.equal(changed.travel, normal.travel);
   assert.equal(changed.slidesState, join(normal.roots.lattice, 'native/.lattice'));
-  assert.equal(appStorageSources(changed).find(item => item.id === 'memo').source, '/mnt/nas/private/memo/memo.db');
+  assert.equal(appStorageSources(changed).find(item => item.id === 'projects').source, '/mnt/nas/private/projects/projects.db');
 });
 test('unknown, relative, overlapping, source, backup and secret roots fail closed', () => {
-  for (const roots of [{ unknown: '/private/x/y' }, { memo: 'relative' }, { memo: '/private/data', travel: '/private/data/travel' }, { memo: '/private/praxis/backups/memo' }, { memo: '/private/praxis/config/memo' }, { memo: process.cwd() + '/data' }, { memo: '/tmp/a/../b' }]) {
+  for (const roots of [{ unknown: '/private/x/y' }, { projects: 'relative' }, { projects: '/private/data', travel: '/private/data/travel' }, { projects: '/private/praxis/backups/projects' }, { projects: '/private/praxis/config/projects' }, { projects: process.cwd() + '/data' }, { projects: '/tmp/a/../b' }]) {
     assert.throws(() => resolveAppPaths({ ...configuration('/private/praxis'), workingData: { version: 1, roots } }));
   }
 });
 test('parent validation rejects symlink aliases', async t => {
   const root = await mkdtemp(join(tmpdir(), 'praxis-app-path-')); t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'real'), { mode: 0o700 }); await symlink(join(root, 'real'), join(root, 'alias'));
-  await assert.rejects(validateAppPathParents({ roots: { memo: join(root, 'alias', 'data') } }));
+  await assert.rejects(validateAppPathParents({ roots: { projects: join(root, 'alias', 'data') } }));
 });
 test('plan preserves identifiers and maps every configured store to its app root', () => {
   const storage = configuration('/private/praxis'); storage.appSources = [{ id: 'tingproof', target: 'tingproof.db', source: '/old/ting/tingproof.db' }, { id: 'slides', target: 'decks', source: '/old/slides/decks' }, { id: 'slides', target: '.lattice', source: '/old/slides/.lattice' }];
-  const business = { database: '/old/auth/auth.db', eventsDatabase: '/old/auth/events.db', observationsFile: '/old/obs/observations.db', apps: Object.fromEntries(['memo', 'projects', 'travel', 'slides'].map(id => [id, { dataDir: `/old/${id}` }])) };
+  const business = { database: '/old/auth/auth.db', eventsDatabase: '/old/auth/events.db', observationsFile: '/old/obs/observations.db', apps: Object.fromEntries(['projects', 'slides'].map(id => [id, { dataDir: `/old/${id}` }])) };
   const plan = planAppData({ storage, business, slidesMapping: { spaces: { spaceA: '/old/slides/a.json' } }, polaris: { enabled: false } });
   assert.equal(plan.slidesMapping.spaces.spaceA, join(plan.paths.slidesBusiness, 'a.json'));
   assert.equal(plan.business.database, join(plan.paths.platform, 'auth.db'));
   assert.equal(business.database, '/old/auth/auth.db');
   assert.doesNotThrow(() => assertAppBindings(plan.storage, plan.business, { slidesSpaces: plan.slidesMapping.spaces }));
-  plan.business.apps.memo.dataDir = '/old/memo'; assert.throws(() => assertAppBindings(plan.storage, plan.business));
+  plan.business.apps.projects.dataDir = '/old/projects'; assert.throws(() => assertAppBindings(plan.storage, plan.business));
 });
 test('same-device migration preserves bytes and inode, and rollback restores source', async t => {
   const root = await mkdtemp(join(tmpdir(), 'praxis-relocate-')); t.after(() => rm(root, { recursive: true, force: true }));

@@ -9,7 +9,7 @@ test('restored commands retain explicit installation scope and stop without dele
   const dir = await mkdtemp(join(tmpdir(), 'managed-installation-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const file = join(dir, 'installation.json');
-  const config = { version: 1, projects: { apps: { name: 'synthetic-existing', files: [join(dir, 'apps.yaml')], services: ['travel', 'slides-public'] } } };
+  const config = { version: 1, projects: { apps: { name: 'synthetic-existing', files: [join(dir, 'apps.yaml')], services: ['intelligence', 'slides-public'] } } };
   await writeFile(file, JSON.stringify(config), { mode: 0o600 });
   const loaded = await readManagedInstallation(file);
   const up = installationCommand(loaded, 'apps', 'up');
@@ -21,9 +21,9 @@ test('restored commands retain explicit installation scope and stop without dele
   assert.ok(!down.includes('down') && !down.includes('-v'));
   assert.throws(() => installationCommand(loaded, 'apps', 'up', ['other-app']), /outside/);
   const calls = [];
-  await installationOperation(loaded, 'apps', 'up', { services: ['travel'], execute: async args => { calls.push(args); return ''; } });
-  assert.equal(calls[0].at(-1), 'travel');
-  const status = installationStatus(JSON.stringify([{ Service: 'travel', State: 'running', Health: 'healthy' }, { Service: 'slides-public', State: 'running', Health: 'healthy' }]), config.projects.apps);
+  await installationOperation(loaded, 'apps', 'up', { services: ['intelligence'], execute: async args => { calls.push(args); return ''; } });
+  assert.equal(calls[0].at(-1), 'intelligence');
+  const status = installationStatus(JSON.stringify([{ Service: 'intelligence', State: 'running', Health: 'healthy' }, { Service: 'slides-public', State: 'running', Health: 'healthy' }]), config.projects.apps);
   assert.equal(status.healthy, true);
   await chmod(file, 0o644);
   await assert.rejects(readManagedInstallation(file), /private installation descriptor/);

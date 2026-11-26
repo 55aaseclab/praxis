@@ -1,0 +1,15 @@
+# Memo 路线图
+
+> Retired from the Praxis distribution on 2026-11-25; archived documents, see [RETIRED.md](RETIRED.md).
+
+[English](ROADMAP.en.md)
+
+从空目录启动原生场景界面，核对授权、读写、回读和双语导航，并以独立源码仓固定到工作台。
+
+## Praxis 供数接口
+
+提供应用自有的只读卡片与数据源描述，验证合成授权记录、原生对象入口、稳定版本、空态及部分失败、管理员数据位置解析；个人卡片偏好不修改业务记录。
+
+## 应用自有 Praxis 集成
+
+本应用在所属仓库维护经审核的 `praxis-integration.mjs`，声明原生入口策略，以及已支持的类型明确的业务操作与 MCP 指引。Praxis 从已安装源码加载声明，继续统一执行授权、签名、策略租约与审计。安装声明不会授予访问权限，也不会启动后端；已有原生界面、数据归属与恢复边界继续生效。
