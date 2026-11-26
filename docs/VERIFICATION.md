@@ -432,3 +432,11 @@ Calendar 按设备、身份使用 IndexedDB，首次授权使用时保留并导�
 ### 部署与运行回读（补充记录）
 
 受管蓝绿安装完成例行镜像切换：blue 活动写者运行 **0.1.159**（healthy），green 0.1.158 为健康回滚槽。切换过程中核心槽因业务配置仍登记退役适配器而激活失败，按运维流程将 `business.json` 的 `apps.reminder`/`apps.knowledge` 登记与失效 provider 元数据移除（操作前备份保留）后恢复；受管描述与 Compose 文件移除 reminder/knowledge/knowledge-public 服务，对应容器停止并移除。匿名公开主页回读：零 reminder/knowledge 引用，应用源码链接恰为九个应用；`/apps/reminder/` 与 `/apps/knowledge/` 返回 404，`/apps/memo/` 仍为受保护 401。既有安装的 `reminder.db`、`knowledge.db`、`content/catalog` 与已发布内容原样保留在安装工作区。独立部署的 knowledge-paper-agent 容器组未属本次退役范围，保持原状。验收记录提交不改变运行代码或应用固定版本。既有安装的 `reminder.db`、`knowledge.db`、`content/catalog` 及已发布内容留在原安装工作区，未读取、未迁移、未删除。本节不宣称独立业务客户端验收。
+
+## 0.1.160——Travel 与 Memo 退役源码检查
+
+按维护授权移除 Travel 与 Memo：两个子模块、`.gitmodules` 条目、安装登记、受管 Compose 服务、生成构建上下文及相关测试引用全部删除；依赖 Travel 业务运行时/地图凭据与 Memo 空间映射的专项测试随主体退役删除。业务与 MCP 链路夹具改用剩余适配器（Projects/TingProof/Lattice），MCP trace 测试改跑真实 Projects 原生服务与 `projects_create`/`projects_read`/`projects_list` 工具语义。应用文档按最终公开提交（Travel `8cd6ed4`、Memo `9918aca`）存档于 `docs/travel/`、`docs/memo/` 并附退役说明。ai-native 三个场景去除 Travel/Memo 依赖。全套平台合成检查 **501** 项：提交树内 **487** 通过、14 项可选跳过、**0** 失败；工作区 3 项失败仅由既有未提交 maintenance 模型变更引起，未随本发行提交。版本按一次 PATCH 对齐 **0.1.160**。两个公开仓库（`55aaseclab/travel`、`55aaseclab/memo`）的删除属发布动作，与源码提交分开执行并单独记录。既有安装的 `travel.db`、`content/`、`memo.db` 原样保留在安装工作区。本节不宣称独立业务客户端验收。
+
+### 部署与运行回读（补充记录）
+
+受管蓝绿安装完成例行镜像切换：运行 **0.1.160**（healthy），前一 0.1.159 槽保持健康回滚。受管描述与 Compose 文件移除 travel/memo 服务，对应容器停止并移除；`business.json` 的 `apps.travel`/`apps.memo` 登记与失效 provider 元数据一并移除（操作前备份保留）。首页合成示例卡从 Memo 改锚 Projects（4fb8317）。匿名公开主页回读：零 travel/memo 应用引用，应用源码链接恰为七个应用；`/apps/travel/` 与 `/apps/memo/` 返回 404，`/apps/tingproof/` 仍为受保护 401。既有安装的 Travel/Memo 工作数据原样保留。独立部署的 memo-content 容器组不属本次退役范围，保持原状。验收记录提交不改变运行代码或应用固定版本。
