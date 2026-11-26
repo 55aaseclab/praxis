@@ -11,17 +11,14 @@ const app = (id, name = id) => ({ id, name, kind: 'app', source: `third_party/${
 
 test('publisher covers split app stores without serializing configuration secrets or payloads', () => {
   const value = createDataInventory({
-    registry: ['reminder', 'knowledge', 'travel', 'projects', 'memo', 'tingproof', 'lattice-slides', 'future'].map(id => app(id)),
+    registry: ['travel', 'projects', 'memo', 'tingproof', 'lattice-slides', 'future'].map(id => app(id)),
     sourceRoot: '/example/source', now: stamp,
     business: { database: '/example/platform/auth.db', eventsDatabase: '/example/platform/events.db', privateToken: 'DO_NOT_INCLUDE_SECRET', apps: {
-      knowledge: { dataDir: '/example/data/knowledge', keyFile: '/example/secrets/key' },
       projects: { dataDir: '/example/data/projects' }, memo: { dataDir: '/example/data/memo' },
       travel: { dataDir: '/example/data/travel' }, slides: { dataDir: '/example/data/slides' },
     } },
-    reminderSpaces: { spaces: { one: '/example/data/reminder/one.json', two: '/example/data/other/two.json' } },
-    slidesSpaces: { spaces: { one: '/example/data/slides/one.json' } },
+        slidesSpaces: { spaces: { one: '/example/data/slides/one.json' } },
     storage: { appSources: [
-      { id: 'reminder', source: '/example/data/reminder/one.json', kind: 'json' },
       { id: 'tingproof', source: '/example/data/audio/tingproof.db', kind: 'sqlite' },
       { id: 'slides', source: '/example/native/decks', target: 'decks', kind: 'directory' },
       { id: 'slides', source: '/example/native/.lattice', target: '.lattice', kind: 'directory' },
@@ -29,8 +26,6 @@ test('publisher covers split app stores without serializing configuration secret
     polaris: { dataRoot: '/example/data/polaris', browserProfiles: '/example/browser/state', browserCache: '/example/browser/cache', envFile: '/example/secrets/.env', codexAuthFile: '/example/secrets/auth.json' },
   });
   const find = id => value.apps.find(item => item.id === id);
-  assert.equal(find('reminder').locations.length, 2);
-  assert.equal(find('knowledge').locations[0].hostPath, '/example/data/knowledge/knowledge.db');
   assert.equal(find('memo').locations.filter(item => item.kind === 'browser').length, 2);
   assert.equal(find('memo').locations[0].hostPath, '/example/data/memo/memo.db');
   assert.equal(find('lattice-slides').locations.length, 4);
@@ -43,7 +38,7 @@ test('publisher covers split app stores without serializing configuration secret
 });
 
 test('sensitive files cannot be reclassified as app data through configuration fields', () => {
-  const value = createDataInventory({ registry: [app('reminder')], reminderSpaces: { spaces: { one: '/example/.codex/auth.json', two: '/example/secrets/provider.json', three: '/example/private.key' } }, now: stamp });
+  const value = createDataInventory({ registry: [app('lattice-slides')], slidesSpaces: { spaces: { one: '/example/.codex/auth.json', two: '/example/secrets/provider.json', three: '/example/private.key' } }, now: stamp });
   assert.equal(value.apps[0].locations[0].kind, 'unknown');
 });
 
@@ -53,9 +48,8 @@ async function fixture(t) {
   const sourceRoot = join(root, 'source'), home = join(root, 'home'), base = join(home, '.config/praxis');
   await mkdir(join(sourceRoot, 'config'), { recursive: true }); await mkdir(base, { recursive: true, mode: 0o700 });
   const save = async (path, value, mode = 0o600) => { await writeFile(path, JSON.stringify(value), { mode }); return path; };
-  await writeInstalledAppsFixture(sourceRoot, [app('reminder'), app('memo')]);
-  const spacesFile = await save(join(base, 'spaces.json'), { spaces: { one: join(root, 'nonexistent-records/one.json') } });
-  const businessFile = await save(join(base, 'business.json'), { apps: { reminder: { spacesFile }, memo: { dataDir: join(root, 'nonexistent-memo') } } });
+  await writeInstalledAppsFixture(sourceRoot, [app('memo'), app('intelligence')]);
+  const businessFile = await save(join(base, 'business.json'), { apps: { memo: { dataDir: join(root, 'nonexistent-memo') } } });
   const storageFile = await save(join(base, 'storage.json'), { workspaceId: 'example', appSources: [] });
   const outputFile = join(base, 'data-inventory/locations.json');
   return { root, sourceRoot, home, base, businessFile, storageFile, outputFile, options: { sourceRoot, home, now: stamp, runDocker: async () => '', print: () => {} } };
@@ -66,7 +60,7 @@ test('CLI publishes bounded private metadata without opening any configured busi
   const result = await main(['publish'], f.options);
   assert.equal(result.published, true); assert.equal(result.apps, 3);
   const value = JSON.parse(await readFile(f.outputFile, 'utf8'));
-  assert.equal(value.apps[0].locations[0].hostPath, join(f.root, 'nonexistent-records/one.json'));
+  assert.equal(value.apps[0].locations[0].hostPath, join(f.root, 'nonexistent-memo/memo.db'));
   assert.equal((await lstat(f.outputFile)).mode & 0o777, 0o600);
   assert.equal((await lstat(join(f.base, 'data-inventory'))).mode & 0o777, 0o700);
   await main(['publish'], f.options);
@@ -95,7 +89,7 @@ test('unregistered optional app configurations produce explicit unknown location
   await rm(f.businessFile); await rm(f.storageFile);
   await main(['publish'], f.options);
   const value = JSON.parse(await readFile(f.outputFile, 'utf8'));
-  assert.equal(value.apps.find(item => item.id === 'reminder').locations[0].kind, 'unknown');
+  assert.equal(value.apps.find(item => item.id === 'intelligence').locations[0].kind, 'unknown');
 });
 
 

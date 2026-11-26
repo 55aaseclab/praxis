@@ -291,7 +291,7 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
             const access = auth.getWebAccess(token);
             for (const event of events.changes(cursor)) {
               cursor = event.cursor;
-              if (!canReadAppCards(access, event.appId, config, registry) || !auth.spaceInterest(userId, event.spaceId)) continue;
+              if (!canReadAppCards(access, registry.webId(event.appId), config, registry) || !auth.spaceInterest(userId, event.spaceId)) continue;
               deliver('change', { appId: event.appId, spaceId: event.spaceId });
             }
             response.write(': keepalive\n\n');

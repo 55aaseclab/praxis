@@ -13,14 +13,15 @@ import { AuthStore, SESSION_COOKIE } from '../src/business/auth.mjs';
 import { BusinessEvents } from '../src/business/events.mjs';
 import { createBusinessServer } from '../src/business/server.mjs';
 import { createPraxisServer } from '../src/server.mjs';
-import { BusinessService } from '../third_party/reminder/src/business.js';
-import { createServer as createReminderServer } from '../third_party/reminder/src/server.js';
-import { Store } from '../third_party/reminder/src/store.js';
+import { MemoBusinessService } from '../third_party/memo/src/business.mjs';
+import { createMemoServer } from '../third_party/memo/src/server.mjs';
+import { MemoStore } from '../third_party/memo/src/store.mjs';
 
 const password = 'Synthetic-MCP-trace-password-2026';
 const secret = 'PRIVATE_SYNTHETIC_MCP_ARGUMENT_NOT_FOR_TRACE';
-const actions = ['read', 'create', 'update', 'complete', 'delete'];
-const rule = (allowed = actions, resources = ['*']) => ({ appId: 'reminder', spaceId: 'space-a', resources, actions: allowed });
+const actions = ['read', 'update'];
+const rule = (allowed = actions, resources = ['*']) => ({ appId: 'memo', spaceId: 'space-a', resources, actions: allowed });
+const guide = (id, title) => ({ id, title, blocks: [{ items: ['Synthetic step'] }], source: { app: 'knowledge', url: '/apps/knowledge/synthetic-entry', entryId: 'synthetic-entry', version: 1 } });
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 async function until(read, predicate, message) {
   const deadline = Date.now() + 6000; let value;
@@ -32,20 +33,13 @@ async function until(read, predicate, message) {
 // isolated business-stack checks, without Docker or any production configuration.
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'praxis-mcp-traces-http-'));
-  const dataFile = join(directory, 'checklist.json'), keyFile = join(directory, 'adapter.key'), key = randomBytes(48);
-  await writeFile(dataFile, JSON.stringify({ version: 2, updated: '', recurring: [], plans: [], pool: [], history: [] }), { mode: 0o600 });
+  const keyFile = join(directory, 'adapter.key'), key = randomBytes(48);
   await writeFile(keyFile, key, { mode: 0o600 });
-  const nativeStore = new Store(dataFile), service = new BusinessService({ key, spaces: { 'space-a': dataFile } }), invokeNative = service.handle.bind(service);
+  const nativeStore = new MemoStore({ file: join(directory, 'memo.db') });
+  const snapshot = () => ({ topics: nativeStore.db.prepare('SELECT space,topic,revision FROM topics ORDER BY space,topic').all(), guides: nativeStore.db.prepare('SELECT space,topic,id,version,payload FROM guides ORDER BY space,topic,id').all() });
   const adapterOperations = [], clients = [], rpcRequests = [], barriers = [];
   let pendingBarrier = null;
-  service.handle = async (raw, assertion) => {
-    const operation = JSON.parse(raw.toString('utf8')).operation; adapterOperations.push(operation);
-    if (pendingBarrier?.operation === operation) {
-      const barrier = pendingBarrier; pendingBarrier = null; barrier.entered.resolve(); await barrier.release.promise;
-    }
-    return invokeNative(raw, assertion);
-  };
-  const native = createReminderServer({ store: nativeStore, businessService: service });
+  const native = createMemoServer({ store: nativeStore, key, spaces: ['space-a'], managed: true });
   await new Promise(resolve => native.listen(0, '127.0.0.1', resolve));
   let backend, web;
   const server = createServer((request, response) => backend.emit('request', request, response));
@@ -54,14 +48,24 @@ async function fixture(t) {
   const auth = new AuthStore({ file: join(directory, 'auth.db'), issuer: origin });
   auth.createUser({ id: 'synthetic-owner', username: 'synthetic-owner', password });
   auth.setPlatformAdmin({ userId: 'synthetic-owner', enabled: true });
-  auth.setWebAccess({ userId: 'synthetic-owner', apps: ['reminder'], prds: false });
+  auth.setWebAccess({ userId: 'synthetic-owner', apps: ['memo'], prds: false });
   auth.createSpace({ id: 'space-a', type: 'personal', ownerId: 'synthetic-owner' });
   auth.createClient({ id: 'synthetic-sdk', name: 'Synthetic SDK fixture', redirectUris: ['https://client.example/callback'] });
   const token = (allowed = actions, resources = ['*']) => auth.issueToken({ grantId: auth.createGrant({ userId: 'synthetic-owner', clientId: 'synthetic-sdk', rules: [rule(allowed, resources)] }).id }).accessToken;
   const bearer = token(), session = auth.login({ username: 'synthetic-owner', password });
   const events = new BusinessEvents(join(directory, 'events.db'));
-  const config = { issuer: origin, database: auth.file, eventsDatabase: events.file, observationsFile: join(directory, 'observations.db'), allowedHosts: [new URL(origin).host], allowedOrigins: [origin], webGateway: { enabled: true, originHost: 'localhost' }, apps: { reminder: { managed: true, keyFile, spaces: ['space-a'], url: `http://127.0.0.1:${native.address().port}/api/business` } } };
-  backend = createBusinessServer({ config, auth, events, pollMs: 60000 });
+  const config = { issuer: origin, database: auth.file, eventsDatabase: events.file, observationsFile: join(directory, 'observations.db'), allowedHosts: [new URL(origin).host], allowedOrigins: [origin], webGateway: { enabled: true, originHost: 'localhost' }, apps: { memo: { managed: true, keyFile, spaces: ['space-a'], url: `http://127.0.0.1:${native.address().port}/api/business` } } };
+  const coreFetch = fetch;
+  const fetchImpl = async (input, init = {}) => {
+    const body = init?.body ? JSON.parse(init.body.toString('utf8')) : null;
+    if (body?.operation) adapterOperations.push(body.operation);
+    if (body?.operation && pendingBarrier?.operation === body.operation) {
+      const barrier = pendingBarrier; pendingBarrier = null; barrier.entered.resolve();
+      await barrier.release.promise;
+    }
+    return coreFetch(input, init);
+  };
+  backend = createBusinessServer({ config, auth, events, pollMs: 60000, fetchImpl });
   t.after(async () => {
     for (const barrier of barriers) barrier.release.resolve();
     await Promise.allSettled(clients.map(client => client.close()));
@@ -69,6 +73,7 @@ async function fixture(t) {
     server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
     await backend.core.shutdown(); backend.close(() => {});
     native.closeAllConnections(); await new Promise(resolve => native.close(resolve));
+    nativeStore.close();
     auth.close(); events.close(); await rm(directory, { recursive: true, force: true });
   });
   async function sdk(credential = bearer) {
@@ -105,12 +110,12 @@ async function fixture(t) {
   }
   async function httpInvoke(request, nativeBrowser = false) {
     const headers = { 'Content-Type': 'application/json', ...(nativeBrowser ? { Cookie: `${SESSION_COOKIE}=${session.sessionToken}`, Origin: origin, 'X-CSRF-Token': session.csrfToken } : { Authorization: `Bearer ${bearer}` }) };
-    const response = await fetch(origin + '/api/business/invoke', { method: 'POST', headers, body: JSON.stringify({ appId: 'reminder', spaceId: 'space-a', ...request }) });
+    const response = await fetch(origin + '/api/business/invoke', { method: 'POST', headers, body: JSON.stringify({ appId: 'memo', spaceId: 'space-a', ...request }) });
     assert.equal(response.status, 200); return response.json();
   }
   const raw = (body, credential = bearer, extra = {}, options = {}) => fetch(origin + '/mcp', { ...options, method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': LATEST_PROTOCOL_VERSION, ...(credential ? { Authorization: `Bearer ${credential}` } : {}), ...extra }, body: typeof body === 'string' ? body : JSON.stringify(body) });
-  function hold(operation = 'add') { const value = { operation, entered: deferred(), release: deferred() }; barriers.push(value); pendingBarrier = value; return value; }
-  return { auth, events, bearer, session, origin, nativeStore, token, sdk, report, openWeb, webGet, webReport, httpInvoke, raw, hold, rpcRequests, adapterOperations };
+  function hold(operation = 'set_guide') { const value = { operation, entered: deferred(), release: deferred() }; barriers.push(value); pendingBarrier = value; return value; }
+  return { auth, events, bearer, session, origin, nativeStore, snapshot, token, sdk, report, openWeb, webGet, webReport, httpInvoke, raw, hold, rpcRequests, adapterOperations };
 }
 async function failedTool(promise) {
   try { const value = await promise; assert.equal(value.isError, true); return value; }
@@ -123,21 +128,21 @@ function safe(report, f) {
 
 test('real SDK calls are counted once by registered tool, excluding HTTP, native and protocol requests', async t => {
   const f = await fixture(t), client = await f.sdk(); await client.listTools(); await client.ping();
-  await f.httpInvoke({ operation: 'list', input: {} }); await f.httpInvoke({ operation: 'list', input: {} }, true);
+  await f.httpInvoke({ operation: 'list_topics', input: {} }); await f.httpInvoke({ operation: 'list_topics', input: {} }, true);
   assert.equal((await f.report()).summary.total, 0);
-  const added = await client.callTool({ name: 'reminder_add', arguments: { spaceId: 'space-a', item: { text: secret, tags: ['synthetic'] }, idempotencyKey: 'mcp-real-create' } });
-  assert.notEqual(added.isError, true); const created = added.structuredContent;
-  const first = await until(() => f.report(), value => value.summary.total === 1 && value.items[0]?.status === 'succeeded', 'successful MCP create is recorded');
-  const write = first.items[0]; assert.equal(write.toolName, 'reminder_add'); assert.equal(write.category, 'business'); assert.equal(write.endpoint, '/mcp'); assert.equal(write.transport, 'streamable-http');
+  const added = await client.callTool({ name: 'memo_set_guide', arguments: { spaceId: 'space-a', resourceId: 'rights', expectedRevision: '0', idempotencyKey: 'mcp-real-create', ...guide('synthetic-guide', secret) } });
+  assert.notEqual(added.isError, true); const created = added.structuredContent; const first = await until(() => f.report(), value => value.summary.total === 1 && value.items[0]?.status === 'succeeded', 'successful MCP create is recorded');
+  const write = first.items[0]; assert.equal(write.toolName, 'memo_set_guide'); assert.equal(write.category, 'business'); assert.equal(write.endpoint, '/mcp'); assert.equal(write.transport, 'streamable-http');
   assert.ok(Number.isSafeInteger(write.durationMs) && write.durationMs >= 0); assert.equal(first.summary.p50Ms, write.durationMs); assert.equal(first.summary.p95Ms, write.durationMs);
-  assert.equal(first.byTool.find(row => row.toolName === 'reminder_add').total, 1); assert.ok(f.adapterOperations.length >= 2, 'one tool call may have several native HTTP operations');
+  assert.equal(first.byTool.find(row => row.toolName === 'memo_set_guide').total, 1); assert.ok(f.adapterOperations.length >= 2, 'one tool call may have several native HTTP operations');
   assert.match(write.actor.userRef, /^[a-f0-9]{24}$/); assert.ok(write.lifecycleTraceId);
   assert.equal(created.traceId, write.lifecycleTraceId, 'the actual adapter invocation reuses the captured MCP lifecycle');
   const lifecycle = (await f.report({ source: 'lifecycle', traceId: write.lifecycleTraceId })).items[0];
   assert.equal(lifecycle.id, write.lifecycleTraceId); assert.equal(lifecycle.committed, true); assert.equal(lifecycle.readback, 'not_recorded'); assert.ok(lifecycle.steps.some(step => step.stage === 'commit' && step.status === 'succeeded'));
-  const read = await client.callTool({ name: 'reminder_list', arguments: { spaceId: 'space-a' } }); assert.equal(read.structuredContent.items[0].resourceId, created.resourceId); assert.equal(read.structuredContent.items[0].revision, created.revision);
+  const read = await client.callTool({ name: 'memo_read_topic', arguments: { spaceId: 'space-a', resourceId: created.topicId } });
+  assert.equal(read.structuredContent.guides[0].id, created.guide.id); assert.equal(read.structuredContent.revision, created.revision);
   const final = await until(() => f.report(), value => value.summary.total === 2 && value.items.every(row => row.status !== 'started'), 'read MCP call completes');
-  const reading = final.items.find(row => row.toolName === 'reminder_list'); assert.equal(final.summary.success, 2); assert.equal(final.summary.errors, 0);
+  const reading = final.items.find(row => row.toolName === 'memo_read_topic'); assert.equal(final.summary.success, 2); assert.equal(final.summary.errors, 0);
   const readLifecycle = (await f.report({ source: 'lifecycle', traceId: reading.lifecycleTraceId })).items[0]; assert.equal(readLifecycle.readback, 'succeeded'); assert.equal(readLifecycle.committed, false);
   const page = await f.report({ limit: '1' }); assert.equal(page.items.length, 1); assert.equal(page.summary.total, 2); assert.equal(page.summary.success, 2); assert.ok(page.nextCursor);
   const older = await f.report({ limit: '1', before: String(page.nextCursor) }); assert.equal(older.items.length, 1); assert.equal(older.summary.total, 2); assert.notEqual(older.items[0].id, page.items[0].id);
@@ -146,21 +151,21 @@ test('real SDK calls are counted once by registered tool, excluding HTTP, native
 
 test('SDK validation, unknown tools and grant denials have distinct safe outcomes without app writes', async t => {
   const f = await fixture(t), client = await f.sdk();
-  const first = await f.httpInvoke({ operation: 'add', input: { item: { text: 'Synthetic allowed record' } }, idempotencyKey: 'http-seed-one' });
-  const second = await f.httpInvoke({ operation: 'add', input: { item: { text: secret } }, idempotencyKey: 'http-seed-two' });
-  const before = await f.nativeStore.read();
-  await failedTool(client.callTool({ name: 'reminder_add', arguments: { spaceId: 'space-a', item: { text: secret, tags: 'invalid-array' }, idempotencyKey: 'invalid-shape' } }));
+  const first = await f.httpInvoke({ operation: 'set_guide', resourceId: 'rights', expectedRevision: '0', idempotencyKey: 'http-seed-one', input: guide('synthetic-guide-one', 'Synthetic allowed record') });
+  const second = await f.httpInvoke({ operation: 'set_guide', resourceId: 'rental', expectedRevision: '0', idempotencyKey: 'http-seed-two', input: guide('synthetic-guide-two', secret) });
+  const before = f.snapshot();
+  await failedTool(client.callTool({ name: 'memo_set_guide', arguments: { spaceId: 'space-a', resourceId: 'rights', expectedRevision: '1', idempotencyKey: 'invalid-shape', ...guide('synthetic-guide-bad', secret), blocks: 'invalid-array' } }));
   await failedTool(client.callTool({ name: 'PRIVATE_UNKNOWN_TOOL_NAME', arguments: { body: secret } }));
-  const readonly = await f.sdk(f.token(['read'])); assert.ok(!(await readonly.listTools()).tools.some(tool => tool.name === 'reminder_add'));
-  await failedTool(readonly.callTool({ name: 'reminder_add', arguments: { spaceId: 'space-a', item: { text: secret }, idempotencyKey: 'ungranted-create' } }));
-  const limited = await f.sdk(f.token(['read', 'update'], [first.resourceId])); assert.ok((await limited.listTools()).tools.some(tool => tool.name === 'reminder_update'));
-  await failedTool(limited.callTool({ name: 'reminder_update', arguments: { spaceId: 'space-a', resourceId: second.resourceId, expectedRevision: second.revision, idempotencyKey: 'ungranted-target', patch: { text: secret } } }));
+  const readonly = await f.sdk(f.token(['read'])); assert.ok(!(await readonly.listTools()).tools.some(tool => tool.name === 'memo_set_guide'));
+  await failedTool(readonly.callTool({ name: 'memo_set_guide', arguments: { spaceId: 'space-a', resourceId: 'rights', expectedRevision: '1', idempotencyKey: 'ungranted-update', ...guide('synthetic-guide-readonly', secret) } }));
+  const limited = await f.sdk(f.token(['read', 'update'], [first.topicId])); assert.ok((await limited.listTools()).tools.some(tool => tool.name === 'memo_set_guide'));
+  await failedTool(limited.callTool({ name: 'memo_set_guide', arguments: { spaceId: 'space-a', resourceId: second.topicId, expectedRevision: second.revision, idempotencyKey: 'ungranted-target', ...guide('synthetic-guide-denied', secret) } }));
   const value = await until(() => f.report(), report => report.summary.total === 4 && report.items.every(row => row.status !== 'started'), 'all failed attempts are terminal');
   const unknown = value.items.find(row => row.category === 'unknown'); assert.equal(unknown.toolName, null); assert.equal(unknown.lifecycleTraceId, null); assert.equal(unknown.code, 'UNKNOWN_TOOL');
-  const schema = value.items.find(row => row.toolName === 'reminder_add' && row.status === 'failed'); assert.equal(schema.lifecycleTraceId, null);
-  const notAvailable = value.items.find(row => row.toolName === 'reminder_add' && row.status === 'denied'); assert.equal(notAvailable.lifecycleTraceId, null);
-  const resourceDenied = value.items.find(row => row.toolName === 'reminder_update'); assert.equal(resourceDenied.status, 'denied'); assert.ok(resourceDenied.lifecycleTraceId);
-  assert.equal(value.summary.denied, 2); assert.equal(value.summary.errors, 2); assert.equal(value.summary.success, 0); assert.deepEqual(await f.nativeStore.read(), before); safe(value, f);
+  const schema = value.items.find(row => row.toolName === 'memo_set_guide' && row.status === 'failed'); assert.equal(schema.lifecycleTraceId, null);
+  const notAvailable = value.items.find(row => row.toolName === 'memo_set_guide' && row.status === 'denied' && !row.lifecycleTraceId); assert.ok(notAvailable); assert.equal(notAvailable.lifecycleTraceId, null);
+  const resourceDenied = value.items.find(row => row.toolName === 'memo_set_guide' && row.status === 'denied' && row.lifecycleTraceId); assert.ok(resourceDenied); assert.equal(resourceDenied.status, 'denied');
+  assert.equal(value.summary.denied, 2); assert.equal(value.summary.errors, 2); assert.equal(value.summary.success, 0); assert.deepEqual(f.snapshot(), before); safe(value, f);
 });
 
 test('actual control-tool calls remain separate from initialize, tool discovery and ping', async t => {
@@ -171,7 +176,7 @@ test('actual control-tool calls remain separate from initialize, tool discovery 
 });
 
 test('native-browser MCP rejection, bad credentials and invalid JSON are ingress failures rather than invented tool calls', async t => {
-  const f = await fixture(t), body = { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'reminder_add', arguments: { item: { text: secret } } } };
+  const f = await fixture(t), body = { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'memo_set_guide', arguments: { id: 'synthetic-ingress', title: secret } } };
   const native = await f.raw(body, null, { Cookie: `${SESSION_COOKIE}=${f.session.sessionToken}` }); assert.ok([401, 403].includes(native.status)); const nativeError = await native.json();
   const basic = await f.raw(body, null, { Authorization: 'Basic c3ludGhldGljOnNlY3JldA==', Cookie: `${SESSION_COOKIE}=${f.session.sessionToken}` }); assert.equal(basic.status, 401); assert.equal((await basic.json()).code, 'BEARER_REQUIRED');
   const bad = await f.raw(body, 'invalid-synthetic-token'); assert.equal(bad.status, 401); const badError = await bad.json();
@@ -185,8 +190,8 @@ test('native-browser MCP rejection, bad credentials and invalid JSON are ingress
 test('SDK cancellation after dispatch preserves the late real commit and an independent readback without duplicate calls', async t => {
   const f = await fixture(t), client = await f.sdk(), barrier = f.hold(), controller = new AbortController();
   await f.openWeb();
-  const pending = client.callTool({ name: 'reminder_add', arguments: { spaceId: 'space-a', item: { text: secret }, idempotencyKey: 'cancel-after-dispatch' } }, undefined, { signal: controller.signal });
-  await barrier.entered.promise; assert.equal((await f.nativeStore.read()).data.pool.length, 0);
+  const pending = client.callTool({ name: 'memo_set_guide', arguments: { spaceId: 'space-a', resourceId: 'rights', expectedRevision: '0', idempotencyKey: 'cancel-after-dispatch', ...guide('synthetic-guide-late', secret) } }, undefined, { signal: controller.signal });
+  await barrier.entered.promise; assert.equal(f.snapshot().guides.length, 0);
   // Exercise the real public gateway, including its Core web-access bootstrap,
   // while a native app write deliberately holds the business serialization gate.
   let inFlight;
@@ -211,16 +216,16 @@ test('SDK cancellation after dispatch preserves the late real commit and an inde
   assert.equal(value.items.length, 1); assert.equal(value.summary.cancelled, 1); const call = value.items[0];
   const lifecycle = await until(() => f.report({ source: 'lifecycle', traceId: call.lifecycleTraceId }), report => report.items[0]?.committed === true, 'native late commit is retained');
   assert.equal(lifecycle.items[0].readback, 'not_recorded'); assert.ok(lifecycle.items[0].steps.some(step => step.stage === 'commit' && step.status === 'succeeded'));
-  const stored = await f.nativeStore.read(); assert.equal(stored.data.pool.length, 1); assert.equal(stored.data.pool[0].text, secret);
-  const readback = await client.callTool({ name: 'reminder_list', arguments: { spaceId: 'space-a' } }); assert.equal(readback.structuredContent.items[0].item.text, secret);
+  const stored = f.snapshot(); assert.equal(stored.guides.length, 1); assert.equal(JSON.parse(stored.guides[0].payload).title, secret);
+  const readback = await client.callTool({ name: 'memo_read_topic', arguments: { spaceId: 'space-a', resourceId: 'rights' } }); assert.equal(readback.structuredContent.guides[0].title, secret);
   const final = await until(() => f.report(), report => report.summary.total === 2 && report.summary.success === 1, 'the independent SDK read is recorded separately');
-  assert.equal(final.items.filter(row => row.toolName === 'reminder_add').length, 1); assert.equal(final.items.find(row => row.toolName === 'reminder_add').status, 'cancelled');
-  const reading = final.items.find(row => row.toolName === 'reminder_list'); assert.equal((await f.report({ source: 'lifecycle', traceId: reading.lifecycleTraceId })).items[0].readback, 'succeeded'); safe(final, f);
+  assert.equal(final.items.filter(row => row.toolName === 'memo_set_guide').length, 1); assert.equal(final.items.find(row => row.toolName === 'memo_set_guide').status, 'cancelled');
+  const reading = final.items.find(row => row.toolName === 'memo_read_topic'); assert.equal((await f.report({ source: 'lifecycle', traceId: reading.lifecycleTraceId })).items[0].readback, 'succeeded'); safe(final, f);
 });
 
 test('a cancellation notification from another grant cannot mark an owner call cancelled', async t => {
   const f = await fixture(t), client = await f.sdk(), otherGrant = f.token(['read']), barrier = f.hold();
-  const pending = client.callTool({ name: 'reminder_add', arguments: { spaceId: 'space-a', item: { text: 'Synthetic grant-isolation record' }, idempotencyKey: 'grant-isolation' } });
+  const pending = client.callTool({ name: 'memo_set_guide', arguments: { spaceId: 'space-a', resourceId: 'rights', expectedRevision: '0', idempotencyKey: 'grant-isolation', ...guide('synthetic-guide-isolated', 'Synthetic grant-isolation record') } });
   await barrier.entered.promise; const requestId = f.rpcRequests.at(-1).id;
   try {
     const response = await f.raw({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId, reason: 'PRIVATE_CANCEL_REASON' } }, otherGrant, {}, { signal: AbortSignal.timeout(5000) }); const body = await response.text(); assert.ok([200, 202].includes(response.status), `cancellation notification status ${response.status}: ${body}`);

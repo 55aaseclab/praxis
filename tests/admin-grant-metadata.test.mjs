@@ -9,7 +9,7 @@ import { createAccountHandler, createAdminHandler } from '../src/business/admin.
 
 const password = 'Synthetic-grant-metadata-password-2026';
 const spaces = ['synthetic-space-a', 'synthetic-space-z'];
-const rule = (spaceId, actions = ['read']) => ({ appId: 'reminder', spaceId, actions, resources: [`private-resource-${spaceId}`] });
+const rule = (spaceId, actions = ['read']) => ({ appId: 'slides', spaceId, actions, resources: [`private-resource-${spaceId}`] });
 
 async function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), 'praxis-grant-metadata-'));
@@ -26,7 +26,7 @@ async function fixture(t) {
     server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
     auth.close(); rmSync(directory, { recursive: true, force: true });
   });
-  handleAuth = createAuthHandler({ store: auth, apps: { reminder: { spaces } }, webGateway: { enabled: true } });
+  handleAuth = createAuthHandler({ store: auth, apps: { slides: { spaces } }, webGateway: { enabled: true } });
   handleAccount = createAccountHandler({ auth }); handleAdmin = createAdminHandler({ auth });
   for (const id of ['administrator', 'member', 'other']) auth.createUser({ id, username: id, password });
   auth.setPlatformAdmin({ userId: 'administrator', enabled: true });
@@ -34,7 +34,7 @@ async function fixture(t) {
     auth.createSpace({ id: spaceId, type: 'family', ownerId: 'administrator' });
     auth.setMembership({ spaceId, userId: 'member', role: 'member' });
   }
-  auth.setWebAccess({ userId: 'member', apps: ['reminder'], prds: false });
+  auth.setWebAccess({ userId: 'member', apps: ['lattice-slides'], prds: false });
   const permissions = spaces.map(spaceId => auth.grantResource({ userId: 'member', ...rule(spaceId, ['read', 'update']) }));
   auth.createClient({ id: 'synthetic-agent', name: 'Same synthetic client name', redirectUris: ['https://client.example/callback'] });
   const rules = [rule(spaces[1]), rule(spaces[0]), rule(spaces[1], ['update'])];
@@ -58,7 +58,7 @@ async function fixture(t) {
 function assertScope(grant, expectedSpaces, expectedActions = ['read', 'update']) {
   assert.deepEqual(grant.spaceIds, spaces, 'delegation identity retains every original space ID, unique and deterministically sorted');
   assert.equal(grant.scopes.length, 1);
-  assert.deepEqual(grant.scopes[0], { appId: 'reminder', actions: expectedActions, spaceCount: expectedSpaces.length, resourceCount: expectedSpaces.length, allResources: false }, 'existing scope fields retain their meaning independently of original identity metadata');
+  assert.deepEqual(grant.scopes[0], { appId: 'slides', actions: expectedActions, spaceCount: expectedSpaces.length, resourceCount: expectedSpaces.length, allResources: false }, 'existing scope fields retain their meaning independently of original identity metadata');
 }
 
 test('grant display metadata identifies all spaces while preserving current and historical scope semantics', async t => {

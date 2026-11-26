@@ -15,8 +15,8 @@ async function fixture(t) {
   await writeFile(configPath, JSON.stringify(config));
   const env = { PRAXIS_STORAGE_CONFIG: configPath, PRAXIS_UID: String(process.getuid?.() || 1000), PRAXIS_GID: String(process.getgid?.() || 1000), PRAXIS_PUBLIC_URLS_FILE: join(root, 'public-urls.json') };
   const settings = await resolveStackSettings({ env, home: root });
-  for (const name of ['reminder', 'tingproof', 'slides/decks', 'slides/.lattice']) await mkdir(join(settings.appsRoot, name), { recursive: true });
-  for (const name of ['reminder/reminder.db', 'tingproof/tingproof.db', 'slides/decks/registry.js']) await writeFile(join(settings.appsRoot, name), 'Synthetic nonempty file.');
+  for (const name of ['memo', 'tingproof', 'slides/decks', 'slides/.lattice']) await mkdir(join(settings.appsRoot, name), { recursive: true });
+  for (const name of ['memo/memo.db', 'tingproof/tingproof.db', 'slides/decks/registry.js']) await writeFile(join(settings.appsRoot, name), 'Synthetic nonempty file.');
   await writeFile(settings.publicUrlsFile, JSON.stringify({ apps: {} }));
   return { root, config, configPath, env, settings };
 }
@@ -68,7 +68,7 @@ test('stack resolves the canonical workspace and writes only private path config
 
 test('missing app data is rejected without creating an empty replacement', async t => {
   const { settings } = await fixture(t);
-  const file = join(settings.appsRoot, 'reminder/reminder.db');
+  const file = join(settings.appsRoot, 'tingproof/tingproof.db');
   await rm(file);
   await assert.rejects(validateData(settings), /Refusing to initialize or replace/);
   await assert.rejects(stat(file), { code: 'ENOENT' });
@@ -119,7 +119,7 @@ test('Travel map credentials reject missing explicit paths, readable files, link
   await assert.rejects(resolveMap(file), /private canonical/);
   await rm(alias); await chmod(directory, 0o755);
   await assert.rejects(resolveMap(file), /private canonical/);
-  const dataFile = join(f.settings.appsRoot, 'reminder/reminder.db'); await chmod(dataFile, 0o600); await chmod(dirname(dataFile), 0o700);
+  const dataFile = join(f.settings.appsRoot, 'memo/memo.db'); await chmod(dataFile, 0o600); await chmod(dirname(dataFile), 0o700);
   await assert.rejects(resolveMap(dataFile), /private canonical/);
 });
 
@@ -164,14 +164,14 @@ test('stack refuses writes from a standby device before invoking Compose', async
   const { config, configPath, env, root } = await fixture(t);
   await writeFile(configPath, JSON.stringify({ ...config, activeWriterDeviceId: 'another-device' }));
   const docker = fakeDocker();
-  await assert.rejects(main(['exec', 'reminder', '--', 'node', 'src/cli.js', 'ls'], { env, home: root, run: docker.run }), /not the active workspace writer/);
+  await assert.rejects(main(['exec', 'memo', '--', 'node', 'src/cli.js', 'ls'], { env, home: root, run: docker.run }), /not the active workspace writer/);
   assert.ok(!docker.calls.some(call => call.args.includes('exec')));
 });
 
 test('an existing native listener prevents startup and is never stopped', async t => {
   const { env, root, settings } = await fixture(t);
   const docker = fakeDocker();
-  await assert.rejects(main(['up'], { env, home: root, run: docker.run, portInUse: async port => port === 4322 }), /reminder:4322/);
+  await assert.rejects(main(['up'], { env, home: root, run: docker.run, portInUse: async port => port === 4325 }), /memo:4325/);
   assert.ok(!docker.calls.some(call => call.args.some(arg => ['build', 'up', 'down', 'stop'].includes(arg))));
   await assert.rejects(stat(settings.receiptFile), { code: 'ENOENT' });
 });
@@ -188,7 +188,7 @@ test('activation receipt requires all healthy services and is cleared on down wi
   await main(['down'], { env, home: root, run: docker.run });
   assert.ok(!docker.calls.some(call => call.args.includes('--volumes') || call.args.includes('-v')));
   await assert.rejects(stat(settings.receiptFile), { code: 'ENOENT' });
-  assert.ok((await stat(join(settings.appsRoot, 'reminder/reminder.db'))).isFile());
+  assert.ok((await stat(join(settings.appsRoot, 'memo/memo.db'))).isFile());
 });
 
 test('unhealthy startup does not produce an activation receipt', async t => {
@@ -203,9 +203,9 @@ test('application commands preserve argv and use the resolved app mount', async 
   const { env, root, settings } = await fixture(t);
   const docker = fakeDocker();
   const text = '汉字 $(touch should-not-exist)';
-  await main(['--apps-root', settings.appsRoot, 'exec', 'reminder', '--', 'node', 'src/cli.js', 'add', text], { env: { ...env, PRAXIS_APPS_ROOT: '/wrong/environment/path' }, home: root, run: docker.run });
+  await main(['--apps-root', settings.appsRoot, 'exec', 'memo', '--', 'node', 'src/cli.js', 'add', text], { env: { ...env, PRAXIS_APPS_ROOT: '/wrong/environment/path' }, home: root, run: docker.run });
   const call = docker.calls.find(item => item.args.includes('exec'));
-  assert.deepEqual(call.args.slice(-7), ['exec', '-T', 'reminder', 'node', 'src/cli.js', 'add', text]);
+  assert.deepEqual(call.args.slice(-7), ['exec', '-T', 'memo', 'node', 'src/cli.js', 'add', text]);
   assert.equal(call.options.env.PRAXIS_APPS_ROOT, settings.appsRoot);
 });
 
@@ -221,9 +221,9 @@ async function registered(t) {
   const f = await fixture(t);
   await rm(f.settings.appsRoot, { recursive: true, force: true });
   const native = join(f.root, 'native');
-  for (const name of ['reminder', 'tingproof', 'slides/decks', 'slides/.lattice']) await mkdir(join(native, name), { recursive: true });
+  for (const name of ['memo', 'tingproof', 'slides/decks', 'slides/.lattice']) await mkdir(join(native, name), { recursive: true });
   const sources = [
-    { id: 'reminder', kind: 'json', target: 'checklist.json', source: join(native, 'reminder/checklist.json') },
+    { id: 'memo', kind: 'sqlite', target: 'memo.db', source: join(native, 'memo/memo.db') },
     { id: 'tingproof', kind: 'sqlite', target: 'tingproof.db', source: join(native, 'tingproof/tingproof.db') },
     { id: 'slides', kind: 'directory', target: 'decks', source: join(native, 'slides/decks') },
     { id: 'slides', kind: 'directory', target: '.lattice', source: join(native, 'slides/.lattice') },
@@ -231,16 +231,15 @@ async function registered(t) {
   for (const file of [sources[0].source, sources[1].source, join(sources[2].source, 'registry.js')]) await writeFile(file, 'Synthetic registered source remains unchanged.');
   f.config.appSources = sources;
   await writeFile(f.configPath, JSON.stringify(f.config)); await chmod(f.configPath, 0o600);
-  f.registeredSettings = await resolveStackSettings({ env: f.env, home: f.root, sourceMode: 'registered', withoutReminder: true });
+  f.registeredSettings = await resolveStackSettings({ env: f.env, home: f.root, sourceMode: 'registered' });
   return f;
 }
 
 test('registered-source plan is read-only and binds original canonical data without creating copied stores', async t => {
   const f = await registered(t);
-  const result = await main(['plan', '--source-mode', 'registered', '--without-reminder'], { env: f.env, home: f.root, print() {}, run: async () => { throw new Error('Read-only plan must not call Docker'); } });
+  const result = await main(['plan', '--source-mode', 'registered'], { env: f.env, home: f.root, print() {}, run: async () => { throw new Error('Read-only plan must not call Docker'); } });
   assert.equal(result.sourceMode, 'registered');
-  assert.equal(result.services.length, Object.keys(SERVICES).length - 1);
-  assert.ok(!result.services.includes('reminder'));
+  assert.equal(result.services.length, Object.keys(SERVICES).length);
   assert.equal(result.sourceMap.tingproof, f.config.appSources[1].source);
   await assert.rejects(stat(f.settings.appsRoot), { code: 'ENOENT' });
   await assert.rejects(stat(f.registeredSettings.envFile), { code: 'ENOENT' });
@@ -277,7 +276,7 @@ test('observations reject app data, source, secret and Docker control overlap', 
   f.config.repositories = [{ type: 'local', path: join(f.root, 'repositories/local'), passwordFile: join(secret, 'password') }];
   f.config.sourceRepos = [{ path: join(f.root, 'source-repository') }];
   await writeFile(f.configPath, JSON.stringify(f.config));
-  for (const observationsDir of [f.registeredSettings.appsRoot, f.registeredSettings.stateRoot, join(f.root, 'native/reminder'), join(f.root, 'native/tingproof/nested'), secret, join(f.root, 'repositories/local'), join(f.root, 'source-repository'), join(f.root, 'docker-apps'), f.root]) {
+  for (const observationsDir of [f.registeredSettings.appsRoot, f.registeredSettings.stateRoot, join(f.root, 'native/memo'), join(f.root, 'native/tingproof/nested'), secret, join(f.root, 'repositories/local'), join(f.root, 'source-repository'), join(f.root, 'docker-apps'), f.root]) {
     await assert.rejects(resolveStackSettings({ env: { ...f.env, PRAXIS_OBSERVATIONS_DIR: observationsDir }, home: f.root, sourceMode: 'registered' }), /dedicated private directory/);
   }
 });
@@ -358,33 +357,33 @@ test('console wiring uses a fixed local upstream and canonical public origin onl
 });
 
 test('registered startup requires its complete service inventory and records a fingerprinted v2 receipt', async t => {
-  const f = await registered(t), docker = fakeDocker(healthyRows().filter(row => row.Service !== 'reminder'));
-  const result = await main(['up', '--source-mode', 'registered', '--without-reminder'], { env: f.env, home: f.root, print() {}, run: docker.run, portInUse: async () => false });
-  assert.equal(result.services.length, Object.keys(SERVICES).length - 1);
+  const f = await registered(t), docker = fakeDocker(healthyRows());
+  const result = await main(['up', '--source-mode', 'registered'], { env: f.env, home: f.root, print() {}, run: docker.run, portInUse: async () => false });
+  assert.equal(result.services.length, Object.keys(SERVICES).length);
   const receipt = JSON.parse(await readFile(f.registeredSettings.receiptFile, 'utf8'));
   assert.equal(receipt.schemaVersion, 2);
   assert.equal(receipt.sourceMode, 'registered');
   assert.equal(receipt.sourceFingerprint, f.registeredSettings.sourceFingerprint);
   assert.deepEqual(receipt.sourceMap, f.registeredSettings.sourceMap);
-  assert.ok(!receipt.services.includes('reminder'));
-  const up = docker.calls.find(call => call.args.includes('up'));
-  assert.equal(up.args.includes('reminder'), false);
-  assert.equal(up.options.env.PRAXIS_TINGPROOF_DATA_DIR, join(f.root, 'native/tingproof'));
+    const up = docker.calls.find(call => call.args.includes('up'));
+    assert.equal(up.options.env.PRAXIS_TINGPROOF_DATA_DIR, join(f.root, 'native/tingproof'));
   assert.equal(up.options.env.PRAXIS_SLIDES_STATE_DIR, join(f.root, 'native/slides/.lattice'));
   await assert.rejects(stat(f.settings.appsRoot), { code: 'ENOENT' });
 });
 
-test('registered mode rejects symbolic-link sources and duplicate Reminder writers', async t => {
+test('registered mode rejects symbolic-link sources and duplicate TingProof writers', async t => {
   const f = await registered(t);
-  const linked = join(f.root, 'native/reminder/alias.json');
-  await symlink(f.config.appSources[0].source, linked);
-  f.config.appSources[0].source = linked;
+  const linked = join(f.root, 'native/alias/tingproof.db');
+  await mkdir(dirname(linked), { recursive: true, mode: 0o700 });
+  await symlink(f.config.appSources[1].source, linked);
+  f.config.appSources[1].source = linked;
   await writeFile(f.configPath, JSON.stringify(f.config));
-  const settings = await resolveStackSettings({ env: f.env, home: f.root, sourceMode: 'registered', withoutReminder: true });
+  const settings = await resolveStackSettings({ env: f.env, home: f.root, sourceMode: 'registered' });
   await assert.rejects(validateData(settings), /symbolic-link/);
-  f.config.appSources[0].source = join(f.root, 'native/reminder/checklist.json'); await writeFile(f.configPath, JSON.stringify(f.config));
+  f.config.appSources[1].source = join(f.root, 'native/tingproof/tingproof.db');
+  f.config.appSources.push({ id: 'tingproof', kind: 'sqlite', target: 'tingproof.db', source: f.config.appSources[1].source }); await writeFile(f.configPath, JSON.stringify(f.config));
   const docker = fakeDocker(healthyRows());
-  await assert.rejects(main(['status', '--source-mode', 'registered', '--without-reminder'], { env: f.env, home: f.root, run: docker.run, print() {} }), /duplicate Reminder/);
+  await assert.rejects(main(['status', '--source-mode', 'registered'], { env: f.env, home: f.root, run: docker.run, print() {} }), /One registered tingproof\/tingproof\.db/);
 });
 
 test('web gateway settings restrict raw app ports without changing canonical sources or storage configuration', async t => {
@@ -516,7 +515,7 @@ async function travelBusinessFixture(t) {
   f.config.appSources.push({ id: 'travel', kind: 'directory', target: 'itineraries', source: dataDir });
   const save = async () => { await writeFile(f.configPath, JSON.stringify(f.config)); await writeFile(businessFile, JSON.stringify(business), { mode: 0o600 }); };
   await save();
-  const resolveTravel = (extra = {}) => resolveStackSettings({ env: f.env, home: f.root, sourceMode: 'registered', withoutReminder: true, ...extra });
+  const resolveTravel = (extra = {}) => resolveStackSettings({ env: f.env, home: f.root, sourceMode: 'registered', ...extra });
   return { ...f, privateDir, dataDir, keyFile, businessConfigFile, businessFile, business, mapping, signingKey, save, resolveTravel };
 }
 
@@ -564,7 +563,7 @@ test('Travel fails closed for missing, unregistered, mismatched and symbolic-lin
   const f = await travelBusinessFixture(t), original = f.dataDir;
   await rm(original, { recursive: true });
   const docker = fakeDocker();
-  await assert.rejects(main(['up', '--source-mode', 'registered', '--without-reminder'], { env: f.env, home: f.root, run: docker.run }), /already exist.*no replacement/);
+  await assert.rejects(main(['up', '--source-mode', 'registered'], { env: f.env, home: f.root, run: docker.run }), /already exist.*no replacement/);
   assert.equal(docker.calls.length, 0);
   await assert.rejects(stat(original), { code: 'ENOENT' });
   await mkdir(original, { mode: 0o700 });
@@ -628,34 +627,16 @@ test('Travel runtime accepts all three approved plans without creating records o
 
 test('Travel plan and status expose path metadata only and never initialize its empty COW store', async t => {
   const f = await travelBusinessFixture(t);
-  const plan = await main(['plan', '--source-mode', 'registered', '--without-reminder'], { env: f.env, home: f.root, print() {}, run() { throw new Error('Plan must not call Docker.'); } });
+  const plan = await main(['plan', '--source-mode', 'registered'], { env: f.env, home: f.root, print() {}, run() { throw new Error('Plan must not call Docker.'); } });
   assert.equal(plan.sourceMap.travelItineraries, f.dataDir);
   assert.equal(JSON.stringify(plan).includes(f.keyFile), false);
   assert.equal(JSON.stringify(plan).includes(f.businessConfigFile), false);
   assert.equal(JSON.stringify(plan).includes(f.signingKey), false);
-  const docker = fakeDocker(healthyRows().filter(row => row.Service !== 'reminder'));
-  await main(['status', '--source-mode', 'registered', '--without-reminder'], { env: f.env, home: f.root, run: docker.run, print() {} });
+  const docker = fakeDocker(healthyRows());
+  await main(['status', '--source-mode', 'registered'], { env: f.env, home: f.root, run: docker.run, print() {} });
   assert.deepEqual(await readdir(f.dataDir), []);
   const settings = await f.resolveTravel();
   await assert.rejects(stat(settings.envFile), { code: 'ENOENT' });
-});
-
-test('Knowledge runtime configuration produces an exact app-only Compose binding', async t => {
-  const f = await fixture(t), gateway = await enableGateway(f), directory = join(f.root, 'knowledge-data'), controls = join(f.root, 'knowledge-controls');
-  await mkdir(directory, { mode: 0o700 }); await mkdir(controls, { mode: 0o700 });
-  const keyFile = join(controls, 'key'), businessConfigFile = join(controls, 'mapping.json');
-  await writeFile(keyFile, 'synthetic-knowledge-key-with-32-bytes', { mode: 0o600 });
-  await writeFile(businessConfigFile, JSON.stringify({ version: 1, spaces: ['synthetic-space'] }), { mode: 0o600 });
-  gateway.business.apps.knowledge = { url: 'http://127.0.0.1:14324/api/business', spaces: ['synthetic-space'], dataDir: directory, keyFile, businessConfigFile };
-  await gateway.save();
-  const settings = await resolveStackSettings({ env: f.env, home: f.root });
-  await writeComposeEnvironment(settings);
-  const override = JSON.parse(await readFile(settings.travelMapOverrideFile, 'utf8'));
-  assert.deepEqual(Object.keys(override.services), ['knowledge-public']);
-  assert.equal(override.services['knowledge-public'].environment.KNOWLEDGE_DATA_DIR, '/data/knowledge');
-  assert.equal(override.services['knowledge-public'].volumes[0].source, directory);
-  assert.equal(settings.sourceMap.knowledge, join(directory, 'knowledge.db'));
-  assert.equal(JSON.stringify(override).includes(await readFile(keyFile, 'utf8')), false);
 });
 
 async function configuredWorkingRoots(t) {
@@ -664,10 +645,10 @@ async function configuredWorkingRoots(t) {
   f.config.workingData = { version: 1, roots: { intelligence: join(f.root, 'other-disk/intelligence') } };
   f.config.dockerSourceMode = 'registered';
   const paths = resolveAppPaths(f.config);
-  const reminder = join(paths.reminder, 'synthetic-space/checklist.json');
-  f.config.appSources = appStorageSources(paths, { 'synthetic-space': reminder });
+  const memoStore = join(paths.memo, 'memo.db');
+  f.config.appSources = appStorageSources(paths, {});
   await writeFile(f.configPath, JSON.stringify(f.config));
-  for (const file of [reminder, paths.tingproof, join(paths.slidesDecks, 'registry.js'), join(paths.knowledgeContent, 'catalog/documents.json'), join(paths.knowledgeContent, 'published/index.html'), join(paths.knowledgeContent, 'published-standalone/index.html'), join(paths.travelContent, 'catalog/trips.json'), join(paths.travelContent, 'catalog/routes.json'), join(paths.travelContent, 'catalog/photo-credits.json'), join(paths.travelContent, 'published/index.html')]) {
+  for (const file of [memoStore, paths.tingproof, join(paths.slidesDecks, 'registry.js'), join(paths.travelContent, 'catalog/trips.json'), join(paths.travelContent, 'catalog/routes.json'), join(paths.travelContent, 'catalog/photo-credits.json'), join(paths.travelContent, 'published/index.html')]) {
     await mkdir(dirname(file), { recursive: true, mode: 0o700 });
     await writeFile(file, 'Synthetic content.', { mode: 0o600 });
   }
@@ -685,14 +666,12 @@ test('configured roots bind content apps explicitly and keep observations separa
   await writeComposeEnvironment(f.settings);
   const { services } = JSON.parse(await readFile(f.settings.travelMapOverrideFile, 'utf8'));
   assert.equal(services.finance, undefined);
+  assert.equal(services.knowledge, undefined);
   assert.equal(services.travel.environment.TRAVEL_CONTENT_ROOT, '/data/content');
   assert.equal(services.travel.volumes[0].source, f.paths.travelContent);
   assert.equal(services.travel.volumes[0].read_only, true);
-  assert.ok(services.knowledge.command.includes('/data/content/published-standalone'));
-  assert.equal(services['knowledge-public'].environment.KNOWLEDGE_STATIC_DIR, '/data/content/published');
-  assert.equal(services['knowledge-public'].environment.KNOWLEDGE_CONTENT_ROOT, '/data/content');
-  await assert.rejects(resolveStackSettings({ env: { ...f.env, PRAXIS_OBSERVATIONS_DIR: f.paths.knowledge }, home: f.root }), /configured application working root/);
-  await assert.rejects(validateObservationsDirectory(f.paths.knowledge, { uid: f.settings.uid, protectedPaths: f.settings.observationsProtectedPaths }), /dedicated private directory/);
+  await assert.rejects(resolveStackSettings({ env: { ...f.env, PRAXIS_OBSERVATIONS_DIR: f.paths.travelContent }, home: f.root }), /configured application working root/);
+  await assert.rejects(validateObservationsDirectory(f.paths.travelContent, { uid: f.settings.uid, protectedPaths: f.settings.observationsProtectedPaths }), /dedicated private directory/);
 });
 
 test('configured published data fails closed when missing without creating replacements', async t => {
@@ -702,7 +681,7 @@ test('configured published data fails closed when missing without creating repla
   await assert.rejects(validateData(f.settings), /missing or unsafe/);
   await assert.rejects(stat(trips), { code: 'ENOENT' });
   await writeFile(trips, 'Synthetic content.', { mode: 0o600 });
-  const index = join(f.paths.knowledgeContent, 'published/index.html');
+  const index = join(f.paths.travelContent, 'published/index.html');
   await rm(index);
   await assert.rejects(validateData(f.settings), /missing or unsafe/);
   await assert.rejects(stat(index), { code: 'ENOENT' });

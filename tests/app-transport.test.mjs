@@ -7,7 +7,7 @@ test('the common transport uses generic scope labels and accepts app-owned label
   globalThis.document = { querySelector: id => id === '#space' ? select : picker, createElement: () => ({}) }; t.after(() => { globalThis.document = previous; });
   populateContexts([{ id: 'personal', type: 'personal' }, { id: 'unknown', type: 'other' }]);
   assert.deepEqual(options.map(value => value.textContent), ['Personal tasks', 'Task scope']);
-  for (const labels of [{ types: { personal: 'Personal reminders' }, fallback: 'Reminder lists' }, { types: { personal: '个人提醒' }, fallback: '提醒列表' }]) {
+  for (const labels of [{ types: { personal: 'Personal records' }, fallback: 'Memo lists' }, { types: { personal: '个人记录' }, fallback: '备忘列表' }]) {
     populateContexts([{ id: 'personal', type: 'personal' }, { id: 'named', type: 'family', name: 'Source-authored title' }, { id: 'other', type: 'other' }], labels);
     assert.deepEqual(options.map(value => value.textContent), [labels.types.personal, 'Source-authored title', labels.fallback]); assert.equal(picker.hidden, false);
   }
@@ -29,7 +29,7 @@ async function enrollmentFixture(t) {
   writeFileSync(keyFile, key, { mode: 0o600 });
   const auth = new AuthStore({ file: join(directory, 'auth.db'), issuer: 'http://127.0.0.1:4326' });
   t.after(() => { auth.close(); rmSync(directory, { recursive: true, force: true }); });
-  const apps = Object.fromEntries(['reminder', 'slides'].map(appId => [appId, { spaces: ['legacy-space'], url: 'http://127.0.0.1:1/api/business', keyFile }]));
+  const apps = Object.fromEntries(['memo', 'slides'].map(appId => [appId, { spaces: ['legacy-space'], url: 'http://127.0.0.1:1/api/business', keyFile }]));
   auth.configureWebAccessBoundary({ enabled: true, apps });
   auth.createUser({ id: 'synthetic-owner', username: 'synthetic-owner', password: 'Synthetic-password-2026' });
   const login = auth.login({ username: 'synthetic-owner', password: 'Synthetic-password-2026' });
@@ -50,9 +50,9 @@ test('runtime enrollment controls adapter execution, catalog, native HTTP and si
   const { createHash } = await import('node:crypto');
   const { Readable } = await import('node:stream');
   const space = f.auth.createSelfServiceSpace({ type: 'family', ownerId: 'synthetic-owner' });
-  const input = { appId: 'reminder', spaceId: space.id, operation: 'list' };
+  const input = { appId: 'memo', spaceId: space.id, operation: 'list_topics' };
   const query = { spaceId: space.id, resourceId: 'synthetic-record', action: 'read' };
-  const http = appHttpContext(f.request, { ...f, config: { apps: f.apps }, appId: 'reminder' });
+  const http = appHttpContext(f.request, { ...f, config: { apps: f.apps }, appId: 'memo' });
   const jobs = createAppJobAuthorizationHandler({ ...f, config: { apps: f.apps } });
   async function jobAuthorized() {
     const job = { ...query, userId: 'synthetic-owner', clientId: 'praxis-browser', grantId: 'first-party-synthetic', actions: ['read'], expiresAt: Date.now() + 10000, firstPartyNative: true };
@@ -70,31 +70,31 @@ test('runtime enrollment controls adapter execution, catalog, native HTTP and si
   assert.equal(await jobAuthorized(), false);
   assert.equal(f.dispatches, 0);
 
-  for (const appId of ['reminder', 'slides']) {
+  for (const appId of ['memo', 'slides']) {
     f.auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true }, f.apps);
     // Enrollment grants no resource authority, even to its owner.
     assert.deepEqual(f.auth.userPermissions('synthetic-owner', space.id, appId, 'read'), []);
     f.auth.grantResource({ userId: 'synthetic-owner', spaceId: space.id, appId, actions: ['read'], resources: ['synthetic-record'] });
   }
-  assert.deepEqual(f.bridge.catalog(f.login.sessionToken).map(value => value.apps.map(app => app.id)), [['reminder', 'slides']]);
+  assert.deepEqual(f.bridge.catalog(f.login.sessionToken).map(value => value.apps.map(app => app.id)), [['memo', 'slides']]);
   assert.deepEqual((await f.bridge.invoke(f.login.sessionToken, input)).items, []);
   assert.deepEqual(http.authorize(query).resources, ['synthetic-record']);
   assert.equal(await jobAuthorized(), true);
   assert.equal(f.dispatches, 1);
-  assert.deepEqual((await f.bridge.workbenchItems(f.login.sessionToken, 'reminder', 'list')).spaces.map(value => value.spaceId), [space.id]);
+  assert.deepEqual((await f.bridge.workbenchItems(f.login.sessionToken, 'memo', 'list_topics')).spaces.map(value => value.spaceId), [space.id]);
 
   // The installed deployment catalog is an independent ceiling. A persisted
   // enrollment cannot reach an adapter removed from that catalog.
-  const removed = f.apps.reminder;
-  delete f.apps.reminder;
-  assert.equal(f.auth.appSpaceEnabled('reminder', space.id, f.apps), false);
-  assert.equal(f.bridge.catalog(f.login.sessionToken).some(value => value.apps.some(app => app.id === 'reminder')), false);
+  const removed = f.apps.memo;
+  delete f.apps.memo;
+  assert.equal(f.auth.appSpaceEnabled('memo', space.id, f.apps), false);
+  assert.equal(f.bridge.catalog(f.login.sessionToken).some(value => value.apps.some(app => app.id === 'memo')), false);
   await assert.rejects(f.bridge.invoke(f.login.sessionToken, input), { status: 403 });
   assert.throws(() => http.authorize(query), { status: 403 });
-  f.apps.reminder = removed;
+  f.apps.memo = removed;
 
   const priorDispatches = f.dispatches;
-  for (const appId of ['reminder', 'slides']) f.auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: false }, f.apps);
+  for (const appId of ['memo', 'slides']) f.auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: false }, f.apps);
   assert.deepEqual(f.bridge.catalog(f.login.sessionToken), []);
   await assert.rejects(f.bridge.invoke(f.login.sessionToken, input), { status: 403 });
   assert.throws(() => http.authorize(query), { status: 403 });
@@ -105,12 +105,12 @@ test('runtime enrollment controls adapter execution, catalog, native HTTP and si
 test('legacy configured space coverage survives and an explicit enrollment denial takes precedence', async t => {
   const f = await enrollmentFixture(t);
   f.auth.createSpace({ id: 'legacy-space', type: 'family', ownerId: 'synthetic-owner' });
-  f.auth.setWebAccess({ userId: 'synthetic-owner', apps: ['reminder'], prds: false });
-  assert.deepEqual(f.bridge.catalog(f.login.sessionToken).map(value => value.apps.map(app => app.id)), [['reminder']]);
-  const input = { appId: 'reminder', spaceId: 'legacy-space', operation: 'list' };
+  f.auth.setWebAccess({ userId: 'synthetic-owner', apps: ['memo'], prds: false });
+  assert.deepEqual(f.bridge.catalog(f.login.sessionToken).map(value => value.apps.map(app => app.id)), [['memo']]);
+  const input = { appId: 'memo', spaceId: 'legacy-space', operation: 'list_topics' };
   await f.bridge.invoke(f.login.sessionToken, input);
-  f.auth.setSpaceAppEnrollment({ spaceId: 'legacy-space', appId: 'reminder', enabled: false }, f.apps);
-  assert.equal(f.auth.appSpaceEnabled('reminder', 'legacy-space', f.apps), false);
+  f.auth.setSpaceAppEnrollment({ spaceId: 'legacy-space', appId: 'memo', enabled: false }, f.apps);
+  assert.equal(f.auth.appSpaceEnabled('memo', 'legacy-space', f.apps), false);
   assert.deepEqual(f.bridge.catalog(f.login.sessionToken), []);
   await assert.rejects(f.bridge.invoke(f.login.sessionToken, input), { status: 403 });
   assert.equal(f.dispatches, 1);

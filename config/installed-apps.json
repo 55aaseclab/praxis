@@ -2,12 +2,6 @@
   "schemaVersion": 1,
   "apps": [
     {
-      "source": "third_party/reminder"
-    },
-    {
-      "source": "third_party/knowledge"
-    },
-    {
       "source": "third_party/lattice"
     },
     {

@@ -47,13 +47,13 @@ async function launchers(apps, origin, options = {}) {
 
 test('launcher uses configured app URLs and excludes static project records', async () => {
   const groups = await launchers([
-    { id: 'knowledge', kind: 'app', name: 'Knowledge', description: 'Knowledge', path: '/', port: 4324, url: 'https://polaris.example.test/apps/knowledge/', icon: '/knowledge-icon.svg' },
-    { id: 'reminder', kind: 'app', name: 'Reminder', description: 'Tasks', path: '/', port: 4322, url: 'https://reminder.example.test:8443/', icon: '/reminder-icon.svg' },
-    { id: 'sample-project', kind: 'project', name: 'Example project', description: 'Reference', path: '/reference/', port: 4324, url: 'https://polaris.example.test/apps/knowledge/reference/', icon: '/project-icon.svg' },
+    { id: 'travel', kind: 'app', name: 'Travel', description: 'Trips', path: '/', port: 4323, url: 'https://polaris.example.test/apps/travel/', icon: '/travel-icon.svg' },
+    { id: 'memo', kind: 'app', name: 'Memo', description: 'Records', path: '/', port: 4325, url: 'https://memo.example.test:8443/', icon: '/memo-icon.svg' },
+    { id: 'sample-project', kind: 'project', name: 'Example project', description: 'Reference', path: '/reference/', port: 4324, url: 'https://polaris.example.test/apps/travel/reference/', icon: '/project-icon.svg' },
   ], 'https://polaris.example.test');
   const apps = groups.get('#apps');
-  assert.equal(apps[0].href, 'https://polaris.example.test/apps/knowledge/');
-  assert.equal(apps[1].href, 'https://reminder.example.test:8443/');
+  assert.equal(apps[0].href, 'https://polaris.example.test/apps/travel/');
+  assert.equal(apps[1].href, 'https://memo.example.test:8443/');
   for (const app of apps) {
     assert.equal(app.target, undefined);
     assert.equal(app.rel, undefined);

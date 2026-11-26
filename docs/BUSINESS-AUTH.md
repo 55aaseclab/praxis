@@ -34,7 +34,7 @@ OAuth 资源标识为 `${issuer}/mcp`。部署代理须将下列协议和登录�
 
 | 应用 | 动作 |
 |---|---|
-| Reminder | `read`、`create`、`update`、`complete`、`delete` |
+| Lattice（slides） | `read`、`create`、`update`、`delete`、`render`、`export` |
 | TingProof | `read`、`submit`、`assign` |
 | 空间管理 | `manage_members`、`manage_sharing`、`manage_delegation`，要求当前 owner/admin 关系及独立客户端委托 |
 
@@ -90,7 +90,7 @@ token 原值只在签发返回中出现，数据库保存 SHA-256 摘要；密�
 | `GET .../delegations` | 只列委托中属于本空间的片段 |
 | `DELETE .../delegations/:grantId` | 撤销该空间片段，保留同一委托中其他空间的规则 |
 
-三个管理动作必须另外明确授权；普通 Reminder/TingProof 读写委托不包含管理权。角色与委托缺一即拒绝。管理接口不替其他用户签发 token，也不能创建平台管理员；用户为外部客户端建立委托仍通过本人登录及明确 consent。cookie 写请求继续检查 Origin 和 CSRF，管理变更仅记录脱敏审计。
+三个管理动作必须另外明确授权；普通 Lattice/TingProof 读写委托不包含管理权。角色与委托缺一即拒绝。管理接口不替其他用户签发 token，也不能创建平台管理员；用户为外部客户端建立委托仍通过本人登录及明确 consent。cookie 写请求继续检查 Origin 和 CSRF，管理变更仅记录脱敏审计。
 
 ## 4.2 公开自助空间生命周期
 
@@ -174,7 +174,7 @@ npm run business:admin -- web-access \
 
 统一网关模式的默认登录、工作台授权完成回到`/`桌面；明确的安全`return_to`贯穿登录与授权，应用内发起返回原应用。外部OAuth严格保留已注册回调；独立业务服务无网关时仍默认自己的`/business/`页面。
 
-统一网关模式只保留一个工作台：旧`/business`、`/business/`和`/business.html`返回规范桌面，聚焦的Reminder/听校界面及空间管理API继续存在。工作台应用与项目按入口权限过滤，并在当前标签页打开；业务空间作为后台权限归属不删除。
+统一网关模式只保留一个工作台：旧`/business`、`/business/`和`/business.html`返回规范桌面，聚焦的听校界面及空间管理API继续存在。工作台应用与项目按入口权限过滤，并在当前标签页打开；业务空间作为后台权限归属不删除。
 
 `GET /session`获取本人管理会话；`GET/POST /users`分页读取/创建用户；`PATCH /users/:id`启停；`POST /users/:id/password`重置密码；`PUT /users/:id/platform-admin`调整平台角色；`GET/PUT /users/:id/web-access`读取/修改入口；`GET /users/:id/grants`分页查看脱敏委托范围，`DELETE /grants/:id`撤销。接口路径均相对`/api/business/admin`。空间页管理员专属「当前用户」复用智能体委托的完整已注册用户原生下拉分页列表（无搜索），跨页保留已选账号，仅改变显示上下文；请求仍按当前登录管理员本人鉴权。已有密码不可读；重置使旧会话、授权码和受托凭据失效；停用再启用不会恢复旧凭据。最后一名启用管理员的停用/降权返回409，数据库事务保护并发。不会自动新建业务空间或授予业务资源，不返回私人业务正文或访问/刷新令牌。
 
@@ -212,8 +212,8 @@ npm run business:admin -- web-access \
 
 可用 OAuth scope：
 
-- `reminder:read`：读取。
-- `reminder:write`：创建、修改、完成、删除；实际授予的动作仍以用户选择及资源权限为限。
+- `slides:read`：读取。
+- `slides:write`：创建、修改、删除、渲染与导出；实际授予的动作仍以用户选择及资源权限为限。
 - `tingproof:read`：读取获准任务。
 - `tingproof:write`：提交校正、分配任务；普通 guest 不会因此获得分配权限。
 - `spaces:members`、`spaces:sharing`、`spaces:delegation`：分别委托本空间成员、共享和委托管理，且要求当前 owner/admin 身份。
@@ -230,13 +230,13 @@ npm run business:admin -- web-access \
 
 同意下拉框在切换时提交原有 GET 请求，仅在含选择器的文档中通过精确哈希授权脚本；权限提交仍为明确 POST，Origin、CSRF、签名同意及 PKCE／回调绑定不变。其他认证文档保留原脚本限制。自有空间拒绝删除用户继续使用既有 `#notice` 持久固定错误浮层及完整空间 ID，不另建弹窗。
 
-验证采用隔离合成的公开指引、浏览器同意及真实 MCP SDK 调用，包含签名原生 Reminder 服务；源码、浏览器和部署结果在下方分别记录，不代表独立业务智能体或实体手机验收。
+验证采用隔离合成的公开指引、浏览器同意及真实 MCP SDK 调用，包含签名原生 Memo 服务；源码、浏览器和部署结果在下方分别记录，不代表独立业务智能体或实体手机验收。
 
 | 审计阶段／验收项 | 技术证据 | 结果 |
 | --- | --- | --- |
 | 公开指引 | `tests/public-mcp.test.mjs`：真实 SDK 读取中英文 `praxis_use_guide` 与配套技能，包含字段映射及兜底，2/2 通过；匿名响应仍为固定指引，不含账号目录。 | Pass |
 | 同意指定与内联创建 | `tests/business-space-designation.test.mjs` 及 `tests/business-auth.test.mjs` 浏览器用例：真实 Chromium 英文 1440／中文 390 px 验证键盘／指针直接原生选择、未勾选权限、无空间内联创建、空同意重试、浏览器跟随跨源回调及 PKCE 完成；专项 2/2 通过，无跳过。 | Pass |
-| 令牌及真实工具参数 | `tests/mcp-space-chain.test.mjs`：公开指引 → 明确同意 → 代码交换／刷新 `space_id` → 真实 SDK `reminder_list({spaceId})` 调用签名原生 Reminder 夹具；已安装 SDK 1.32.2 的换码剥离扩展，经初始化／刷新目录取得同一 ID 并再次调用成功。跨空间拒绝及停用应用后重算目录通过。 | Pass |
+| 令牌及真实工具参数 | `tests/mcp-space-chain.test.mjs`：公开指引 → 明确同意 → 代码交换／刷新 `space_id` → 真实 SDK `memo_list_topics({spaceId})` 调用签名原生 Memo 夹具；已安装 SDK 1.32.2 的换码剥离扩展，经初始化／刷新目录取得同一 ID 并再次调用成功。跨空间拒绝及停用应用后重算目录通过。 | Pass |
 | MCP 清理与共用错误（MCP01） | `tests/admin-layout.test.mjs`：Chromium 中英文 × 1440/390 px 验证三类过时展示已移除；真实合成 409 保留账号／空间，两个完整 ID 与普通读取错误显示于完全相同的固定 `#notice` 节点，无额外弹窗，正文／滚动零位移，跨视图保留、明确刷新清除。基线已使用该机制，本次未新增第二套实现。 | Pass |
 | 源码检查与阅读器（MCP02–MCP03） | 最终 `npm test`：502 通过、0 失败、9 个可选浏览器项跳过（共 511）；本次相关浏览器专项已单独运行。双语 PRD 从真实工作台阅读器打开，版本 0.1.151，无溢出。 | Pass |
 | 独立业务智能体／实体手机验收 | 此变更仅采用隔离维护夹具，业务验收由指定独立客户端负责。 | N/A — 不属于本技术包 |

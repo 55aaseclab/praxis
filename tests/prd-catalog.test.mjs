@@ -24,12 +24,10 @@ async function workspace(t) {
 
 const metadata = [
   { id: 'praxis', group: 'main', project: 'Praxis', source: 'docs/PRD.md' },
-  { id: 'reminder', group: 'third-party', project: 'Reminder', source: 'third_party/reminder/docs/PRD.md' },
   { id: 'memo', group: 'third-party', project: 'Memo', source: 'third_party/memo/docs/Memo_PRD.md' },
   { id: 'tingproof', group: 'third-party', project: '听校（TingProof）', source: 'third_party/tingproof/docs/听校_PRD_V1.0.0.md' },
   { id: 'lattice-slides', group: 'third-party', project: 'Lattice', source: 'third_party/lattice/docs/Slides-Platform_PRD.md' },
   { id: 'travel', group: 'third-party', project: 'Travel', source: 'third_party/travel/docs/PRD.md' },
-  { id: 'knowledge', group: 'third-party', project: 'Knowledge', source: 'third_party/knowledge/docs/PRD.md' },
   { id: 'intelligence', group: 'third-party', project: 'Intelligence', source: 'third_party/intelligence/docs/PRD.md' },
   { id: 'projects', group: 'third-party', project: 'Projects', source: 'third_party/projects/docs/PRD.md' },
   { id: 'letters', group: 'third-party', project: 'Letters', source: 'third_party/letters/PRD.md' },
@@ -86,11 +84,11 @@ test('missing declared PRD files degrade one entry without failing the catalog',
   assert.equal(list.length, metadata.length);
   assert.equal(list.find(document => document.id === 'praxis').status, 'ready');
   assert.equal(list.filter(document => document.status === 'missing').length, metadata.length - 1);
-  const missing = await loadPrd('reminder', { root, locale: 'zh' });
+  const missing = await loadPrd('travel', { root, locale: 'zh' });
   assert.equal(missing.status, 'missing');
   assert.equal(missing.content, '');
-  await put('third_party/reminder/docs/PRD.md', '# Newly initialized source\n');
-  assert.equal((await loadPrd('reminder', { root, locale: 'zh' })).status, 'ready');
+  await put('third_party/travel/docs/PRD.md', '# Newly initialized source\n');
+  assert.equal((await loadPrd('travel', { root, locale: 'zh' })).status, 'ready');
 });
 
 test('source refresh reads new bytes and empty documents remain distinguishable from errors', async (t) => {
@@ -129,9 +127,9 @@ test('source symlinks and symlinked parent directories are unavailable even insi
   const fileLink = await loadPrd('praxis', { root, locale: 'zh' });
   assert.equal(fileLink.status, 'unavailable');
   assert.equal(fileLink.content, '');
-  await mkdir(join(root, 'third_party/reminder'), { recursive: true });
-  await symlink(join(root, 'alternate'), join(root, 'third_party/reminder/docs'));
-  const parentLink = await loadPrd('reminder', { root, locale: 'zh' });
+  await mkdir(join(root, 'third_party/travel'), { recursive: true });
+  await symlink(join(root, 'alternate'), join(root, 'third_party/travel/docs'));
+  const parentLink = await loadPrd('travel', { root, locale: 'zh' });
   assert.equal(parentLink.status, 'unavailable');
   assert.equal(parentLink.content, '');
   const list = await listPrds({ root, locale: 'zh' });
@@ -165,18 +163,18 @@ test('English is the default reader edition and has its own fixed source allowli
 
 test('app release and PRD location refresh from the app declaration without a platform entry edit', async t => {
   const { root, put } = await workspace(t);
-  await put('third_party/reminder/docs/PRD.md', '# First requirements\n\nVersion: 9.8.7\n');
-  const before = await loadPrd('reminder', { root, locale: 'zh' });
+  await put('third_party/travel/docs/PRD.md', '# First requirements\n\nVersion: 9.8.7\n');
+  const before = await loadPrd('travel', { root, locale: 'zh' });
   assert.equal(before.appVersion, '1.2.3'); assert.equal(before.version, '9.8.7');
-  const manifestFile = join(root, 'third_party/reminder/praxis-app.json');
+  const manifestFile = join(root, 'third_party/travel/praxis-app.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
   manifest.version = '1.2.4'; manifest.documents.prd.zh = 'docs/current.md';
   await writeFile(manifestFile, JSON.stringify(manifest));
-  await put('third_party/reminder/docs/current.md', '# App-owned updated requirements\n\nVersion: 2.0.0\n');
-  const after = await loadPrd('reminder', { root, locale: 'zh' });
+  await put('third_party/travel/docs/current.md', '# App-owned updated requirements\n\nVersion: 2.0.0\n');
+  const after = await loadPrd('travel', { root, locale: 'zh' });
   assert.equal(after.appVersion, '1.2.4'); assert.equal(after.version, '2.0.0');
   assert.equal(after.title, 'App-owned updated requirements');
-  assert.equal(after.source, 'third_party/reminder/docs/current.md');
+  assert.equal(after.source, 'third_party/travel/docs/current.md');
 });
 
 test('explicit integer document revisions take precedence over app releases and historical rows', () => {

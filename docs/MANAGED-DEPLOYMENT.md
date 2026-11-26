@@ -15,7 +15,7 @@ Put the installation descriptor in `~/.config/praxis/managed-checkout/managed-co
     "apps": {
       "name": "sample-installed-apps",
       "files": ["/srv/sample/private/apps.yaml"],
-      "services": ["knowledge", "travel"]
+      "services": ["travel", "projects"]
     }
   }
 }
@@ -26,7 +26,7 @@ Put the installation descriptor in `~/.config/praxis/managed-checkout/managed-co
 ```sh
 node scripts/managed-compose.mjs check apps
 node scripts/managed-compose.mjs status apps
-node scripts/managed-compose.mjs up apps knowledge
+node scripts/managed-compose.mjs up apps travel
 ```
 
 `up` reconciles the specified services using local images. `recreate` replaces their containers and waits for startup. `stop` stops them. Omitting service names selects the descriptor's service list. Use the blue/green controller for its two routing services and four application slots.
@@ -66,7 +66,7 @@ Check the effective mounts, public entry and protected reader routes, then verif
 ```sh
 node scripts/managed-compose.mjs check apps
 node scripts/managed-compose.mjs status apps
-node scripts/managed-compose.mjs up apps knowledge
+node scripts/managed-compose.mjs up apps travel
 ```
 
 `up` 依据配置和本地镜像启动所选服务。`recreate` 替换容器并等待就绪。`stop` 停止服务。省略服务名会选择该组配置中列出的服务。两个蓝绿路由服务及四个应用槽由蓝绿控制器管理。

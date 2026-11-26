@@ -30,8 +30,8 @@ async function fixture(t) {
       if (path === '/api/platform/status') return json(response, { schemaVersion: 1, generatedAt: new Date().toISOString(), sections: { permissions: { state: 'ready', platformAdmin: true, spaces: 0, resourcePermissions: 0, activeGrants: 0, revokedGrants: 0, managedApps: 1, unmanagedApps: 0 }, connections: { state: 'ready', apps: [] }, storage: { state: 'unknown' } } });
       if (path === '/api/platform/observations') return json(response, { status: 'empty', generated_at: new Date().toISOString(), window: 'day', truncated: false });
       if (path === '/api/platform/traces') return json(response, { schemaVersion: 1, state: 'empty', source: 'mcp', items: [], nextCursor: null });
-      if (path === '/api/business/console/data') return json(response, { schemaVersion: 1, generatedAt: new Date().toISOString(), workspaceRoot: '/synthetic/workspace', apps: [{ id: 'reminder', name: 'Reminder', locations: [{ label: 'Synthetic tasks', kind: 'json', hostPath: '/synthetic/workspace/data/tasks.json' }] }] });
-      if (path === '/api/business/admin/mcp') return json(response, { schemaVersion: 1, generatedAt: new Date().toISOString(), endpoints: [{ id: 'business', url: `${auth.issuer}/mcp`, registration: 'registered', authentication: 'oauth2-bearer', discovery: 'authorized-subset', toolCount: 1, apps: [{ name: 'Reminder', adapter: 'configured', activity: 'not_observed' }], tools: [{ name: 'synthetic_reminder_list', description: 'Synthetic read-only capability', action: 'read', readOnly: true, inputFields: ['spaceId'] }] }] });
+      if (path === '/api/business/console/data') return json(response, { schemaVersion: 1, generatedAt: new Date().toISOString(), workspaceRoot: '/synthetic/workspace', apps: [{ id: 'slides', name: 'Lattice Slides', locations: [{ label: 'Synthetic decks', kind: 'json', hostPath: '/synthetic/workspace/data/decks.json' }] }] });
+      if (path === '/api/business/admin/mcp') return json(response, { schemaVersion: 1, generatedAt: new Date().toISOString(), endpoints: [{ id: 'business', url: `${auth.issuer}/mcp`, registration: 'registered', authentication: 'oauth2-bearer', discovery: 'authorized-subset', toolCount: 1, apps: [{ name: 'Lattice Slides', adapter: 'configured', activity: 'not_observed' }], tools: [{ name: 'synthetic_slides_list', description: 'Synthetic read-only capability', action: 'read', readOnly: true, inputFields: ['spaceId'] }] }] });
       if (await handleAuth(request, response) || await handleAccount(request, response) || await handleAdmin(request, response)) return;
       if (path === '/vendor/chartjs-4.6.1.umd.min.js') return response.writeHead(200, { 'Content-Type': 'text/javascript' }).end(readFileSync(new URL('../node_modules/chart.js/dist/chart.umd.min.js', import.meta.url)));
       const asset = path === '/admin/' ? 'admin.html' : path.slice(1);
@@ -48,9 +48,9 @@ async function fixture(t) {
   auth.setPlatformAdmin({ userId: 'z-owner', enabled: true });
   auth.createSpace({ id: 'synthetic-family', type: 'family', ownerId: 'z-owner' });
   auth.setMembership({ spaceId: 'synthetic-family', userId: 'a-member', role: 'member' });
-  auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] });
+  auth.grantResource({ userId: 'a-member', appId: 'slides', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] });
   auth.createClient({ id: 'synthetic-client', name: 'Synthetic agent', redirectUris: ['https://synthetic.example/callback'] });
-  auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [{ appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] }] });
+  auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [{ appId: 'slides', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] }] });
   handleAuth = createAuthHandler({ store: auth, apps: Object.fromEntries(Object.keys(registry.businessActions).map(id => [id, { spaces: ['synthetic-family'] }])), webGateway: { enabled: true } });
   handleAccount = createAccountHandler({ auth }); handleAdmin = createAdminHandler({ auth });
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); auth.close(); rmSync(directory, { recursive: true, force: true }); });
@@ -94,7 +94,7 @@ test('Chromium MCP cleanup and owned-space refusals share the persistent Setting
       assert.doesNotMatch(text, /Tools are available according to|This registry lists configured tools|业务工具按使用者的当前权限|这里的注册清单/);
       assert.doesNotMatch(text, /Updated |更新于|Business adapter configured|业务适配器已配置|No successful calls observed|未观测到成功调用/);
       assert.equal(await page.locator('.mcp-table').count(), 2, 'only protocol endpoints and capabilities remain');
-      assert.match(text, /synthetic_reminder_list/);
+      assert.match(text, /synthetic_slides_list/);
       assert.match(text, /spaceId/);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     };
@@ -453,19 +453,19 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     await write('POST', '/members', () => member.locator('button[type=submit]').click());
     // Navigation preserves the selected space without introducing a success notice.
     assert.equal(await page.locator('#notice').textContent(), '');
-    await manage('reminder');
+    await manage('slides');
     assert.equal(await page.locator('#notice').textContent(), '');
-    await write('PUT', '/apps/reminder', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
+    await write('PUT', '/apps/slides', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
     let permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
     await permission.locator('select[name=userId]').selectOption('a-member');
     await permission.locator('input[name=resources]').fill('synthetic-layout-record');
     await permission.locator('input[type=checkbox][name=read]').check();
-    evidence.push(await inspectLayout(page, width, 'space-reminder-enabled'));
-    separatorEvidence.push(await inspectSeparators(page, width, 'space-reminder-enabled'));
+    evidence.push(await inspectLayout(page, width, 'space-slides-enabled'));
+    separatorEvidence.push(await inspectSeparators(page, width, 'space-slides-enabled'));
     // Re-enter the app to measure native popup stability without edited form state.
-    await back(); await manage('reminder');
+    await back(); await manage('slides');
     permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
-    selectEvidence.push(await inspectSelectStability(page, width, 'space-reminder-enabled', artifacts));
+    selectEvidence.push(await inspectSelectStability(page, width, 'space-slides-enabled', artifacts));
     await permission.locator('select[name=userId]').selectOption('a-member');
     await permission.locator('input[name=resources]').fill('synthetic-layout-record');
     if (width === 1440) {
@@ -481,7 +481,7 @@ test('Chromium admin control rows and space actions remain usable at desktop and
       await page.locator('#navigation [data-view=general]').click(); await ready(page, { allowError: true });
       assert.equal(await page.locator('#notice.error').count(), 1, 'view changes preserve unresolved errors');
       await page.locator('#navigation [data-view=spaces]').click(); await ready(page, { allowError: true });
-      await page.locator('.space-app-row[data-app="reminder"]').getByRole('link', { name: /^Manage / }).click(); await ready(page, { allowError: true });
+      await page.locator('.space-app-row[data-app="slides"]').getByRole('link', { name: /^Manage / }).click(); await ready(page, { allowError: true });
       permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
       await permission.locator('select[name=userId]').selectOption('a-member');
       await permission.locator('input[name=resources]').fill('synthetic-layout-record');
@@ -510,22 +510,22 @@ test('Chromium admin control rows and space actions remain usable at desktop and
       assert.equal(await page.locator('#notice').textContent(), '', 'completed save shows no success notice');
     } else await write('POST', '/permissions', () => permission.locator('button[type=submit]').click());
     let saved = auth.db.prepare('SELECT id,app_id,actions,resources FROM auth_resources WHERE space_id=? AND user_id=?').get(spaceId, 'a-member');
-    assert.equal(saved.app_id, 'reminder');
+    assert.equal(saved.app_id, 'slides');
     assert.deepEqual(JSON.parse(saved.actions), ['read']); assert.deepEqual(JSON.parse(saved.resources), ['synthetic-layout-record']);
-    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-space-reminder-permissions.png`), fullPage: true });
+    if (artifacts) await page.screenshot({ path: join(artifacts, `${width}-space-slides-permissions.png`), fullPage: true });
     // Reload keeps the route scoped to the app, and a different app cannot show its grants.
     await page.reload(); await ready(page);
-    assert.equal(new URL(page.url()).searchParams.get('app'), 'reminder');
+    assert.equal(new URL(page.url()).searchParams.get('app'), 'slides');
     assert.equal(await page.locator('input[name=resources]').count(), 1);
-    await back(); await manage('knowledge');
+    await back(); await manage('travel');
     assert.doesNotMatch(await page.locator('#content').innerText(), /synthetic-layout-record/);
     await page.goBack(); await ready(page);
     assert.equal(await page.locator('.space-app-row').count(), 14, 'browser Back returns to overview');
-    await manage('reminder');
+    await manage('slides');
     lifecycleEvidence.push(await inspectConfirmation(page, page.getByRole('button', { name: text('Revoke permission', '撤销权限'), exact: true }), `${width}/permission revoke`));
     await page.getByRole('button', { name: text('Revoke permission', '撤销权限'), exact: true }).click();
     await write('DELETE', `/permissions/${saved.id}`, confirm);
-    assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE space_id=? AND app_id=?').get(spaceId, 'reminder').n, 0);
+    assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE space_id=? AND app_id=?').get(spaceId, 'slides').n, 0);
     permission = page.locator('form').filter({ has: page.locator('input[name=resources]') });
     await permission.locator('select[name=userId]').selectOption('a-member');
     await permission.locator('input[name=resources]').fill('synthetic-layout-record');
@@ -534,10 +534,10 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     lifecycleEvidence.push(await inspectConfirmation(page, page.getByRole('button', { name: text('Disable', '停用'), exact: true }), `${width}/app disable`));
     await page.getByRole('button', { name: text('Disable', '停用'), exact: true }).click();
     assert.equal(await page.locator('.confirm-box').count(), 1, 'disable retains explicit confirmation');
-    await write('PUT', '/apps/reminder', confirm);
+    await write('PUT', '/apps/slides', confirm);
     assert.equal(await page.locator('input[name=resources]').count(), 0);
-    assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE space_id=? AND app_id=?').get(spaceId, 'reminder').n, 0, 'disable deletes resource grants');
-    await write('PUT', '/apps/reminder', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
+    assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE space_id=? AND app_id=?').get(spaceId, 'slides').n, 0, 'disable deletes resource grants');
+    await write('PUT', '/apps/slides', () => page.getByRole('button', { name: text('Enable', '启用'), exact: true }).click());
     assert.equal(await page.getByRole('button', { name: text('Revoke permission', '撤销权限'), exact: true }).count(), 0, 'reenabling does not revive grants');
     await back(); await manage('intelligence');
     assert.match(await page.locator('#content').innerText(), /web entry|网页入口/i);
@@ -569,13 +569,13 @@ test('Chromium admin control rows and space actions remain usable at desktop and
     const clearance = await page.evaluate(() => innerHeight - Math.max(...[...document.querySelectorAll('main button, main select, main input')].filter(node => node.getClientRects().length).map(node => node.getBoundingClientRect().bottom)));
     assert.ok(clearance >= 64, `bottom control clearance: ${clearance}`);
     if (width === 1440) {
-      await manage('reminder');
+      await manage('slides');
       const detailUrl = `${origin}/api/business/account/spaces/${spaceId}`;
       const unavailable = route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'UNAVAILABLE' }) });
       await page.route(detailUrl, unavailable);
       const dialogsBeforeFailure = dialogs.length;
       await page.getByRole('button', { name: 'Disable', exact: true }).click();
-      await Promise.all([page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/apps/reminder')), confirm()]);
+      await Promise.all([page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/apps/slides')), confirm()]);
       await ready(page, { allowError: true });
       assert.equal(await page.locator('#notice.error').count(), 1, 'successful write followed by failed read preserves its error');
       assert.equal(await page.locator('#notice.success').count(), 0, 'failed refresh is not reported as success');
@@ -584,7 +584,7 @@ test('Chromium admin control rows and space actions remain usable at desktop and
       await page.locator('#refresh').click(); await ready(page);
       const expired = route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ code: 'UNAUTHENTICATED' }) });
       await page.route(detailUrl, expired);
-      await Promise.all([page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/apps/reminder')), page.getByRole('button', { name: 'Enable', exact: true }).click()]);
+      await Promise.all([page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/apps/slides')), page.getByRole('button', { name: 'Enable', exact: true }).click()]);
       await ready(page, { allowError: true });
       assert.equal(await page.locator('#notice.error').count(), 1);
       assert.equal(await page.locator('#notice.success').count(), 0, 'terminal rejection is never overwritten by success');
@@ -633,10 +633,10 @@ test('Chromium space deletion requires typed confirmation and clears revoked spa
     const extraPersonal = auth.createSelfServiceSpace({ type: 'personal', ownerId: creator });
     auth.setMembership({ spaceId: space.id, userId: 'a-member', role: 'member' });
     auth.setMembership({ spaceId: other.id, userId: 'a-member', role: 'member' });
-    for (const appId of ['intelligence', 'reminder']) auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
-    auth.setSpaceAppEnrollment({ spaceId: other.id, appId: 'reminder', enabled: true });
-    for (const spaceId of [space.id, other.id]) auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId, actions: ['read'], resources: ['synthetic-deletion-record'] });
-    const grant = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [space.id, other.id].map(spaceId => ({ appId: 'reminder', spaceId, actions: ['read'], resources: ['synthetic-deletion-record'] })) });
+    for (const appId of ['intelligence', 'slides']) auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
+    auth.setSpaceAppEnrollment({ spaceId: other.id, appId: 'slides', enabled: true });
+    for (const spaceId of [space.id, other.id]) auth.grantResource({ userId: 'a-member', appId: 'slides', spaceId, actions: ['read'], resources: ['synthetic-deletion-record'] });
+    const grant = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [space.id, other.id].map(spaceId => ({ appId: 'slides', spaceId, actions: ['read'], resources: ['synthetic-deletion-record'] })) });
     const token = auth.issueToken({ grantId: grant.id }).accessToken;
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
@@ -697,13 +697,13 @@ test('Chromium space deletion requires typed confirmation and clears revoked spa
     assert.match(dialogs.at(-1), /Space deleted|空间已删除/);
     for (const table of ['auth_members', 'auth_resources', 'auth_space_apps', 'auth_self_service_spaces']) assert.equal(auth.db.prepare(`SELECT count(*) AS n FROM ${table} WHERE space_id=?`).get(space.id).n, 0, `${table} is cleared`);
     assert.equal(auth.getGrant(grant.id).rules.some(rule => rule.spaceId === space.id), false);
-    assert.throws(() => auth.authorize(token, { appId: 'reminder', spaceId: space.id, action: 'read', resourceId: 'synthetic-deletion-record' }));
-    assert.equal(auth.authorize(token, { appId: 'reminder', spaceId: other.id, action: 'read', resourceId: 'synthetic-deletion-record' }).spaceId, other.id, 'other-space grant remains usable');
+    assert.throws(() => auth.authorize(token, { appId: 'slides', spaceId: space.id, action: 'read', resourceId: 'synthetic-deletion-record' }));
+    assert.equal(auth.authorize(token, { appId: 'slides', spaceId: other.id, action: 'read', resourceId: 'synthetic-deletion-record' }).spaceId, other.id, 'other-space grant remains usable');
     memberAccess = await (await member.request.get(`${origin}/api/business/web-access`)).json();
     assert.ok(!memberAccess.apps.includes('intelligence'), 'derived web entry is immediately withdrawn');
-    assert.ok(memberAccess.apps.includes('reminder'), 'other space retains its web entry');
+    assert.ok(memberAccess.apps.includes('slides'), 'other space retains its web entry');
     assert.equal((await member.request.get(`${origin}/api/business/account/spaces/${space.id}`)).status(), 404, 'immediate re-access is refused');
-    await open(page, space.id, 'reminder');
+    await open(page, space.id, 'slides');
     assert.notEqual(new URL(page.url()).searchParams.get('space'), space.id, 'opening stale deep link selects a current space');
     assert.equal(new URL(page.url()).searchParams.has('app'), false);
     const listed = await (await member.request.get(`${origin}/api/business/account/spaces`)).json();
@@ -733,23 +733,23 @@ test('Chromium same-name delegations show full IDs and account/delegation confir
   const { origin, auth } = await fixture(t), evidence = [];
   const longSpaceId = `synthetic-secondary-${'long-space-'.repeat(12)}end`;
   const originalId = auth.listGrants('a-member')[0].id;
-  auth.setSpaceAppEnrollment({ spaceId: 'synthetic-family', appId: 'reminder', enabled: true });
+  auth.setSpaceAppEnrollment({ spaceId: 'synthetic-family', appId: 'slides', enabled: true });
   auth.createSpace({ id: longSpaceId, type: 'company', ownerId: 'z-owner' });
-  auth.setSpaceAppEnrollment({ spaceId: longSpaceId, appId: 'reminder', enabled: true });
+  auth.setSpaceAppEnrollment({ spaceId: longSpaceId, appId: 'slides', enabled: true });
   auth.setMembership({ spaceId: longSpaceId, userId: 'a-member', role: 'member' });
-  auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: longSpaceId, actions: ['read'], resources: ['synthetic-secondary-record'] });
+  auth.grantResource({ userId: 'a-member', appId: 'slides', spaceId: longSpaceId, actions: ['read'], resources: ['synthetic-secondary-record'] });
   const rules = [
-    { appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] },
-    { appId: 'reminder', spaceId: longSpaceId, actions: ['read'], resources: ['synthetic-secondary-record'] },
+    { appId: 'slides', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] },
+    { appId: 'slides', spaceId: longSpaceId, actions: ['read'], resources: ['synthetic-secondary-record'] },
   ];
   const multi = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules });
   const historical = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules });
   auth.revokeGrant(historical.id);
   const restrictedSpace = auth.createSelfServiceSpace({ type: 'family', ownerId: 'z-owner' });
-  auth.setSpaceAppEnrollment({ spaceId: restrictedSpace.id, appId: 'reminder', enabled: true });
+  auth.setSpaceAppEnrollment({ spaceId: restrictedSpace.id, appId: 'slides', enabled: true });
   auth.setMembership({ spaceId: restrictedSpace.id, userId: 'a-member', role: 'member' });
-  const temporary = auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: restrictedSpace.id, actions: ['read'], resources: ['synthetic-restricted-record'] });
-  const restricted = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [{ appId: 'reminder', spaceId: restrictedSpace.id, actions: ['read'], resources: ['synthetic-restricted-record'] }] });
+  const temporary = auth.grantResource({ userId: 'a-member', appId: 'slides', spaceId: restrictedSpace.id, actions: ['read'], resources: ['synthetic-restricted-record'] });
+  const restricted = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [{ appId: 'slides', spaceId: restrictedSpace.id, actions: ['read'], resources: ['synthetic-restricted-record'] }] });
   auth.revokeResource(temporary.id);
   const expected = new Map(auth.listGrants('a-member').map(grant => [grant.id, [...new Set(grant.rules.map(rule => rule.spaceId))].sort()]));
   const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
@@ -809,11 +809,11 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
   t.after(() => browser.close());
   const { origin, auth } = await fixture(t), evidence = [];
   // Put the signed-in administrator beyond the first page of the user catalog.
-  auth.setSpaceAppEnrollment({ spaceId: 'synthetic-family', appId: 'reminder', enabled: true });
+  auth.setSpaceAppEnrollment({ spaceId: 'synthetic-family', appId: 'slides', enabled: true });
   for (let index = 0; index < 51; index++) auth.createUser({ id: `b-context-${index.toString().padStart(2, '0')}`, username: `synthetic-context-${index}`, password });
-  const memberRule = { appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] };
+  const memberRule = { appId: 'slides', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-record'] };
   for (let index = 0; index < 50; index++) auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [memberRule] });
-  const ownerPermission = auth.grantResource({ userId: 'z-owner', appId: 'reminder', spaceId: 'synthetic-family', actions: ['update'], resources: ['synthetic-owner-only-record'] });
+  const ownerPermission = auth.grantResource({ userId: 'z-owner', appId: 'slides', spaceId: 'synthetic-family', actions: ['update'], resources: ['synthetic-owner-only-record'] });
   const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
   if (artifacts) mkdirSync(artifacts, { recursive: true });
   for (const [width, language] of [[1440, 'en'], [390, 'zh']]) {
@@ -829,7 +829,7 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     page.on('pageerror', error => errors.push(error.message)); memberPage.on('pageerror', error => errors.push(error.message));
     const open = async (target, query) => { await target.goto(`${origin}/admin/?${query}`); await ready(target); };
     const switchUser = async (id, options) => { await page.locator('#selected-user').selectOption(id); await ready(page, options); assert.equal(await page.locator('#selected-user').inputValue(), id); };
-    const manage = async target => { await target.locator('.space-app-row[data-app=reminder] a').click(); await ready(target); };
+    const manage = async target => { await target.locator('.space-app-row[data-app=slides] a').click(); await ready(target); };
     const sessionId = async () => (await (await context.request.get(`${origin}/api/business/account/session`)).json()).user.id;
     await open(page, 'view=spaces&space=synthetic-family');
     assert.equal(await page.locator('#content>:first-child #selected-user').count(), 1, 'Current user is the first row');
@@ -914,8 +914,8 @@ test('Chromium administrator display contexts keep Spaces and delegations aligne
     await page.locator('select[name=space]').selectOption(foreign.id); await ready(page); await manage(page);
     assert.equal(await page.getByRole('button', { name: text('Enable', '启用'), exact: true }).count(), 0, 'foreign-owner display context cannot expose owner-only actions');
     const access = await (await context.request.get(`${origin}/api/business/web-access`)).json();
-    assert.equal((await context.request.put(`${origin}/api/business/account/spaces/${foreign.id}/apps/reminder`, { headers: { Origin: origin, 'X-CSRF-Token': access.csrfToken }, data: { enabled: true } })).status(), 403, 'the unchanged server refuses a non-owner administrator write');
-    assert.equal(auth.appSpaceEnabled('reminder', foreign.id), false, 'rejected action has no enrollment effect');
+    assert.equal((await context.request.put(`${origin}/api/business/account/spaces/${foreign.id}/apps/slides`, { headers: { Origin: origin, 'X-CSRF-Token': access.csrfToken }, data: { enabled: true } })).status(), 403, 'the unchanged server refuses a non-owner administrator write');
+    assert.equal(auth.appSpaceEnabled('slides', foreign.id), false, 'rejected action has no enrollment effect');
     await page.locator('.space-back').click(); await ready(page);
     assert.equal(await page.locator('.space-delete').count(), 1, 'administrator retains foreign-space deletion while displaying its creator');
     await page.getByRole('button', { name: text('Load more users', '加载更多用户'), exact: true }).click(); await ready(page);
@@ -1053,10 +1053,10 @@ test('Chromium user sections, dedicated account pages and confirmed deletion wor
     assert.equal(auth.isPlatformAdmin(created), false);
     const personal = auth.ensurePersonalSpace(created);
     auth.setMembership({ spaceId: 'synthetic-family', userId: created, role: 'member' });
-    auth.setSpaceAppEnrollment({ spaceId: 'synthetic-family', appId: 'reminder', enabled: true });
-    auth.grantResource({ userId: created, appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-user-deletion'] });
+    auth.setSpaceAppEnrollment({ spaceId: 'synthetic-family', appId: 'slides', enabled: true });
+    auth.grantResource({ userId: created, appId: 'slides', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-user-deletion'] });
     auth.setWebAccess({ userId: created, apps: ['intelligence'], prds: false });
-    const grant = auth.createGrant({ userId: created, clientId: 'synthetic-client', rules: [{ appId: 'reminder', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-user-deletion'] }] });
+    const grant = auth.createGrant({ userId: created, clientId: 'synthetic-client', rules: [{ appId: 'slides', spaceId: 'synthetic-family', actions: ['read'], resources: ['synthetic-user-deletion'] }] });
     const token = auth.issueToken({ grantId: grant.id }).accessToken;
     const victim = await browser.newContext(); t.after(() => victim.close());
     await login(victim, username, replacementPassword);
@@ -1092,13 +1092,13 @@ test('Chromium user sections, dedicated account pages and confirmed deletion wor
       assert.equal(auth.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column}=?`).get(created).n, 0, `${table} has no deleted user`);
     }
     assert.equal((await victim.request.get(`${origin}/api/business/account/session`)).status(), 401, 'deleted native session is rejected immediately');
-    assert.throws(() => auth.authorize(token, { appId: 'reminder', spaceId: 'synthetic-family', action: 'read', resourceId: 'synthetic-user-deletion' }), 'deleted bearer credential cannot authorize');
+    assert.throws(() => auth.authorize(token, { appId: 'slides', spaceId: 'synthetic-family', action: 'read', resourceId: 'synthetic-user-deletion' }), 'deleted bearer credential cannot authorize');
     for (const view of ['spaces', 'grants', 'access']) {
       await page.locator(`#navigation [data-view=${view}]`).click(); await ready(page);
       assert.equal(await page.locator(`#selected-user option[value="${created}"]`).count(), 0, `${view} has no cached deleted user`);
       assert.notEqual(await page.locator('#selected-user').inputValue(), created, `${view} clears deleted selection`);
     }
-    await open('view=spaces&space=synthetic-family&app=reminder');
+    await open('view=spaces&space=synthetic-family&app=slides');
     assert.equal(await page.locator(`select[name=userId] option[value="${created}"]`).count(), 0, 'member/resource selector has no deleted account');
     for (const activeView of ['spaces', 'grants']) {
       const concurrent = `synthetic-concurrent-${width}-${activeView}`;
@@ -1163,9 +1163,9 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
   const { origin, auth } = await fixture(t), evidence = [];
   const space = auth.createSelfServiceSpace({ type: 'family', ownerId: 'z-owner' });
   auth.setMembership({ spaceId: space.id, userId: 'a-member', role: 'member' });
-  auth.setSpaceAppEnrollment({ spaceId: space.id, appId: 'reminder', enabled: true });
-  auth.grantResource({ userId: 'z-owner', spaceId: space.id, appId: 'reminder', resources: ['synthetic-owner-resource'], actions: ['update'] });
-  auth.grantResource({ userId: 'a-member', spaceId: space.id, appId: 'reminder', resources: ['synthetic-member-resource'], actions: ['read'] });
+  auth.setSpaceAppEnrollment({ spaceId: space.id, appId: 'slides', enabled: true });
+  auth.grantResource({ userId: 'z-owner', spaceId: space.id, appId: 'slides', resources: ['synthetic-owner-resource'], actions: ['update'] });
+  auth.grantResource({ userId: 'a-member', spaceId: space.id, appId: 'slides', resources: ['synthetic-member-resource'], actions: ['read'] });
   const artifacts = process.env.ADMIN_LAYOUT_ARTIFACTS;
   if (artifacts) mkdirSync(artifacts, { recursive: true });
   for (const [width, language] of [[1440, 'en'], [390, 'zh']]) {
@@ -1190,7 +1190,7 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
       }
     };
     await open(page); await open(memberPage);
-    const summary = '.space-app-row[data-app=reminder] .app-user-access';
+    const summary = '.space-app-row[data-app=slides] .app-user-access';
     const ownerSummary = await page.locator(summary).innerText();
     assert.match(ownerSummary, /synthetic-owner-resource/);
     await switchUser('a-member');
@@ -1198,8 +1198,8 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
     assert.equal(await page.locator(summary).innerText(), await memberPage.locator(summary).innerText(), 'overview matches the selected user real session');
     assert.doesNotMatch(await page.locator(summary).innerText(), /synthetic-owner-resource/);
     assert.equal(await page.locator('.space-delete, input[name=username]').count(), 2, 'acting owner capabilities survive user switch');
-    await page.locator('.space-app-row[data-app=reminder] a').click(); await ready(page);
-    await memberPage.locator('.space-app-row[data-app=reminder] a').click(); await ready(memberPage);
+    await page.locator('.space-app-row[data-app=slides] a').click(); await ready(page);
+    await memberPage.locator('.space-app-row[data-app=slides] a').click(); await ready(memberPage);
     assert.equal(await page.locator('.app-user-access').innerText(), await memberPage.locator('.app-user-access').innerText());
     await switchUser('z-owner');
     assert.match(await page.locator('.app-user-access').innerText(), /synthetic-owner-resource/);
@@ -1218,11 +1218,11 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
     release(); await finished; await page.unroute(contextUrl, delayed);
     assert.equal(await page.locator('#selected-user').inputValue(), 'z-owner');
     await page.locator('select[name=space]').selectOption(space.id); await ready(page);
-    assert.match(await page.locator('.space-app-row[data-app=reminder] .app-user-access').innerText(), /synthetic-owner-resource/, 'delayed member response cannot replace current context');
-    await page.locator('.space-app-row[data-app=reminder] a').click(); await ready(page);
+    assert.match(await page.locator('.space-app-row[data-app=slides] .app-user-access').innerText(), /synthetic-owner-resource/, 'delayed member response cannot replace current context');
+    await page.locator('.space-app-row[data-app=slides] a').click(); await ready(page);
     await switchUser('a-member');
 
-    const rule = { appId: 'reminder', spaceId: space.id, actions: ['read'], resources: ['synthetic-member-resource'] };
+    const rule = { appId: 'slides', spaceId: space.id, actions: ['read'], resources: ['synthetic-member-resource'] };
     const active = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [rule] });
     const token = auth.issueToken({ grantId: active.id }).accessToken;
     const expired = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [rule] });
@@ -1251,7 +1251,7 @@ test('Chromium Spaces switches effective user access in place and manages app-sc
     assert.equal(await page.locator(`[data-grant="${expired.id}"]`).getAttribute('data-status'), 'revoked');
     // Self-service uses the unchanged own-grant API even on a Space page.
     const self = auth.createGrant({ userId: 'a-member', clientId: 'synthetic-client', rules: [rule] });
-    await open(memberPage, 'reminder');
+    await open(memberPage, 'slides');
     const selfDeleted = memberPage.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith(`/account/grants/${self.id}`));
     await memberPage.locator(`[data-grant="${self.id}"] button`).click();
     await memberPage.locator('.confirm-dialog').getByRole('button', { name: /^(Confirm|确认)$/ }).click();
@@ -1278,8 +1278,8 @@ test('Chromium Spaces removes filler hints for owners and members across all spa
   assert.equal(spaces.at(-1).deletionProtected, true, 'fixture includes a genuinely protected automatic personal space');
   for (const space of spaces) {
     if (space.type !== 'personal') auth.setMembership({ spaceId: space.id, userId: 'synthetic-view-member', role: 'member' });
-    auth.setSpaceAppEnrollment({ spaceId: space.id, appId: 'reminder', enabled: true });
-    auth.grantResource({ userId: 'a-member', appId: 'reminder', spaceId: space.id, actions: ['read'], resources: ['synthetic-owner-framing-resource'] });
+    auth.setSpaceAppEnrollment({ spaceId: space.id, appId: 'slides', enabled: true });
+    auth.grantResource({ userId: 'a-member', appId: 'slides', spaceId: space.id, actions: ['read'], resources: ['synthetic-owner-framing-resource'] });
   }
   const ownerHint = /You own this space|你是此空间的所有者|Ask the space owner to enable apps|需要启用应用或变更资源权限时|^App enrollment and resource permissions are separate\.$|^应用启用状态与资源权限分开展示。$/m;
   const overviewInstruction = /Manage each app’s enrollment|分别设置应用的启用状态与权限/;
@@ -1299,7 +1299,7 @@ test('Chromium Spaces removes filler hints for owners and members across all spa
     for (const target of pages) target.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (!['GET', 'HEAD'].includes(request.method())) writes.push(request.method()); });
     const open = async (target, space) => { await target.goto(`${origin}/admin/?view=spaces&space=${space.id}`); await ready(target); };
-    const manage = async target => { await target.locator('.space-app-row[data-app=reminder] a').click(); await ready(target); };
+    const manage = async target => { await target.locator('.space-app-row[data-app=slides] a').click(); await ready(target); };
     const stableRefresh = async () => {
       await page.evaluate(() => {
         window.framingShifts = [];
@@ -1412,7 +1412,7 @@ test('Chromium Spaces picker follows the displayed user with distinct personal I
     assert.equal(await page.locator(`select[name=space] option[value="${adminPersonal.id}"]`).count(), 0, 'administrator personal space never bleeds into member context');
     assert.ok(memberIds.includes(shared.id) && memberIds.includes(company.id), 'owned company and joined family both appear');
     await selectSpace(shared.id);
-    await page.locator('.space-app-row[data-app=reminder] a').click(); await ready(page);
+    await page.locator('.space-app-row[data-app=slides] a').click(); await ready(page);
     await switchUser('b-second'); await check(secondIds);
     assert.equal(await page.locator('select[name=space]').inputValue(), secondPersonal.id, 'shared-space overlap does not preserve the old selected space');
     assert.equal(new URL(page.url()).searchParams.has('app'), false, 'context switch clears app selection');
@@ -1425,7 +1425,7 @@ test('Chromium Spaces picker follows the displayed user with distinct personal I
     await selectSpace(company.id);
     await page.locator('#refresh').click(); await ready(page);
     assert.equal(await page.locator('select[name=space]').inputValue(), company.id, 'refresh preserves a valid current-user selection');
-    await page.locator('.space-app-row[data-app=reminder] a').click(); await ready(page);
+    await page.locator('.space-app-row[data-app=slides] a').click(); await ready(page);
     assert.equal(await page.locator('.account-setting button, input[name=resources]').count(), 0, 'viewing another owner lends no owner write controls');
     await page.locator('.space-back').click(); await ready(page);
     assert.equal(await page.locator('select[name=space]').inputValue(), company.id, 'Manage/Back preserves the selected current-user space');
@@ -1466,8 +1466,8 @@ test('Chromium members leave spaces through the centered modal without stale acc
     for (const id of [memberId, ownerId]) auth.createUser({ id, username: id, password });
     const personal = auth.ensurePersonalSpace(memberId), retained = auth.createSelfServiceSpace({ type: 'family', ownerId });
     auth.setMembership({ spaceId: retained.id, userId: memberId, role: 'member' });
-    auth.setSpaceAppEnrollment({ spaceId: retained.id, appId: 'reminder', enabled: true });
-    auth.grantResource({ userId: memberId, appId: 'reminder', spaceId: retained.id, actions: ['read'], resources: ['synthetic-leave-record'] });
+    auth.setSpaceAppEnrollment({ spaceId: retained.id, appId: 'slides', enabled: true });
+    auth.grantResource({ userId: memberId, appId: 'slides', spaceId: retained.id, actions: ['read'], resources: ['synthetic-leave-record'] });
     const member = await browser.newContext({ viewport: { width, height: 900 } }), owner = await browser.newContext({ viewport: { width, height: 900 } }), admin = await browser.newContext({ viewport: { width, height: 900 } });
     t.after(() => member.close()); t.after(() => owner.close()); t.after(() => admin.close());
     for (const context of [member, owner, admin]) await context.addCookies([{ name: 'praxis_locale', value: language, url: origin }]);
@@ -1481,9 +1481,9 @@ test('Chromium members leave spaces through the centered modal without stale acc
     for (const type of ['family', 'company']) {
       const space = auth.createSelfServiceSpace({ type, ownerId });
       auth.setMembership({ spaceId: space.id, userId: memberId, role: 'member' });
-      for (const appId of ['reminder', 'intelligence']) auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
-      auth.grantResource({ userId: memberId, appId: 'reminder', spaceId: space.id, actions: ['read'], resources: ['synthetic-leave-record'] });
-      const rule = spaceId => ({ appId: 'reminder', spaceId, actions: ['read'], resources: ['synthetic-leave-record'] });
+      for (const appId of ['slides', 'intelligence']) auth.setSpaceAppEnrollment({ spaceId: space.id, appId, enabled: true });
+      auth.grantResource({ userId: memberId, appId: 'slides', spaceId: space.id, actions: ['read'], resources: ['synthetic-leave-record'] });
+      const rule = spaceId => ({ appId: 'slides', spaceId, actions: ['read'], resources: ['synthetic-leave-record'] });
       const multi = auth.createGrant({ userId: memberId, clientId: 'synthetic-client', rules: [rule(space.id), rule(retained.id)] });
       const single = auth.createGrant({ userId: memberId, clientId: 'synthetic-client', rules: [rule(space.id)] });
       const token = auth.issueToken({ grantId: multi.id }).accessToken;
@@ -1517,18 +1517,18 @@ test('Chromium members leave spaces through the centered modal without stale acc
       assert.equal(auth.db.prepare('SELECT count(*) AS n FROM auth_resources WHERE user_id=? AND space_id=? AND membership_required=1').get(memberId, space.id).n, 0);
       assert.equal(auth.getGrant(multi.id).rules.some(rule => rule.spaceId === space.id), false, 'multi-space delegation is pruned');
       assert.ok(auth.db.prepare('SELECT revoked_at FROM auth_grants WHERE id=?').get(single.id).revoked_at, 'empty delegation is revoked');
-      assert.throws(() => auth.authorize(token, { appId: 'reminder', spaceId: space.id, action: 'read', resourceId: 'synthetic-leave-record' }));
-      assert.equal(auth.authorize(token, { appId: 'reminder', spaceId: retained.id, action: 'read', resourceId: 'synthetic-leave-record' }).spaceId, retained.id, 'unrelated delegation rules remain usable');
+      assert.throws(() => auth.authorize(token, { appId: 'slides', spaceId: space.id, action: 'read', resourceId: 'synthetic-leave-record' }));
+      assert.equal(auth.authorize(token, { appId: 'slides', spaceId: retained.id, action: 'read', resourceId: 'synthetic-leave-record' }).spaceId, retained.id, 'unrelated delegation rules remain usable');
       assert.equal((await member.request.get(`${origin}/api/business/account/spaces/${space.id}`)).status(), 404, 'departed space is immediately inaccessible');
       const access = await (await member.request.get(`${origin}/api/business/web-access`)).json();
       assert.equal(access.apps.includes('intelligence'), false, 'membership-only app entry is immediately lost');
-      assert.equal(access.apps.includes('reminder'), true, 'another space retains its entry');
+      assert.equal(access.apps.includes('slides'), true, 'another space retains its entry');
       assert.equal(await page.locator(`select[name=space] option[value="${space.id}"]`).count(), 0);
       assert.notEqual(new URL(page.url()).searchParams.get('space'), space.id);
       assert.equal(new URL(page.url()).searchParams.has('app'), false);
       assert.equal(await page.locator('select[name=space]').evaluate(node => node === document.activeElement), true, 'focus moves to the refreshed picker');
       assert.match(dialogs.at(-1), /You left the space|你已退出空间/);
-      await open(page, space.id, 'reminder');
+      await open(page, space.id, 'slides');
       assert.notEqual(new URL(page.url()).searchParams.get('space'), space.id, 'stale app deep link falls back to a current space');
       assert.equal(new URL(page.url()).searchParams.has('app'), false);
       await page.reload(); await ready(page);

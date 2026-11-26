@@ -13,10 +13,9 @@
 | 服务 | 固定端口 | 数据与构建 |
 |---|---|---|
 | Praxis / 公开入口 | 4321 / 14321 | 源码镜像；公开 URL 配置只读挂载 |
-| Reminder / core | 4322 / 4326 | 独立核心后端 Compose；Reminder 按明确空间映射挂载原 JSON 目录，核心后端保存身份与事件元数据 |
+| 核心后端 | 4326 | 独立核心后端 Compose；保存身份与事件元数据 |
 | Projects | 4327 | 同一核心后端 Compose 中的共享应用，按登记目录挂载项目 SQLite，不按项目单独启动服务 |
 | Travel | 4323 | 按登记的私有目录提供旅行内容与受控攻略，页面／地图／MCP 共用同一数据源 |
-| Knowledge / 受管入口 | 4324 / 14324 | 独立运行时和受保护的 `/apps/knowledge/` 入口 |
 | TingProof / 公开入口 | 5173 / 15173 | 共用 appSources 登记的 SQLite 父目录，保留 WAL/SHM；静态生产 UI + 同一 API |
 | Slides / 公开入口 | 4666 / 14666 | 绑定 appSources 登记的 decks 与完整 `.lattice`；公开路径 `/apps/slides/` |
 | Slides业务服务 | 4328 | 固定回环适配，独立JSON文稿／版本／作业与内容寻址素材目录；只读挂载应用签名Key和空间映射 |
@@ -24,9 +23,9 @@
 | Intelligence | 4330 | 受管目录分开配置；演示使用合成资料 |
 | Polaris 只读查看器 | 18787 | 管理员授权和工作区观察文件 |
 
-既有安装读取私有存储配置登记的实际绑定，并保留 Reminder 的业务空间映射。迁移前先确认 workspace 与唯一写入者。新主机使用已核验的恢复文件，空白演示不能覆盖注册数据。
+既有安装读取私有存储配置登记的实际绑定。迁移前先确认 workspace 与唯一写入者。新主机使用已核验的恢复文件，空白演示不能覆盖注册数据。
 
-私有数据、凭据、开发机 node_modules、Git 元数据与无关项目均不进入镜像。`.dockerignore` 使用默认拒绝、逐项放行的上下文；Reminder 私有 JSON、TingProof 数据库、Slides decks/.lattice 永不上传到构建上下文。Knowledge 文档与 Travel 路线属于应用源码，构建后随镜像版本更新。
+私有数据、凭据、开发机 node_modules、Git 元数据与无关项目均不进入镜像。`.dockerignore` 使用默认拒绝、逐项放行的上下文；TingProof 数据库、Slides decks/.lattice 永不上传到构建上下文。Travel 路线属于应用源码，构建后随镜像版本更新。
 
 ## 准备与日常命令
 
@@ -45,7 +44,7 @@ npm run deploy -- status
 
 平台后端统一称为 `core`。受管命令兼容既有描述文件中的 `business` 组，保留原项目名、配置路径和数据绑定。
 
-启动前检查活动 writer、非空注册数据、目录权限和端口。应用组与核心后端组避免重复启动 Reminder writer。镜像和注册绑定一致后再检查页面与媒体功能。停止服务时保留目录、卷和检查点。
+启动前检查活动 writer、非空注册数据、目录权限和端口。应用组与核心后端组避免重复启动同一 writer。镜像和注册绑定一致后再检查页面与媒体功能。停止服务时保留目录、卷和检查点。
 
 私有 Compose 描述及其引用的配置均放在容器不可写目录。对单文件只读挂载进行原子替换可能留下旧 inode，轮换后重建消费服务并核验容器内实际内容。
 
@@ -79,7 +78,7 @@ v0.1.63将应用与引擎合并到`third_party/lattice`，`packages/runtime`和`
 
 1. 保持现有入口，先构建镜像并用合成数据验收，核对候选挂载与实际注册来源。
 2. 在无网络、非 root、只读环境对 TingProof 的一致性副本执行 schema 预检。不认识的格式单独评审迁移。
-3. 停止占用同一端口的旧监听器和写入者，按空间映射启动受管 Reminder，保留原数据且只启用一个 writer。
+3. 停止占用同一端口的旧监听器和写入者，保留原数据且只启用一个 writer。
 4. 核对实际应用、核心后端、存储服务的健康状态。分别验收页面、媒体、授权和备份。业务验收由独立受限客户端完成，维护者只读验收摘要。
 5. 通过私有描述文件和蓝绿控制器管理各组。限制运行日志大小；存储健康、远端复制和试恢复分别报告。
 
@@ -114,14 +113,6 @@ v0.1.17 的部署验收检查终端关闭后服务仍运行、服务器数据在
 Projects是`third_party/projects`独立子模块，全部项目共用一个4327服务。统一业务组配置`apps.projects`：固定`http://127.0.0.1:4327/api/business`、`managed:true`、独立`keyFile`、`dataDir`与`businessConfigFile`；映射为`{"version":1,"spaces":["获准空间ID"]}`。配置和密钥为Git外600文件，数据目录700；容器只可写该目录，其余只读。受管网页通过统一业务API逐项目鉴权，原始数据GET关闭。具体项目、工作项和资料引用通过受限MCP写入，不进入仓库或镜像。
 
 入口传输由安装方配置。在变更公开 TLS 入口或受信中继前核对证书、固定上游和转发边界，再检查受保护路由。个人网络拓扑、凭据和路由清单由安装方私有保管。
-
-## Knowledge业务知识库运行时
-
-Knowledge继续共用一个独立应用实现。`knowledge-public`的14324端口运行应用自有Node服务，新首页和`/k/<spaceId>/<libraryId>/<entryId>/`由同一阅读界面渲染；旧书路径和`/library/`仍由构建的静态书库提供。4324服务保留原静态书籍入口，原始端口只绑定回环。
-
-统一业务配置登记`apps.knowledge`的固定适配器`http://127.0.0.1:14324/api/business`、`dataDir`、`keyFile`、`businessConfigFile`和显式`spaces`。映射文件为`{"version":1,"spaces":["业务空间ID"]}`。数据目录权限700，密钥和映射文件600，全部位于Git之外。栈CLI只向`knowledge-public`精确挂载知识库目录读写及两个控制文件只读；不挂载整个个人目录。Node服务管理空数据库schema；业务条目只能由授权业务客户端录入。
-
-访问新知识库仍需应用入口与库资源授权；旧书籍、PDF、照片、搜索索引及静态资产另需`legacy-library`只读资源授权。获得某个新库不会同时获得旧书库。维护更新先启动知识库运行时，再更新核心后端；数据库创建后纳入在线备份并重建存储工作器的精确挂载。只更新相关服务，不重启其他应用。Knowledge不依赖Praxis才能运行，独立使用的启动方式由子仓文档说明。
 
 ## Finance（已退役）
 
@@ -202,10 +193,6 @@ Memo 指南由同一 4325 服务提供。`apps.memo` 固定适配器为 `http://
 Intelligence 的受保护入口为 `/apps/intelligence/`。预览模式只读合成资料，真实模式使用显式数据目录。工作台与管理页应区分这两种状态。
 
 应用根遵守`workingData.roots.intelligence`覆盖规则，正式模式只读挂到`/data/intelligence`并读取`data.json`；目录／文件缺失拒绝启用，不自动建库或用预览回退。真实资料与采集／业务MCP按后续合同接入。管理页依据受信容器元数据区分预览来源和正式绑定，不将空工作目录声称为活动数据源。
-
-### Knowledge 原件交付
-
-可将私有业务配置的 `apps.knowledge.attachmentInbox` 指向独立的 0700 目录。附件交付方按 `<spaceId>/<resourceId>/<sha256>` 放置已授权文件，应用只读挂载，一次配置支持后续交付。也可在私有业务配置的 `apps.knowledge.attachments` 中登记附件数组。每项指定已配置的 `spaceId`、普通库 `resourceId`、原件的 `sha256` 和本机绝对文件名 `file`。Compose 生成器只将该文件只读挂到这一个目标库的收件位置。内容客户端只需要 SHA-256、原文件名和标题；通过 Knowledge MCP 发起入库，再读解析状态。保留挂载直到该作业完成，之后可从配置移除并重新应用服务。入库原件和证据索引归 Knowledge 的 SQLite 存储及其备份管理。独立部署可将同样的 `<spaceId>/<resourceId>/<sha256>` 层次只读挂入 `KNOWLEDGE_INBOX_ROOT`。
 
 ### Letters 和 Profiles
 

@@ -6,9 +6,8 @@ The app owns the source of truth. Before each replica job, call `withBusinessBac
 
 Coverage includes:
 
-- All established Reminder space JSON files in `apps.reminder.spacesFile`, validated with `json/reminder-v2`. Backup targets use stable opaque IDs derived from workspace and space. Family names, task titles and original paths stay out of target names.
 - Identity, delegation, audit, event and pending synchronization state in `database` and `eventsDatabase`. SQLite online backup includes committed changes in the WAL.
-- The configured TingProof data file, `apps.tingproof.dataFile`, and the Projects, Knowledge and Memo databases (`projects.db`, `knowledge.db` and `memo.db` under each configured app’s `dataDir`). A source already registered at the same path is reused.
+- The configured TingProof data file, `apps.tingproof.dataFile`, and the Projects and Memo databases (`projects.db` and `memo.db` under each configured app’s `dataDir`). A source already registered at the same path is reused.
 
 The function reads protected mappings and SQLite event metadata. It does not need task or correction text. Sources are deduplicated by real path. Conflicting types, targets or space bindings fail. Paths that escape their root, symbolic links and overlaps with staging or replica repositories are rejected.
 

@@ -13,8 +13,8 @@ async function fixture(t) {
   t.after(() => rm(root, { recursive: true, force: true }));
   const data = join(root, 'input'); await mkdir(data);
   const json = join(data, 'checklist.json');
-  await writeFile(json, JSON.stringify({ version: 2, recurring: [], plans: [{ id: '汉字', text: '北京午饭', tags: [] }], pool: [], history: [] }));
-  const config = { workspaceId: randomUUID(), deviceId: randomUUID(), dataRoot: join(root, 'storage'), appSources: [{ id: 'reminder', kind: 'json', source: json, target: 'checklist.json', schema: 'reminder-v2' }] };
+  await writeFile(json, JSON.stringify({ format: 'memo-backup', schemaVersion: 1, appVersion: '1.0.0', exportedAt: '2026-11-25T00:00:00.000Z', data: { records: [{ id: '汉字', text: '北京午饭', tags: [] }], prefs: {}, flow: null } }));
+  const config = { workspaceId: randomUUID(), deviceId: randomUUID(), dataRoot: join(root, 'storage'), appSources: [{ id: 'memo', kind: 'json', source: json, target: 'checklist.json', schema: 'memo-backup-v1' }] };
   config.activeWriterDeviceId = config.deviceId;
   return { root, data, json, config };
 }
@@ -31,7 +31,7 @@ test('snapshot preserves JSON and Chinese paths, excludes locks and verifies eve
   f.config.parentSnapshotId = first.manifest.snapshotId;
   const second = await createSnapshot(f.config);
   assert.equal(second.manifest.parentSnapshotId, first.manifest.snapshotId);
-  await writeFile(join(first.directory, 'apps/reminder/checklist.json'), '{}');
+  await writeFile(join(first.directory, 'apps/memo/checklist.json'), '{}');
   await assert.rejects(verifySnapshot(first.directory), /verification failed/);
 });
 test('SQLite online backup includes committed WAL and leaves the source unchanged', async t => {

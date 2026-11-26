@@ -31,7 +31,7 @@ async function fixture(t) {
 test('a reviewed additional app owns its stack services, source checks, environment, Compose patch and assets', async t => {
   const f = await fixture(t); assert.deepEqual(f.settings.services, { praxis: 4321, 'praxis-public': 14321, notebook: 45125, 'notebook-public': 45126 });
   assert.equal(f.settings.notebookRuntime, 'ready'); await validateData(f.settings); await writeComposeEnvironment(f.settings);
-  const environment = await readFile(f.settings.envFile, 'utf8'); assert.ok(environment.includes('PRAXIS_NOTEBOOK_DATA_FILE=')); assert.ok(!environment.includes('REMINDER') && !environment.includes('SLIDES'));
+  const environment = await readFile(f.settings.envFile, 'utf8'); assert.ok(environment.includes('PRAXIS_NOTEBOOK_DATA_FILE=')); assert.ok(!environment.includes('SLIDES'));
   assert.equal((await stat(f.settings.envFile)).mode & 0o777, 0o600);
   const override = JSON.parse(await readFile(f.settings.runtimeOverrideFile, 'utf8')); assert.deepEqual(Object.keys(override.services), ['notebook']); assert.equal(override.services.notebook.volumes[0].bind.create_host_path, false); assert.equal(override.services.notebook.volumes[0].source, f.settings.sourceMap.notebookStore);
   const calls = [], run = async (command, args, options) => { calls.push({ command, args, options }); return ''; };

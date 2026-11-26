@@ -6,9 +6,8 @@
 
 覆盖范围包括：
 
-- `apps.reminder.spacesFile` 中所有已经建立的空间 JSON，使用 `json/reminder-v2` 校验；备份目标采用工作区与空间派生的稳定不透明标识，不使用家庭名、任务标题或原始路径。
 - `database` 与 `eventsDatabase` 中的身份、委托、审计、事件和待同步状态，登记为 SQLite，由现有在线备份保存已提交 WAL 内容。
-- 已配置 TingProof 的 `apps.tingproof.dataFile`，以及 Projects、Knowledge 和 Memo 的 `dataDir` 下对应的 `projects.db`、`knowledge.db` 和 `memo.db`。已登记同一路径时复用来源。
+- 已配置 TingProof 的 `apps.tingproof.dataFile`，以及 Projects 和 Memo 的 `dataDir` 下对应的 `projects.db` 和 `memo.db`。已登记同一路径时复用来源。
 
 函数只读取受保护的空间映射配置和 SQLite 事件元数据，不读取任务或校正正文。已有 `appSources` 按真实路径去重；冲突的类型、目标或空间绑定失败，不把同一路径当作两份不同数据。符号链接、路径逃逸、与副本仓库或暂存目录重叠的来源均拒绝。
 

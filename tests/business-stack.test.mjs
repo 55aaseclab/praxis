@@ -16,18 +16,18 @@ async function fixture(t, { managed = false, cleanup = true } = {}) {
   const directory = join(root, 'private'), configuration = join(directory, 'config');
   const state = join(directory, 'state'), secret = join(directory, 'secrets'), data = join(directory, 'app-data');
   for (const path of [directory, configuration, state, join(state, 'auth'), join(state, 'events'), secret, data]) await mkdir(path, { mode: 0o700 });
-  const keyFile = join(secret, 'reminder.key'), spacesFile = join(configuration, 'reminder-spaces.json');
-  const configFile = join(configuration, 'business.json'), dataFile = join(data, 'checklist.json');
+  const keyFile = join(secret, 'projects.key'), businessConfigFile = join(configuration, 'projects-spaces.json');
+  const configFile = join(configuration, 'business.json');
   await writeFile(keyFile, 'synthetic-signing-key-material-never-in-image', { mode: 0o600 });
-  await writeFile(spacesFile, JSON.stringify({ spaces: { 'space-a': dataFile } }), { mode: 0o600 });
+  await writeFile(businessConfigFile, JSON.stringify({ version: 1, spaces: ['space-a'] }), { mode: 0o600 });
   const config = {
     issuer: 'https://business-synthetic.example', allowedHosts: ['127.0.0.1:17326'],
     database: join(state, 'auth/auth.db'), eventsDatabase: join(state, 'events/events.db'),
-    apps: { reminder: { managed, url: 'http://127.0.0.1:4322/api/business', spaces: ['space-a'], keyFile, spacesFile } },
+    apps: managed ? { projects: { managed: true, url: 'http://127.0.0.1:4327/api/business', spaces: ['space-a'], keyFile, businessConfigFile, dataDir: data } } : {},
   };
   const save = () => writeFile(configFile, JSON.stringify(config), { mode: 0o600 });
   await save();
-  return { root, config, configFile, keyFile, spacesFile, dataFile, data, state, configuration, save };
+  return { root, config, configFile, keyFile, businessConfigFile, data, state, configuration, save };
 }
 const plan = f => businessStackPlan(f.configFile, { port: 17326, projectName: 'praxis-business-synthetic' });
 
@@ -86,7 +86,7 @@ test('business stack mounts only identity/event directories writable and precise
   assert.equal(service.environment.HEALTH_URL, 'http://127.0.0.1:17326/health');
   const writable = service.volumes.filter(volume => !volume.read_only).map(volume => volume.source);
   assert.deepEqual(writable.sort(), [join(f.state, 'auth'), join(f.state, 'events')].sort());
-  assert.deepEqual(service.volumes.filter(volume => volume.read_only).map(volume => volume.source).sort(), [f.configFile, f.keyFile].sort());
+  assert.deepEqual(service.volumes.filter(volume => volume.read_only).map(volume => volume.source).sort(), [f.configFile].sort());
   assert.ok(service.volumes.every(volume => volume.bind.create_host_path === false && volume.source === volume.target));
   assert.equal(service.user, `${process.getuid?.() ?? 1000}:${process.getgid?.() ?? 1000}`);
   assert.equal(service.volumes.some(volume => result.overrideFile.startsWith(`${volume.source}/`)), false);
@@ -101,9 +101,6 @@ test('business stack rejects public permissions, symlink aliases, hard links and
   const alias = join(f.configuration, 'alias.json');
   await symlink(f.configFile, alias);
   await assert.rejects(businessStackPlan(alias, { port: 17326 }), { code: 'UNSAFE_PRIVATE_PATH' });
-  await link(f.keyFile, join(f.configuration, 'key-hardlink'));
-  await assert.rejects(plan(f), { code: 'UNSAFE_PRIVATE_PATH' });
-  await rm(join(f.configuration, 'key-hardlink'));
   await chmod(join(f.state, 'auth'), 0o755);
   await assert.rejects(plan(f), { code: 'UNSAFE_PRIVATE_PATH' });
   await chmod(join(f.state, 'auth'), 0o700);
@@ -127,46 +124,45 @@ test('business stack rejects broad or overlapping state and secret mounts', asyn
   await assert.rejects(plan(f), { code: 'OVERLAPPING_MOUNTS' });
 });
 
-test('managed Reminder is explicitly enabled with only data directories writable', async t => {
-  const f = await fixture(t, { managed: true }), result = await plan(f), service = result.override.services.reminder;
+test('managed Projects is explicitly enabled with only data directories writable', async t => {
+  const f = await fixture(t, { managed: true }), result = await plan(f), service = result.override.services.projects;
   assert.equal(service.network_mode, 'host');
   assert.equal(service.build.dockerfile, 'Dockerfile.praxis');
   assert.equal(service.read_only, true);
-  assert.deepEqual(result.ports, [17326, 4322]);
-  assert.equal(service.environment.REMINDER_MANAGED, '1');
-  assert.equal(service.environment.REMINDER_BUSINESS_UI_URL, `${f.config.issuer}/business/reminder/`);
+  assert.deepEqual(result.ports, [17326, 4327]);
+  assert.equal(service.environment.PROJECTS_MANAGED, '1');
   assert.deepEqual(service.volumes.filter(volume => !volume.read_only).map(volume => volume.source), [f.data]);
-  assert.deepEqual(service.volumes.filter(volume => volume.read_only).map(volume => volume.source).sort(), [f.keyFile, f.spacesFile].sort());
+  assert.deepEqual(service.volumes.filter(volume => volume.read_only).map(volume => volume.source).sort(), [f.keyFile, f.businessConfigFile].sort());
   assert.equal(service.volumes.some(volume => volume.source === f.root || volume.source === f.state), false);
-  await assert.rejects(stat(f.dataFile), { code: 'ENOENT' });
 });
 
 test('enabled source gateway binds both host-network business services to loopback only', async t => {
   const f = await fixture(t, { managed: true });
   f.config.webGateway = { enabled: true, originHost: 'origin.example' }; await f.save();
   const result = await plan(f);
-  for (const name of ['core', 'reminder']) {
+  for (const name of ['core', 'projects']) {
     const command = result.override.services[name].command;
     assert.equal(command[command.indexOf('--host') + 1], '127.0.0.1');
   }
   f.config.webGateway.enabled = false; await f.save();
   const legacy = await plan(f);
-  for (const name of ['core', 'reminder']) { const command = legacy.override.services[name].command; assert.equal(command[command.indexOf('--host') + 1], '0.0.0.0'); }
+  const command = legacy.override.services.core.command; assert.equal(command[command.indexOf('--host') + 1], '0.0.0.0');
 });
 
-test('managed Reminder rejects unapproved endpoints, mapping drift and writable secret overlap', async t => {
+test('managed Projects rejects unapproved endpoints, mapping drift and writable secret overlap', async t => {
   const f = await fixture(t, { managed: true });
-  f.config.apps.reminder.url = 'http://remote.example:4322/api/business'; await f.save();
+  f.config.apps.projects.url = 'http://remote.example:4327/api/business'; await f.save();
   await assert.rejects(plan(f), { code: 'INVALID_MANAGED_ENDPOINT' });
-  f.config.apps.reminder.url = 'http://127.0.0.1:4322/api/business'; await f.save();
-  await writeFile(f.spacesFile, JSON.stringify({ spaces: { 'other-space': f.dataFile } }));
+  f.config.apps.projects.url = 'http://127.0.0.1:4327/api/business'; await f.save();
+  await writeFile(f.businessConfigFile, JSON.stringify({ version: 1, spaces: ['other-space'] }));
   await assert.rejects(plan(f), { code: 'INVALID_SPACE_MAPPING' });
-  await writeFile(f.spacesFile, JSON.stringify({ spaces: { 'space-a': join(f.configuration, 'data.json') } }));
+  await writeFile(f.businessConfigFile, JSON.stringify({ version: 1, spaces: ['space-a'] }));
+  f.config.apps.projects.dataDir = join(f.state, 'auth'); await f.save();
   await assert.rejects(plan(f), { code: 'OVERLAPPING_DATA_MOUNT' });
-  await writeFile(f.spacesFile, JSON.stringify({ spaces: { 'space-a': resolve('src/private-task.json') } }));
+  f.config.apps.projects.dataDir = resolve('src/private-data'); await f.save();
   await assert.rejects(plan(f), { code: 'UNSAFE_DATA_PATH' });
-  await writeFile(f.spacesFile, JSON.stringify({ spaces: { 'space-a': f.dataFile } }));
   await mkdir(join(f.data, '.git'), { mode: 0o700 });
+  f.config.apps.projects.dataDir = f.data; await f.save();
   await assert.rejects(plan(f), { code: 'UNSAFE_PATH' });
 });
 
@@ -189,10 +185,10 @@ test('optional observations share only a dedicated metadata directory with the b
   const f = await fixture(t, { managed: true });
   f.config.observationsFile = join(f.root, 'private/observability/observations.db'); await f.save();
   const before = await readFile(f.configFile), result = await plan(f);
-  const core = result.override.services.core, reminder = result.override.services.reminder;
+  const core = result.override.services.core, projects = result.override.services.projects;
   assert.equal(core.environment.PRAXIS_OBSERVATIONS_FILE, f.config.observationsFile);
   assert.deepEqual(core.volumes.filter(volume => volume.source === result.observationsDirectory), [{ type: 'bind', source: result.observationsDirectory, target: result.observationsDirectory, bind: { create_host_path: false } }]);
-  assert.equal(reminder.volumes.some(volume => volume.source === result.observationsDirectory), false);
+  assert.equal(projects.volumes.some(volume => volume.source === result.observationsDirectory), false);
   await assert.rejects(stat(result.observationsDirectory), { code: 'ENOENT' });
   await runBusinessStack('status', { configFile: f.configFile, port: 17326, execute: async () => '[]' });
   await assert.rejects(stat(result.observationsDirectory), { code: 'ENOENT' });
@@ -232,9 +228,9 @@ test('observations reject business data, secrets, controls, public paths and uns
   await assert.rejects(plan(f), { code: 'UNSAFE_OBSERVATIONS_PATH' });
 });
 
-test('optional offline storage publisher exposes only sanitized metadata to core and never mounts it in Reminder', async t => {
+test('optional offline storage publisher exposes only sanitized metadata to core and never mounts it in Projects', async t => {
   const f = await fixture(t, { managed: true }), input = await enablePublisher(f), result = await plan(f);
-  assert.deepEqual(result.services, ['core', 'reminder', 'storage-status']);
+  assert.deepEqual(result.services, ['core', 'projects', 'storage-status']);
   const core = result.override.services.core, publisher = result.override.services['storage-status'];
   assert.equal(core.volumes.some(volume => volume.source === input.storageFile || volume.source === input.metadata), false);
   assert.deepEqual(core.volumes.find(volume => volume.source === input.statusDirectory), { type: 'bind', source: input.statusDirectory, target: input.statusDirectory, read_only: true, bind: { create_host_path: false } });
@@ -244,7 +240,7 @@ test('optional offline storage publisher exposes only sanitized metadata to core
   assert.deepEqual(publisher.volumes.filter(volume => volume.read_only).map(volume => volume.source).sort(), [input.storageFile, input.metadata].sort());
   assert.equal(publisher.volumes.some(volume => [f.keyFile, f.config.database, f.config.eventsDatabase, f.data, '/var/run/docker.sock'].includes(volume.source)), false);
   assert.equal(publisher.tmpfs.filter(value => value.startsWith('/run/praxis-storage-metadata/')).length, 3);
-  assert.equal(result.override.services.reminder.volumes.some(volume => [input.statusDirectory, input.metadata, input.storageFile].includes(volume.source)), false);
+  assert.equal(result.override.services.projects.volumes.some(volume => [input.statusDirectory, input.metadata, input.storageFile].includes(volume.source)), false);
   await runBusinessStack('status', { configFile: f.configFile, port: 17326, execute: async () => '[]' });
   await assert.rejects(stat(f.config.console.storageStatusFile), { code: 'ENOENT' });
   await assert.rejects(stat(result.controlDirectory), { code: 'ENOENT' });
@@ -275,9 +271,9 @@ test('native port conflicts prevent up and down is restricted to the selected pr
   assert.ok(!down.includes('--volumes') && !down.includes('-v'));
 });
 
-test('managed Reminder port conflicts are checked independently from the business listener', async t => {
+test('managed Projects port conflicts are checked independently from the business listener', async t => {
   const f = await fixture(t, { managed: true }), calls = [];
-  await assert.rejects(runBusinessStack('up', { configFile: f.configFile, port: 17326, portProbe: async port => port === 4322, execute: async (command, args) => { calls.push(args); return '[]'; } }), { code: 'PORT_IN_USE' });
+  await assert.rejects(runBusinessStack('up', { configFile: f.configFile, port: 17326, portProbe: async port => port === 4327, execute: async (command, args) => { calls.push(args); return '[]'; } }), { code: 'PORT_IN_USE' });
   assert.ok(!calls.some(args => args.includes('up')));
 });
 
@@ -308,7 +304,7 @@ test('blue-green core facade is preserved while business applications remain sin
   assert.ok(starts.every(args => args.includes(join(root, 'compose.business.yml'))));
   assert.equal(starts.find(args => args.includes('--no-recreate')).at(-1), 'core');
   const replace = starts.find(args => args.includes('--force-recreate'));
-  assert.equal(replace.at(-1), 'reminder');
+  assert.equal(replace.at(-1), 'projects');
   assert.ok(!replace.includes('core'));
 });
 
@@ -326,20 +322,21 @@ if (process.env.PRAXIS_BUSINESS_DOCKER_TEST === '1') test('isolated Docker busin
   const publisherInput = await enablePublisher(f);
   const projectName = `praxis-business-synthetic-${process.pid}`;
   const { AuthStore } = await import('../src/business/auth.mjs');
-  const { BusinessService } = await import('../third_party/reminder/src/business.js');
-  const { createServer: createReminderServer } = await import('../third_party/reminder/src/server.js');
+  const { createMemoServer } = await import('../third_party/memo/src/server.mjs');
+  const { MemoStore } = await import('../third_party/memo/src/store.mjs');
   const auth = new AuthStore({ file: f.config.database, issuer: f.config.issuer });
   auth.createUser({ id: 'synthetic-owner', username: 'synthetic-owner', password: 'Synthetic-Docker-password-2026' });
-  auth.setWebAccess({ userId: 'synthetic-owner', apps: ['reminder'], prds: false });
+  auth.setWebAccess({ userId: 'synthetic-owner', apps: ['memo'], prds: false });
   auth.createSpace({ id: 'space-a', type: 'personal', ownerId: 'synthetic-owner' });
   auth.createClient({ id: 'synthetic-client', name: 'Synthetic Docker client', redirectUris: ['https://client.example/callback'] });
-  const grant = auth.createGrant({ userId: 'synthetic-owner', clientId: 'synthetic-client', rules: [{ appId: 'reminder', spaceId: 'space-a', resources: ['*'], actions: ['read', 'create', 'update', 'complete', 'delete'] }] });
+  const grant = auth.createGrant({ userId: 'synthetic-owner', clientId: 'synthetic-client', rules: [{ appId: 'memo', spaceId: 'space-a', resources: ['*'], actions: ['read', 'update'] }] });
   const token = auth.issueToken({ grantId: grant.id }).accessToken;
   auth.close();
   const key = await readFile(f.keyFile);
-  const reminder = createReminderServer({ businessService: new BusinessService({ key, spaces: { 'space-a': f.dataFile } }) });
-  reminder.listen(0, '127.0.0.1'); await once(reminder, 'listening');
-  f.config.apps.reminder.url = `http://127.0.0.1:${reminder.address().port}/api/business`;
+  const memoStore = new MemoStore({ file: join(f.root, 'memo-data/memo.db') });
+  const reminder = createMemoServer({ store: memoStore, key, spaces: ['space-a'], managed: true });
+  await new Promise(resolve => reminder.listen(0, '127.0.0.1', resolve));
+  f.config.apps.memo = { managed: true, keyFile: f.keyFile, spaces: ['space-a'], url: `http://127.0.0.1:${reminder.address().port}/api/business` };
   await f.save();
   const options = { configFile: f.configFile, port: 17326, projectName };
   const execute = async (command, args, settings) => (await runFile(command, args, { ...settings, maxBuffer: 8 * 1024 * 1024 })).stdout;
@@ -380,22 +377,21 @@ if (process.env.PRAXIS_BUSINESS_DOCKER_TEST === '1') test('isolated Docker busin
   assert.equal((await fetch(`${base}/health`)).status, 200);
   assert.equal((await fetch(`${base}/api/business/catalog`)).status, 401);
   const invoke = async request => {
-    const response = await fetch(`${base}/api/business/invoke`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ appId: 'reminder', spaceId: 'space-a', ...request }) });
+    const response = await fetch(`${base}/api/business/invoke`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ appId: 'memo', spaceId: 'space-a', ...request }) });
     assert.equal(response.status, 200); return response.json();
   };
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
   const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
   mcpClient = new Client({ name: 'synthetic-docker-client', version: '1.0.0' });
   await mcpClient.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
-  assert.ok((await mcpClient.listTools()).tools.some(tool => tool.name === 'reminder_add'));
-  const added = await mcpClient.callTool({ name: 'reminder_add', arguments: { spaceId: 'space-a', item: { text: '容器内合成事项', tags: ['合成'] }, idempotencyKey: 'docker-synthetic-create' } });
+  assert.ok((await mcpClient.listTools()).tools.some(tool => tool.name === 'memo_set_guide'));
+  const added = await mcpClient.callTool({ name: 'memo_set_guide', arguments: { spaceId: 'space-a', resourceId: 'rights', expectedRevision: '0', idempotencyKey: 'docker-synthetic-create', id: 'synthetic-guide', title: '容器内合成指南', blocks: [{ items: ['合成步骤'] }], source: { app: 'memo', url: '/apps/memo/synthetic-entry', entryId: 'synthetic-entry', version: 1 } } });
   assert.equal(added.isError, undefined);
   const created = added.structuredContent;
-  const completed = await invoke({ operation: 'complete', resourceId: created.resourceId, expectedRevision: created.revision, input: { actualHours: 1.5 }, idempotencyKey: 'docker-synthetic-complete' });
-  assert.equal(completed.item.done, true);
-  assert.equal((await invoke({ operation: 'list' })).items.length, 1);
-  await invoke({ operation: 'delete', resourceId: completed.resourceId, expectedRevision: completed.revision, idempotencyKey: 'docker-synthetic-delete' });
-  assert.equal((await invoke({ operation: 'list' })).items.length, 0);
+  const readBack = await invoke({ operation: 'read_topic', resourceId: 'rights', input: {} });
+  assert.equal(readBack.guides[0].title, '容器内合成指南');
+  const archived = await invoke({ operation: 'archive_guide', resourceId: 'rights', expectedRevision: readBack.revision, input: { id: created.guide.id, idempotencyKey: 'docker-synthetic-archive' } });
+  assert.equal(archived.guide.archived, true);
   await runFile('docker', ['exec', containerId, 'node', '-e', BUSINESS_HEALTHCHECK]);
   await new Promise(resolvePromise => { reminder.close(resolvePromise); reminder.closeAllConnections(); });
   await assert.rejects(runFile('docker', ['exec', containerId, 'node', '-e', BUSINESS_HEALTHCHECK]));
@@ -433,7 +429,7 @@ test('administrator data locations use a separate read-only metadata directory',
   assert.equal(result.dataInventoryDirectory, directory);
   assert.ok(result.override.services.core.volumes.some(mount => mount.source === directory && mount.read_only === true));
   assert.equal(result.override.services.core.volumes.some(mount => mount.source === f.root), false);
-  f.config.console.dataInventoryFile = join(f.data, 'locations.json');
+  f.config.console.dataInventoryFile = join(f.state, 'auth', 'locations.json');
   await f.save();
   await assert.rejects(plan(f), { code: 'UNSAFE_INVENTORY_PATH' });
 });
@@ -445,18 +441,18 @@ test('core defaults and explicit legacy plans preserve the configured data mount
   assert.equal(current.serviceName, 'core');
   assert.deepEqual(legacy.override.services.business.volumes, current.override.services.core.volumes);
   assert.equal(legacy.projectName, 'praxis-business');
-  assert.deepEqual(coreInstallation({ projects: { business: { name: 'unchanged-project', services: ['business', 'reminder'] } } }), { group: 'business', item: { name: 'unchanged-project', services: ['business', 'reminder'] }, serviceName: 'business' });
+  assert.deepEqual(coreInstallation({ projects: { business: { name: 'unchanged-project', services: ['business', 'projects'] } } }), { group: 'business', item: { name: 'unchanged-project', services: ['business', 'projects'] }, serviceName: 'business' });
   assert.throws(() => coreInstallation({ projects: { core: { services: ['core', 'business'] } } }), { code: 'INVALID_CORE_SERVICE' });
 });
 
 test('managed core startup defers the actual facade while preserving legacy project identities', async () => {
   for (const [group, service] of [['core', 'core'], ['business', 'business'], ['business', 'core']]) {
-    const installation = { version: 1, projects: { [group]: { name: 'unchanged-private-project', files: ['/private/compose.yml'], services: [service, 'reminder'] } } };
+    const installation = { version: 1, projects: { [group]: { name: 'unchanged-private-project', files: ['/private/compose.yml'], services: [service, 'projects'] } } };
     const calls = [];
     await runBusinessStack('up', { installation, deferDeploymentFacade: true, execute: async (_command, args) => { calls.push(args); return ''; } });
     assert.equal(calls.length, 1);
     assert.ok(calls[0].includes('unchanged-private-project'));
-    assert.deepEqual(calls[0].slice(calls[0].indexOf('--wait') + 1), ['reminder']);
+    assert.deepEqual(calls[0].slice(calls[0].indexOf('--wait') + 1), ['projects']);
   }
 });
 

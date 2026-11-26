@@ -11,7 +11,7 @@ git submodule update --init --recursive
 docker compose up --build -d --wait
 ```
 
-The default Compose file starts the complete built-in distribution. Reminder, Knowledge, Lattice Slides, Travel, TingProof, Memo, Intelligence, Projects and Polaris have their native services. Letters and Profiles are served by the workbench image. The `core` backend enforces browser and agent authorization.
+The default Compose file starts the complete built-in distribution. Lattice Slides, Travel, TingProof, Memo, Intelligence, Projects and Polaris have their native services. Letters and Profiles are served by the workbench image. The `core` backend enforces browser and agent authorization.
 
 The initializer creates the installation's owner account, workspace, signing keys and empty app stores once. Retrieve the initial login information privately:
 

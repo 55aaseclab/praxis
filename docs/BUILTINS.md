@@ -14,8 +14,6 @@ Open the printed **Demo workbench** URL and select the app. Use your browser’s
 
 | App ID | First run |
 | --- | --- |
-| `reminder` | Opens a task list initialized from the bundled empty checklist. |
-| `knowledge` | Creates a library database. |
 | `lattice-slides` | Opens the presentation workbench with an empty deck registry. |
 | `travel` | Builds and displays an empty itinerary catalog. |
 | `tingproof` | Builds the proofreading interface and opens a fresh project database. |
@@ -41,8 +39,6 @@ npm run app:demo -- memo 18432
 
 | 应用标识 | 首次启动 |
 | --- | --- |
-| `reminder` | 从内置的空清单初始化任务列表。 |
-| `knowledge` | 创建资料库数据库。 |
 | `lattice-slides` | 打开演示工作台，演示文稿列表为空。 |
 | `travel` | 构建并展示空的行程目录。 |
 | `tingproof` | 构建听校界面并创建项目数据库。 |

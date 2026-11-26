@@ -31,11 +31,10 @@ F25 的目标是让本地数据能够恢复、换机和换存储。应用仍读�
 
 | 应用 | 已纳入的服务器数据 | 单独迁移的部分 |
 |---|---|---|
-| Reminder | schema v2 JSON、完整条目 | `.lock`、`.tmp` 不属于数据；CLI 与服务器继续共用同一真源 |
 | TingProof | SQLite 一致性备份，含 WAL 中已提交内容 | 原始音频正文不在服务器数据库中；浏览器文件句柄需重新关联，可显式登记媒体目录 |
 | Slides | decks、资产、`.lattice` 业务状态 | 不能把整个 `.lattice` 当缓存；依赖和明确可重建的产物才可排除 |
 | Slides受控制作 | 额外登记Git外`apps/slides-business/`目录，包含原子JSON文稿／版本／作业和内容寻址素材／产物 | 原生文稿不迁移或复制成第二事实源；新状态无活动SQLite，目录稳定性检查后纳入一致性快照 |
-| Travel / Knowledge | 应用根下独立内容目录、照片、结构化数据；Knowledge版本数据库与Travel受控行程另按各自格式登记 | 签名／高德／飞猪秘密不作为业务数据，锁和临时文件不入快照 |
+| Travel | 应用根下独立内容目录、照片、结构化数据；Travel受控行程另按其格式登记 | 签名／高德／飞猪秘密不作为业务数据，锁和临时文件不入快照 |
 | Memo | `memo.db`指南、记录、照片与历史 | 旧设备尚未导入的记录、浏览器偏好／流程仍需设备打开导入或完整JSON导出 |
 
 JSON 复制后校验，SQLite 使用 Online Backup API；目录在复制前后检查稳定性，变化时拒绝提交并保留旧备份。源码使用 Git bundle 保留本地未推送提交，并保存允许范围内的工作差异和未跟踪文件。清单记录源码版本、实际包含项及遗漏项，不把“服务器备份成功”等同于“所有浏览器和音频都已迁移”。
@@ -79,13 +78,6 @@ node scripts/storage.mjs watch
     }
   ],
   "appSources": [
-    {
-      "id": "reminder",
-      "kind": "json",
-      "source": "/absolute/private/reminder/checklist.json",
-      "target": "checklist.json",
-      "schema": "reminder-v2"
-    },
     {
       "id": "tingproof",
       "kind": "sqlite",
@@ -210,18 +202,6 @@ Memo 在应用内导出完整 JSON，以应用自己的只读校验器验证内�
 
 Docker 隔离实测还包含只读源目录中的冷 WAL 数据库，以及后台取消后等待子进程清理锁。无非空 WAL/rollback journal、主文件稳定时，备份工具可在私有 staging 校验冷数据库；无法安全读取的非空日志会拒绝，绝不丢弃已提交 WAL。恢复材料只保存在原机器仍不构成灾难恢复保证，需另行独立安全保存。
 
-## 当前规划与执行者更新
-
-云端验收分别记录安全保存凭据、客户端配置、实际连通、上传成功和可恢复性。记录凭据就绪仅能证明第一步。
-
-PRD F29 将家庭实时协作与云/NAS 副本分开：多人通过单服务端事实源操作，提交后推送，云端变更触发与持久重试是待实现目标。当前 `watch` 仍默认每小时备份，不能据此宣称已有事件驱动同步。产品 `spaceId` 与本文件的存储 `workspaceId` 不等同；家庭授权不能直接暴露包含个人资料的整个备份仓库。
-
-当前维护 agent 仅修改代码/文档并验证合成夹具；真实业务记录的创建、修改和清理交给指定外部业务执行者经受控 API/MCP。实时、权限、Codex 和手机端的完整验收与未执行台账见 [VERIFICATION.md](VERIFICATION.md)。
-
-Projects使用独立应用数据目录中的`projects.db`，所有具体项目共用该SQLite事实源；以`id:projects,kind:sqlite,target:projects.db`登记在线备份，不按项目创建存储仓。统一业务备份解析器自动覆盖该源，丢失已登记文件时失败关闭；代码子模块作为独立sourceRepo登记。首次录入、备份来源登记、工作器健康和云副本完成分别验证，不以登记完成宣称远端副本已同步。
-
-Knowledge结构化资料使用独立数据目录内的`knowledge.db`，同一SQLite事实源包含各业务库、集合、不可变来源、条目版本、幂等提交与事件发件箱。统一备份解析器按`id:knowledge,kind:sqlite,target:knowledge.db`登记在线备份；旧书籍源文件和照片继续由原代码来源保存，不自动迁写或复制为新业务记录。数据库与配置、签名密钥、代码仓及其他应用数据保持独立。启动新运行时后再启动读取该源的备份工作器；已有数据库丢失时失败关闭，不创建替代记录。登记来源和本地工作器健康不代表云端快照或异机恢复已完成。
-
 ## Lattice合仓保全（v0.1.63）
 
 历史合仓后登记唯一源码 `third_party/lattice`。旧源码 Git bundle 与控制配置的恢复副本存于 Git 之外。停写迁移 deck 源文件与状态目录时，比对每个文件的大小、权限、所有者和 SHA 摘要，另行重建派生的 runtime 缓存。独立公开发行历史与私有归档分别保存。
@@ -249,15 +229,13 @@ Memo 场景指南单独登记为 `id:memo,kind:sqlite,target:memo.db`，包含�
 ```
 
 未覆盖的应用使用 `<dataRoot>/workspaces/<workspaceId>/apps/<appId>`。
-应用ID为 reminder、tingproof、knowledge、travel、lattice、memo、projects、polaris、intelligence、praxis。
+应用ID为 tingproof、travel、lattice、memo、projects、polaris、intelligence、praxis。
 每个目录必须独立于其他应用、源码、密钥、协调状态与备份库；拒绝符号链接别名。
 配置仍在私有配置目录中，不放进工作数据。覆盖可以指向NAS的独立目录，但不能增加第二个活动writer。
 
 | 应用 | 应用根内的工作数据 |
 |---|---|
-| Reminder | `spaces/<spaceId>/checklist.json`；Web与容器CLI读同一文件 |
 | TingProof | `tingproof.db`；用户选取的音频仍是外部输入 |
-| Knowledge | `knowledge.db`、`content/catalog`、两种入口的发布内容 |
 | Travel | `itineraries`、`content/catalog`、`content/published` |
 | Lattice | `native/decks`、`native/.lattice`、`business` |
 | Memo | `memo.db`；指南、记录、照片及历史；旧浏览器记录需成功连接后导入 |
@@ -295,7 +273,7 @@ Memo旧设备在打开应用并成功连接后导入，不删除失败导入的�
 
 ## 应用自有结构化数据库
 
-服务端权威结构化记录统一采用每应用独立的 SQLite 数据库。Reminder、Intelligence、Travel 与 Lattice 业务状态保存在各自数据库中，既有 Knowledge、Projects、Memo、TingProof 及平台数据库继续归原所有者维护。保留空间/资源 ID、修订、顺序、回执、事件、时间戳、历史扩展字段及授权。Reminder 使用按空间标识记录的 `reminder.db`，不再以 `spaces/<id>/checklist.json` 树作为运行主源。数据库命名空间不授予权限；JSON 只作显式导入/导出或兼容格式，配置数据库缺席时不得自动回退。
+服务端权威结构化记录统一采用每应用独立的 SQLite 数据库。Intelligence、Travel 与 Lattice 业务状态保存在各自数据库中，既有 Projects、Memo、TingProof 及平台数据库继续归原所有者维护。保留空间/资源 ID、修订、顺序、回执、事件、时间戳、历史扩展字段及授权。数据库命名空间不授予权限；JSON 只作显式导入/导出或兼容格式，配置数据库缺席时不得自动回退。
 
 原始文档、媒体、制作源文件和导出物继续保留文件及内容摘要，需要时由数据库引用。Letters/Profiles 继续读取原件；Polaris 继续只读投影外部运行观测，不增加执行器。
 

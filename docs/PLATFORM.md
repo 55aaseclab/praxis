@@ -12,10 +12,10 @@ Praxis 内部没有agent。外部客户端负责理解和编排，`core` 核心�
 
 ## 工作台与应用
 
-统一用户入口是`https://polaris.jianxiaoyitech.com/`。本机HTTP4321入口在当前网关部署下跳转该地址，用户登录一次后进入工作台。旧`/business`、`/business/`和`/business.html`返回同一个工作台；`/business/reminder/`等路径是受管应用的技术路由，不代表另一套业务空间页面。
+统一用户入口是`https://polaris.jianxiaoyitech.com/`。本机HTTP4321入口在当前网关部署下跳转该地址，用户登录一次后进入工作台。旧`/business`、`/business/`和`/business.html`返回同一个工作台；`/business/tingproof/`等路径是受管应用的技术路由，不代表另一套业务空间页面。
 
 - 每个有效登录账号都有工作台；管理员有默认应用入口，项目记录另行验权，其他用户只看到获准入口，无应用时显示空态。
-- 项目入口统一来自 Projects 的获授权项目列表，点击进入对应概览。项目引用的 Knowledge 资料位于相应的「资料」页，来源应用继续检查访问权限。
+- 项目入口统一来自 Projects 的获授权项目列表，点击进入对应概览。
 - 工作台采用启动台布局，以应用和项目图标为主体，使用系统字体、中性背景及紧凑导航，不强制侧栏。受管工作台按账号权限显示设置和 PRD 入口；应用和项目在当前标签页打开，可以后退。
 - 在首页底部栏切换「应用」和「待关注」。「应用」展示应用与项目入口；「待关注」展示获准的任务和项目工作卡片，可从卡片回到来源。外部智能体通过各自的客户端和获授权的 MCP 连接使用应用，个人应用可用本地清单开发。[独立 Paseo 客户端](PASEO.md) · [应用标准](APP-STANDARD.md)
 - 在独立或已登录的工作台打开**设置 → 通用 → 语言**，为当前浏览器选择 English 或简体中文。已登录的普通用户还可查看本人权限、管理本人的智能体委托。管理员可在**设置 → 状态概览**查看全局权限、连接、存储及体验线索。普通用户不请求全局概览信息。
@@ -24,9 +24,7 @@ Praxis 内部没有agent。外部客户端负责理解和编排，`core` 核心�
 
 | 应用 | 统一入口 | 应用服务端口 | 独立源码 |
 |---|---|---:|---|
-| Reminder | `/apps/reminder/` | 4322 | `third_party/reminder` |
 | Travel | `/apps/travel/` | 4323 | `third_party/travel` |
-| Knowledge | `/apps/knowledge/` | 14324 | `third_party/knowledge` |
 | Memo | `/apps/memo/` | 4325 | `third_party/memo` |
 | Slides | `/apps/slides/` | 14666 | `third_party/lattice` |
 | 听校 | `/apps/tingproof/` | 15173 | `third_party/tingproof` |
@@ -36,7 +34,7 @@ Praxis 内部没有agent。外部客户端负责理解和编排，`core` 核心�
 | 信件 | `/apps/letters/` | 网页槽 | `third_party/letters` |
 | 个人资料 | `/apps/profiles/` | 网页槽 | `third_party/profiles` |
 
-表内端口为受管网关的目标。独立运行的 Knowledge、Lattice、听校分别使用 4324、4666、5173。源站 14321 网关转发到固定本机服务，受管核心后端监听回环 4326；具体映射、公开资源副本及健康检查见 [Docker 手册](DOCKER.md)。Knowledge 承载笔记、藏书与项目引用，旧知识和旅行路径保留受权兼容跳转。信件和个人资料分别只读挂载文档，且要求固定所有者的有效管理员会话。Polaris 的管理员入口为只读观察查看器。
+表内端口为受管网关的目标。独立运行的 Lattice、听校分别使用 4666、5173。源站 14321 网关转发到固定本机服务，受管核心后端监听回环 4326；具体映射、公开资源副本及健康检查见 [Docker 手册](DOCKER.md)。旧旅行路径保留受权兼容跳转。信件和个人资料分别只读挂载文档，且要求固定所有者的有效管理员会话。Polaris 的管理员入口为只读观察查看器。
 
 ```mermaid
 flowchart LR
@@ -50,7 +48,7 @@ flowchart LR
   A --> D[(应用事实源)]
 ```
 
-`config/installed-apps.json` 仅保存已审核应用的源码引用；各应用在自己的 `praxis-app.json` 维护展示与发行版本。PRD集合仅读取应用自有 `praxis-app.json` 文档声明明确列出的文档，不开放任意文件。代码、运行配置与私人记录分开；初始化所需子模块使用`git submodule update --init third_party/<app>`，应用归属不因进入工作台而改变。十一个固定应用提交可公开获取；已退役仓库与文档去向见 [REPOSITORIES.md](REPOSITORIES.md)。
+`config/installed-apps.json` 仅保存已审核应用的源码引用；各应用在自己的 `praxis-app.json` 维护展示与发行版本。PRD集合仅读取应用自有 `praxis-app.json` 文档声明明确列出的文档，不开放任意文件。代码、运行配置与私人记录分开；初始化所需子模块使用`git submodule update --init third_party/<app>`，应用归属不因进入工作台而改变。九个固定应用提交可公开获取；已退役仓库与文档去向见 [REPOSITORIES.md](REPOSITORIES.md)。
 
 ## 运行与专题导航
 
@@ -90,7 +88,7 @@ npm run core -- --config /absolute/private/business.json --host 127.0.0.1 --port
 npm run core:admin -- status --config /absolute/private/business.json
 ```
 
-生产对外采用明确 HTTPS issuer。回环 HTTP 只用于本机开发或隔离测试；不能把服务的监听地址 `0.0.0.0` 当作 OAuth issuer。统一工作台位于`${issuer}/`，旧通用`/business/`入口在网关模式返回工作台，独立开发模式转到明确的Reminder入口。`/business/reminder/`与`/business/tingproof/`分别直接返回应用专属HTML，禁用JavaScript也不经过通用界面；原通用HTML、控制器、样式与日历资源已删除。共享`app-transport.js`只处理认证、调用及事件，不提供通用应用界面。MCP资源位于`${issuer}/mcp`。应用启动器和核心后端是不同职责，不能因本地端口启动就宣称公网协议路由已配置。
+生产对外采用明确 HTTPS issuer。回环 HTTP 只用于本机开发或隔离测试；不能把服务的监听地址 `0.0.0.0` 当作 OAuth issuer。统一工作台位于`${issuer}/`，旧通用`/business/`入口在网关模式返回工作台，独立开发模式转到明确的应用入口。`/business/tingproof/`直接返回应用专属HTML，禁用JavaScript也不经过通用界面；原通用HTML、控制器、样式与日历资源已删除。共享`app-transport.js`只处理认证、调用及事件，不提供通用应用界面。MCP资源位于`${issuer}/mcp`。应用启动器和核心后端是不同职责，不能因本地端口启动就宣称公网协议路由已配置。
 
 账号菜单只保留账户信息与退出；所有有效用户均可打开「设置」。管理员保留全局及用户管理；普通用户只读查看本人应用/能力并管理本人智能体委托，不提供独立授权页面。正式网页按本人当前权限操作，无须自委托；外部agent经既有OAuth确认，只能取得当前应用与业务资源权限内、已接入的能力，详见[身份授权专题](BUSINESS-AUTH.md#5-工作台登录与智能体授权)。
 
@@ -110,10 +108,7 @@ npm run core:admin -- status --config /absolute/private/business.json
   "allowedHosts": ["127.0.0.1:4326", "localhost:4326"],
   "allowedOrigins": [],
   "apps": {
-    "reminder": {
       "url": "http://127.0.0.1:4322/api/business",
-      "keyFile": "/absolute/private/secrets/business-reminder.key",
-      "spacesFile": "/absolute/private/reminder-business-spaces.json",
       "spaces": ["opaque-personal-space-id"]
     },
     "tingproof": {
@@ -135,13 +130,11 @@ npm run core:admin -- status --config /absolute/private/business.json
 
 下列命令保留用于首次部署或故障维护，不是用户日常管理步骤。
 
-初始化只建立身份/授权元数据和私有配置，不导入、读取或创建 Reminder 任务。必须明确指定现有数据文件的映射，不能猜测旧 checkout 是否仍为活动事实源。
 
 ```bash
 npm run core:admin -- init \
   --config /absolute/private/business.json \
   --issuer https://your-existing-domain.example \
-  --reminder-data /absolute/active/reminder/checklist.json \
   --state-root /absolute/private/state \
   --username owner
 ```
@@ -150,7 +143,6 @@ npm run core:admin -- init \
 
 - 身份/事件数据库路径与一个个人空间。
 - 两应用独立签名密钥。
-- Reminder 空间至数据文件的明确映射及受管环境说明。
 - 私有 `business-owner.json`，供用户通过正式登录页使用；不交给业务模型。
 
 其他维护命令：`user-create`、`space-create`、`member-set`、`permission-grant`、`client-create`、`grant-create`、`grant-revoke`、`token-issue`、`status`。变更参数来自 `--spec /absolute/private/spec.json`，文件必须为600普通文件；`token-issue` 还需 `--out`，凭据原值只写新的私有输出文件。
@@ -158,23 +150,6 @@ npm run core:admin -- init \
 这些 CLI 是平台维护/配置入口，不能作为普通 agent 的业务工具或授权旁路。业务操作和真实测试数据的创建、修改、清理由受限业务执行者经 API/MCP 完成。空间管理员日常成员/共享管理使用受控管理 API，详见 [身份与授权手册](BUSINESS-AUTH.md)。
 
 ## 4. 独立应用的受管模式
-
-### Reminder
-
-设置 `REMINDER_MANAGED=1`、`REMINDER_BUSINESS_KEY_FILE`、`REMINDER_BUSINESS_SPACES_FILE`。空间文件结构：
-
-```json
-{
-  "spaces": {
-    "opaque-personal-space-id": "/absolute/active/reminder/checklist.json",
-    "opaque-family-space-id": "/absolute/active/reminder/family-checklist.json"
-  }
-}
-```
-
-不同空间必须对应不同规范数据路径，禁止把同一文件同时映射给个人和家庭。schema v2 保持兼容；受控业务适配提供稳定资源 ID、记录版本、持久幂等和提交事件，继续复用应用自己的 Store。
-
-受管模式拒绝旧的全库 `/api/data` 等原始入口，并禁用直读数据文件的 CLI 业务操作；内部 `/api/business` 必须携带有效签名上下文。关闭旧接口以后，页面入口必须使用已经适配的受控业务 UI，不能继续让旧页面请求原始接口后声称 UI 正常。既定六卡、数据驱动周日历及统计行为仍需按对应 PRD 验证。
 
 ### TingProof
 
@@ -195,7 +170,7 @@ npm run core:admin -- init \
 | `/health` | GET，服务健康及版本，不含业务记录 |
 | `/` | 唯一用户工作台，由源站前端提供 |
 | `/business/` | 网关模式返回工作台；无网关的独立业务开发模式保留调试界面 |
-| `/business/reminder/`、`/business/tingproof/` | GET，受管应用聚焦界面 |
+| `/business/tingproof/` | GET，受管应用聚焦界面 |
 | `/api/business/catalog` | GET，当前身份及业务授权可访问的空间和应用动作 |
 | `/api/business/invoke` | POST，固定业务动作，cookie 请求需 CSRF |
 | `/api/business/events?spaceId=...&appId=...` | GET，当前授权范围内的提交事件与重连游标 |
@@ -217,7 +192,7 @@ npm run core:admin -- init \
 
 `POST ${issuer}/mcp` 使用官方 SDK 的无会话 Streamable HTTP JSON 传输，每次携带绑定具体用户、客户端及范围的 Bearer。工具发现按当前权限过滤，实际执行再次验权。协议版本以实际 `initialize` 握手结果登记。
 
-工具契约包括Reminder列表、创建、修改、完成、删除、例行执行记录和统计，以及TingProof任务列表、读取、校正提交与分配。实际可用工具取决于已配置适配器与当前授权，名称/参数以实时发现为准；不把契约存在当作所有应用已在生产接通。不提供`exec`、原始文件、SQL、部署、任意网络请求或代码编辑工具。
+工具契约包括Lattice幻灯片列表与渲染，以及TingProof任务列表、读取、校正提交与分配。实际可用工具取决于已配置适配器与当前授权，名称/参数以实时发现为准；不把契约存在当作所有应用已在生产接通。不提供`exec`、原始文件、SQL、部署、任意网络请求或代码编辑工具。
 
 远程授权发现：
 
@@ -268,7 +243,6 @@ Docker 统一运行、应用数据映射和正式切换按 [Docker 手册](DOCKE
 | 浏览器授权 | 历史浏览器身份专项检查 | 临时真实服务上的 Chromium 登录、回跳、范围选择、换码与撤销 |
 | 业务界面 | 历史业务浏览器场景 | 隔离夹具上的业务界面；具体断言以脚本为准 |
 | 个性化工作台 | 历史个性化工作台专项检查 | 受限内容、同标签导航、空态、到期及概览权限 |
-| Reminder原版界面 | 历史 Reminder 界面对照检查 | 同一合成内容下的原版/受管界面几何、交互及权限对照 |
 | 应用适配 | 各子仓 `npm test` | 应用自身事务、schema、版本、幂等与受管旧入口防护 |
 | 独立 Paseo Codex | [C01–X01](VERIFICATION.md) | 生效隔离环境内的真实 MCP 操作与清理，需另有实际证据 |
 | 手机第三方 App | [M01–M03](VERIFICATION.md) | 物理手机上的独立连接与业务闭环，需用户参与 |

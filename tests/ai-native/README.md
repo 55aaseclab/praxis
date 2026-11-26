@@ -10,9 +10,9 @@ This is an opt-in external-client harness, not a Praxis-internal agent. [Platfor
 
 | Campaign | Actors | Apps and continuity |
 | --- | --- | --- |
-| Family travel | Planner, explorer, comfort-minded member | Travel, Reminder. Same three people and records across destinations; feedback, personal preparation and actionable shared reminders. Thirty initial destinations do not end the campaign. |
-| AI-era vulnerability management | Mentor/student in Research; engineer in Productization; Marketing; Finance/support | Reminder, Knowledge, Lattice, Memo, Polaris, Projects, Intelligence. Demand → research → engineering → market delivery/feedback → finance/support, with returns and revisions. Research belongs to a synthetic school entity, the other groups to a synthetic company. |
-| Full-time simulated investor | One investor | Reminder, Memo, Intelligence, Polaris. CNY 1,000,000 starting capital, 10% target net return. Market/horizon/asOf are mandatory before a round can start; trading, fills, fees and funds are synthetic. |
+| Family travel | Planner, explorer, comfort-minded member | Travel, Memo. Same three people and records across destinations; feedback, personal preparation and actionable shared follow-ups. Thirty initial destinations do not end the campaign. |
+| AI-era vulnerability management | Mentor/student in Research; engineer in Productization; Marketing; Finance/support | Lattice, Memo, Polaris, Projects, Intelligence. Demand → research → engineering → market delivery/feedback → finance/support, with returns and revisions. Research belongs to a synthetic school entity, the other groups to a synthetic company. |
+| Full-time simulated investor | One investor | Memo, Intelligence, Polaris. CNY 1,000,000 starting capital, 10% target net return. Market/horizon/asOf are mandatory before a round can start; trading, fills, fees and funds are synthetic. |
 
 Models are exact: coordinator `opencode/hexhive005-main/zai-org/GLM-5.3-Flash`; workers `opencode/hexhive005-work/zai-org/GLM-5.3-Flash`; maintenance `codex/gpt-6.1-sol`, thinking `ultra`, provider default context window (no override). Discovery rejects unavailable exact models instead of substituting. Main and Maintenance are separate from the global one-worker slot; while Maintenance is reserved/running, new business work is blocked to avoid testing a changing environment. Every invocation requires human approval. There is no worker token budget or fixed campaign expiry. Quota/provider failures retain progress; they do not permit blind retries.
 

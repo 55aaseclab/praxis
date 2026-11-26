@@ -66,8 +66,8 @@ test('Chromium workbench updates app tiles and receives change events without a 
   const f = await fixture(t);
   f.auth.createUser({ id: 'worker', username: 'worker', password });
   f.auth.createSpace({ id: 'live-family', type: 'family', ownerId: 'worker' });
-  f.auth.grantResource({ userId: 'worker', appId: 'reminder', spaceId: 'live-family', actions: ['read'], resources: ['live-record'] });
-  f.auth.setWebAccess({ userId: 'worker', apps: ['reminder'], prds: true });
+  f.auth.grantResource({ userId: 'worker', appId: 'slides', spaceId: 'live-family', actions: ['read'], resources: ['live-record'] });
+  f.auth.setWebAccess({ userId: 'worker', apps: ['lattice-slides'], prds: true });
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args: ['--no-sandbox'] });
   t.after(async () => browser.close());
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -90,34 +90,34 @@ test('Chromium workbench updates app tiles and receives change events without a 
   page.on('pageerror', error => errors.push(error.message));
   await login(page, f.origin, 'worker');
   await page.waitForFunction(() => document.querySelector('#apps-section')?.hidden === false && document.querySelector('#apps')?.childElementCount > 0, null, { timeout: 15000 });
-  assert.equal(await page.locator('#apps .workbench-app[data-app="reminder"]').count(), 1);
-  assert.equal(await page.locator('#apps .workbench-app[data-app="knowledge"]').count(), 0);
+  assert.equal(await page.locator('#apps .workbench-app[data-app="lattice-slides"]').count(), 1);
+  assert.equal(await page.locator('#apps .workbench-app[data-app="travel"]').count(), 0);
   await page.evaluate(() => { window.__pageToken = 'original'; });
-  const reminderTile = () => page.locator('#apps .workbench-app[data-app="reminder"]').evaluate(node => { const rect = node.getBoundingClientRect(); return [rect.x, rect.y, rect.width, rect.height]; });
-  const before = await reminderTile(), scrollBefore = await page.evaluate(() => [scrollX, scrollY]);
+  const slidesTile = () => page.locator('#apps .workbench-app[data-app="lattice-slides"]').evaluate(node => { const rect = node.getBoundingClientRect(); return [rect.x, rect.y, rect.width, rect.height]; });
+  const before = await slidesTile(), scrollBefore = await page.evaluate(() => [scrollX, scrollY]);
   // An authorization change made by another session reaches the open workbench.
-  f.auth.setWebAccess({ userId: 'worker', apps: ['reminder', 'knowledge'], prds: true });
-  await page.waitForFunction(() => document.querySelector('#apps .workbench-app[data-app="knowledge"]'), null, { timeout: 8000 });
+  f.auth.setWebAccess({ userId: 'worker', apps: ['lattice-slides', 'memo'], prds: true });
+  await page.waitForFunction(() => document.querySelector('#apps .workbench-app[data-app="travel"]'), null, { timeout: 8000 });
   assert.equal(await page.evaluate(() => window.__pageToken), 'original', 'no full-page reload');
-  assert.equal(await page.locator('#apps .workbench-app[data-app="reminder"]').count(), 1, 'no duplicated renders');
-  assert.deepEqual(await reminderTile(), before, 'existing tile keeps its geometry');
+  assert.equal(await page.locator('#apps .workbench-app[data-app="lattice-slides"]').count(), 1, 'no duplicated renders');
+  assert.deepEqual(await slidesTile(), before, 'existing tile keeps its geometry');
   assert.deepEqual(await page.evaluate(() => [scrollX, scrollY]), scrollBefore);
   // App data changes stream to the subscribed session.
-  f.events.ingest('reminder', 'live-family', { cursor: 2, events: [{ id: 'e1', resourceId: 'live-record', revision: '1', operation: 'change', cursor: 2 }] });
-  await page.waitForFunction(() => window.__liveEvents.some(event => event.type === 'change' && event.data?.appId === 'reminder'), null, { timeout: 8000 });
+  f.events.ingest('slides', 'live-family', { cursor: 2, events: [{ id: 'e1', resourceId: 'live-record', revision: '1', operation: 'change', cursor: 2 }] });
+  await page.waitForFunction(() => window.__liveEvents.some(event => event.type === 'change' && event.data?.appId === 'slides'), null, { timeout: 8000 });
   // Reconnection after a core restart still delivers updates.
   await f.restartCore();
   await page.waitForFunction(() => window.__liveEvents.filter(event => event.type === 'ready').length >= 2, null, { timeout: 30000 });
-  f.auth.setWebAccess({ userId: 'worker', apps: ['knowledge'], prds: true });
-  await page.waitForFunction(() => !document.querySelector('#apps .workbench-app[data-app="reminder"]'), null, { timeout: 15000 });
+  f.auth.setWebAccess({ userId: 'worker', apps: ['travel'], prds: true });
+  await page.waitForFunction(() => !document.querySelector('#apps .workbench-app[data-app="lattice-slides"]'), null, { timeout: 15000 });
   assert.equal(await page.evaluate(() => window.__pageToken), 'original');
   // Phone width: the same live update path with no horizontal overflow.
   const phone = await context.newPage();
   await phone.setViewportSize({ width: 390, height: 844 });
   await login(phone, f.origin, 'worker');
   await phone.waitForFunction(() => document.querySelector('#apps-section')?.hidden === false && document.querySelector('#apps')?.childElementCount > 0, null, { timeout: 15000 });
-  f.auth.setWebAccess({ userId: 'worker', apps: ['reminder', 'knowledge'], prds: true });
-  await phone.waitForFunction(() => document.querySelector('#apps .workbench-app[data-app="knowledge"]'), null, { timeout: 8000 });
+  f.auth.setWebAccess({ userId: 'worker', apps: ['lattice-slides', 'memo'], prds: true });
+  await phone.waitForFunction(() => document.querySelector('#apps .workbench-app[data-app="travel"]'), null, { timeout: 8000 });
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no horizontal overflow at 390 px');
   await phone.close();
   assert.deepEqual(errors, []);

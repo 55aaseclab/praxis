@@ -6,7 +6,7 @@ Praxis provides one workbench, permission system and set of business APIs. Each 
 
 ## Workbench and apps
 
-Open the [Praxis workbench](https://polaris.jianxiaoyitech.com/). HTTP on port 4321 redirects to canonical HTTPS on the deployed host. The legacy paths `/business`, `/business/` and `/business.html` also lead to the workbench. App-specific routes such as `/business/reminder/` serve the managed view of that app.
+Open the [Praxis workbench](https://polaris.jianxiaoyitech.com/). HTTP on port 4321 redirects to canonical HTTPS on the deployed host. The legacy paths `/business`, `/business/` and `/business.html` also lead to the workbench. App-specific routes such as `/business/tingproof/` serve the managed view of that app.
 
 Each signed-in user gets a workbench. Administrators see default application entries. Project records require separate resource access. Other users see only granted entries, and a new account may see an empty workbench. Project access comes from Projects, which opens the corresponding overview. Project reference documents open from the corresponding Materials view. The destination service checks access again.
 
@@ -16,9 +16,7 @@ Apps and projects open in the current tab. Browser Back returns to the previous 
 
 | App | Managed entry | Service port | Source |
 | --- | --- | ---: | --- |
-| Reminder | `/apps/reminder/` | 4322 | `third_party/reminder` |
 | Travel | `/apps/travel/` | 4323 | `third_party/travel` |
-| Knowledge | `/apps/knowledge/` | 14324 | `third_party/knowledge` |
 | Memo | `/apps/memo/` | 4325 | `third_party/memo` |
 | Lattice | `/apps/slides/` | 14666 | `third_party/lattice` |
 | TingProof | `/apps/tingproof/` | 15173 | `third_party/tingproof` |
@@ -28,7 +26,7 @@ Apps and projects open in the current tab. Browser Back returns to the previous 
 | Letters | `/apps/letters/` | Web slot | `third_party/letters` |
 | Profiles | `/apps/profiles/` | Web slot | `third_party/profiles` |
 
-The table gives the managed gateway targets. Standalone Knowledge, Lattice and TingProof use ports 4324, 4666 and 5173, respectively. The production gateway on 14321 forwards to fixed local targets. The managed core backend listens on loopback port 4326. App-specific publishing ports, mounts and probes appear in the Docker guide. Knowledge serves notes, books and project reference documents. Legacy Knowledge and Travel URLs use authorized redirects. The Letters and Profiles readers use separate read-only document mounts. Both require the configured owner’s administrator session. The Polaris entry is an administrator-only read-only observation viewer. [Deployment guide](DOCKER.en.md)
+The table gives the managed gateway targets. Standalone Lattice and TingProof use ports 4666 and 5173, respectively. The production gateway on 14321 forwards to fixed local targets. The managed core backend listens on loopback port 4326. App-specific publishing ports, mounts and probes appear in the Docker guide. Legacy Travel URLs use authorized redirects. The Letters and Profiles readers use separate read-only document mounts. Both require the configured owner’s administrator session. The Polaris entry is an administrator-only read-only observation viewer. [Deployment guide](DOCKER.en.md)
 
 ```mermaid
 flowchart LR
@@ -82,7 +80,7 @@ npm run core -- --config /absolute/private/business.json --host 127.0.0.1 --port
 npm run core:admin -- status --config /absolute/private/business.json
 ```
 
-Use an explicit HTTPS origin as the production OAuth issuer. Loopback HTTP is available for local development and isolated tests. A bind address such as `0.0.0.0` describes a listener. The workbench is at `${issuer}/`. The managed endpoints `/business/reminder/` and `/business/tingproof/` return app-specific HTML. Shared `app-transport.js` provides authentication, calls and events. The MCP endpoint is `${issuer}/mcp`. Verify public routing separately from local process startup.
+Use an explicit HTTPS origin as the production OAuth issuer. Loopback HTTP is available for local development and isolated tests. A bind address such as `0.0.0.0` describes a listener. The workbench is at `${issuer}/`. The managed endpoints `/business/tingproof/` return app-specific HTML. Shared `app-transport.js` provides authentication, calls and events. The MCP endpoint is `${issuer}/mcp`. Verify public routing separately from local process startup.
 
 Anyone with a valid website account can open Settings for their own access and agent delegations. Platform administrators can also administer users and global status. Browser actions use the person's existing permissions. External agents use explicit OAuth delegation within the current app and resource boundaries. [Identity guide](BUSINESS-AUTH.en.md)
 
@@ -102,10 +100,7 @@ This example uses placeholder paths and space IDs:
   "allowedHosts": ["127.0.0.1:4326", "localhost:4326"],
   "allowedOrigins": [],
   "apps": {
-    "reminder": {
       "url": "http://127.0.0.1:4322/api/business",
-      "keyFile": "/absolute/private/secrets/business-reminder.key",
-      "spacesFile": "/absolute/private/reminder-business-spaces.json",
       "spaces": ["opaque-personal-space-id"]
     },
     "tingproof": {
@@ -127,37 +122,19 @@ Sign in and open Settings or `${issuer}/admin/`. The Users view manages accounts
 
 Only administrator browser sessions can access `/api/business/admin/*`. The account endpoints at `/api/business/account/*` take their user identity from the current browser session. Both sets require same-origin CSRF checks for writes. Password resets invalidate old sessions and delegations. The last active administrator must retain administrative access.
 
-The maintenance CLI bootstraps identity metadata and private configuration without importing Reminder tasks. Map the active data file explicitly:
 
 ```sh
 npm run core:admin -- init \
   --config /absolute/private/business.json \
   --issuer https://your-existing-domain.example \
-  --reminder-data /absolute/active/reminder/checklist.json \
   --state-root /absolute/private/state \
   --username owner
 ```
 
-Initialization creates new files, prints their locations and preserves existing configuration. Its output includes identity and event database paths, a personal space, separate app signing keys, the Reminder space-to-file mapping and a private `business-owner.json` for browser login.
 
 Other maintenance commands include `user-create`, `space-create`, `member-set`, `permission-grant`, `client-create`, `grant-create`, `grant-revoke`, `token-issue` and `status`. Provide mutations in a mode-600 regular file with `--spec /absolute/private/spec.json`. For `token-issue`, specify `--out` to write credentials into a new private file. Authorized business users and their agents operate app data via API or MCP. Space administrators use the scoped management API for membership and sharing.
 
 ## 4. Managed independent apps
-
-### Reminder
-
-Set `REMINDER_MANAGED=1`, `REMINDER_BUSINESS_KEY_FILE` and `REMINDER_BUSINESS_SPACES_FILE`. Example space file:
-
-```json
-{
-  "spaces": {
-    "opaque-personal-space-id": "/absolute/active/reminder/checklist.json",
-    "opaque-family-space-id": "/absolute/active/reminder/family-checklist.json"
-  }
-}
-```
-
-Give each space its own canonical data path. The schema-v2 adapter uses the app's store with stable resource IDs, revisions, durable idempotency and commit events. Managed deployments reject raw routes including the old whole-database `/api/data` and disable direct-file CLI business operations. Internal `/api/business` requests require a valid signed context. Test the approved six-card views, data-driven weekly calendar and statistics against the app PRD.
 
 ### TingProof
 
@@ -174,7 +151,7 @@ The business bridge signs a short-lived assertion binding the app, user, client,
 | `/health` | GET health and version metadata |
 | `/` | User workbench |
 | `/business/` | Workbench in gateway mode; independent development entry otherwise |
-| `/business/reminder/`, `/business/tingproof/` | GET app-specific managed views |
+| `/business/tingproof/` | GET app-specific managed views |
 | `/api/business/catalog` | GET spaces and actions allowed for the current identity |
 | `/api/business/invoke` | POST a fixed app action; cookie requests require CSRF |
 | `/api/business/events?spaceId=...&appId=...` | GET committed events and a reconnect cursor |
@@ -194,7 +171,7 @@ Public tool results default to English. Send the HTTP header `Accept-Language: z
 
 The MCP section in Settings shows registered capabilities, adapter configuration and recent usage for administrators. A registration or past call is separate from a current health check.
 
-The protected service at `POST ${issuer}/mcp` uses the official SDK's stateless Streamable HTTP JSON transport. Each call presents a Bearer credential bound to a user, client and scope. Tool discovery filters by current authority and execution checks authority again. Record the actual protocol version from `initialize`. Examples include permitted Reminder listing, creation, completion, execution records and statistics, and TingProof task reading, assignment or correction submission. Consult live discovery for names and arguments. Business clients get no shell, direct files, SQL, deployment access or arbitrary network commands.
+The protected service at `POST ${issuer}/mcp` uses the official SDK's stateless Streamable HTTP JSON transport. Each call presents a Bearer credential bound to a user, client and scope. Tool discovery filters by current authority and execution checks authority again. Record the actual protocol version from `initialize`. Examples include permitted Lattice deck listing and rendering and TingProof task reading, assignment or correction submission. Consult live discovery for names and arguments. Business clients get no shell, direct files, SQL, deployment access or arbitrary network commands.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -239,7 +216,6 @@ Current checkout checks include `node --test tests/workbench-http.test.mjs tests
 | Browser authorization | Historical isolated browser sign-in suite | Chromium sign-in, return path, scope selection, exchange and revocation on temporary services |
 | App interface | Historical business browser scenarios | Scenarios in the isolated app fixture |
 | Personalized workbench | Historical personalized workbench suite | Permission filtering, same-tab navigation, empty and expired states and status access |
-| Reminder parity | Historical Reminder parity suite | Standalone and managed geometry, interaction and access on equal synthetic content |
 | App adapter | `npm test` in the owning repository when provided | App transactions, schema, revisions, idempotency and managed route boundaries |
 | Independent Paseo Codex | C01–X01 | Scoped MCP operations and cleanup under effective runtime isolation |
 | Third-party phone app | M01–M03 | Independent physical-device connection and end-to-end business operation |

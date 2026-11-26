@@ -5,26 +5,26 @@ import { setAppFacts } from '../public/app-registry.js';
 import { mergeBrowserInventory, validateDataManagement } from '../public/admin-data.js';
 
 const origin = 'https://workbench.example.test';
-const registeredFacts = ['reminder', 'projects', 'lattice-slides', 'memo', 'field-notes'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + (id === 'lattice-slides' ? 'slides' : id) + '/', policy: 'grant', legacyPaths: id === 'reminder' ? ['/business/reminder/'] : [] } }));
+const registeredFacts = ['projects', 'lattice-slides', 'memo', 'field-notes'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + (id === 'lattice-slides' ? 'slides' : id) + '/', policy: 'grant', legacyPaths: [] } }));
 setAppFacts(registeredFacts);
-const card = (overrides = {}) => ({ id: 'reminder:sample:record-a', appId: 'reminder', spaceId: 'sample', resourceId: 'record-a', revision: '7', kind: 'reminder', title: 'Keep this original title', preview: 'Source-authored <script>text</script>', reason: { en: 'A reminder you set.', zh: '你设置的提醒。' }, source: { name: 'Reminder' }, primaryAction: { label: { en: 'Open reminder', zh: '打开提醒' }, href: '/business/reminder/?space=sample&item=record-a' }, evidence: [{ label: 'Original note', excerpt: 'Keep the author’s language.', href: '/business/reminder/?space=sample&item=record-a', revision: '7' }], ...overrides });
-const envelope = items => ({ schemaVersion: 1, items, sources: [{ appId: 'reminder', status: 'ready' }], partial: false, generatedAt: '2026-11-19T12:00:00.000Z' });
+const card = (overrides = {}) => ({ id: 'memo:sample:record-a', appId: 'memo', spaceId: 'sample', resourceId: 'record-a', revision: '7', kind: 'reminder', title: 'Keep this original title', preview: 'Source-authored <script>text</script>', reason: { en: 'A record you flagged.', zh: '你标记的记录。' }, source: { name: 'Memo' }, primaryAction: { label: { en: 'Open record', zh: '打开记录' }, href: '/apps/memo/' }, evidence: [{ label: 'Original note', excerpt: 'Keep the author’s language.', href: '/apps/memo/', revision: '7' }], ...overrides });
+const envelope = items => ({ schemaVersion: 1, items, sources: [{ appId: 'memo', status: 'ready' }], partial: false, generatedAt: '2026-11-19T12:00:00.000Z' });
 const reply = value => ({ ok: true, json: async () => value });
 
 test('card projections preserve authored content while localizing only declared labels', () => {
   const checked = validateCardEnvelope(envelope([card()]), origin).items[0];
   assert.equal(checked.title, 'Keep this original title');
   assert.equal(checked.preview, 'Source-authored <script>text</script>');
-  assert.equal(localizedText(checked.reason, 'zh'), '你设置的提醒。');
+  assert.equal(localizedText(checked.reason, 'zh'), '你标记的记录。');
   assert.equal(localizedText(checked.evidence[0].excerpt, 'zh'), 'Keep the author’s language.');
   assert.throws(() => validateCardEnvelope(envelope([card(), card()]), origin), /Duplicate/);
 });
 
 test('native actions stay in their app while evidence supports safe original sources', () => {
-  for (const href of ['https://other.example.test/apps/reminder/', '/apps/projects/', '/api/business/admin/users', 'javascript:alert(1)', '//other.example.test/apps/reminder/', '/apps/reminder/../../admin/']) {
-    assert.throws(() => nativeHref(href, 'reminder', origin), undefined, href);
+  for (const href of ['https://other.example.test/apps/memo/', '/apps/projects/', '/api/business/admin/users', 'javascript:alert(1)', '//other.example.test/apps/memo/', '/apps/memo/../../admin/']) {
+    assert.throws(() => nativeHref(href, 'memo', origin), undefined, href);
   }
-  for (const href of ['/api/business/admin/users', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,example', '//other.example.test/apps/reminder/', '/apps/reminder/a/%2e%2e/', '/apps/reminder/../../admin/']) {
+  for (const href of ['/api/business/admin/users', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,example', '//other.example.test/apps/memo/', '/apps/memo/a/%2e%2e/', '/apps/memo/../../admin/']) {
     assert.throws(() => validateCard(card({ evidence: [{ label: 'Source', href }] }), origin), undefined, href);
   }
   for (const href of ['https://other.example.test/source', '/apps/projects/']) assert.equal(validateCard(card({ evidence: [{ label: 'Source', href }] }), origin).evidence[0].href, href);
@@ -94,9 +94,9 @@ test('unreviewed modules are refused and one broken provider cannot hide other a
 });
 
 test('data location sources remain factual and browser failures do not retain stale paths', () => {
-  const value = { schemaVersion: 1, generatedAt: '2026-11-19T12:00:00.000Z', apps: [{ id: 'reminder', name: 'Reminder', locations: [{ label: 'Task store', kind: 'json', hostPath: '/synthetic/data/tasks.json' }] }, { id: 'memo', name: 'Memo', locations: [{ label: 'Old browser key', kind: 'browser', storageKey: 'sample.old' }] }] };
+  const value = { schemaVersion: 1, generatedAt: '2026-11-19T12:00:00.000Z', apps: [{ id: 'travel', name: 'Travel', locations: [{ label: 'Trip store', kind: 'json', hostPath: '/synthetic/data/trips.json' }] }, { id: 'memo', name: 'Memo', locations: [{ label: 'Old browser key', kind: 'browser', storageKey: 'sample.old' }] }] };
   const merged = mergeBrowserInventory(value, [{ appId: 'memo', status: 'unavailable', items: [] }]);
-  assert.equal(merged.apps[0].locations[0].hostPath, '/synthetic/data/tasks.json');
+  assert.equal(merged.apps[0].locations[0].hostPath, '/synthetic/data/trips.json');
   assert.deepEqual(merged.apps[1].locations, []); assert.equal(merged.apps[1].status, 'unavailable');
   validateDataManagement({ ...value, apps: [{ id: 'field-notes', name: 'Field notes', locations: [{ label: 'Derived projection', kind: 'derived' }, { label: 'External archive', kind: 'external', description: 'Owned by the connected service.' }] }] });
   assert.equal(value.apps[1].locations[0].storageKey, 'sample.old');

@@ -5,7 +5,7 @@ import { renderPrdMarkdown as renderDocument } from '../src/prd-renderer.mjs';
 
 const registeredSources = [
   {id:'praxis',source:'docs/PRD.md',en:'docs/PRD.en.md'},
-  {id:'reminder',source:'third_party/reminder/docs/PRD.md',en:'third_party/reminder/docs/PRD.en.md'},
+  {id:'travel',source:'third_party/travel/docs/PRD.md',en:'third_party/travel/docs/PRD.en.md'},
   {id:'memo',source:'third_party/memo/docs/Memo_PRD.md',en:'third_party/memo/docs/PRD.en.md'},
   {id:'tingproof',source:'third_party/tingproof/docs/PRD.md',en:'third_party/tingproof/docs/PRD.en.md'},
 ];
@@ -54,8 +54,8 @@ test('only safe explicit protocols and document anchors remain clickable', async
 });
 
 test('relative links map only to allowed PRDs and other local paths become plain text', async () => {
-  const { html } = await renderPrdMarkdown(document('# PRD links\n\n[Reminder](../third_party/reminder/docs/PRD.md)\n\n[Memo](../third_party/memo/docs/Memo_PRD.md)\n\n[Self](PRD.md)\n\n[Catalog](/prds/tingproof/)\n\n[Unknown](ROADMAP.md)\n\n[Private data](../third_party/reminder/data/checklist.json)\n\n[Host path](/etc/passwd)\n'));
-  assert.match(html, /href="\/prds\/reminder\/\?lang=zh"/);
+  const { html } = await renderPrdMarkdown(document('# PRD links\n\n[Travel](../third_party/travel/docs/PRD.md)\n\n[Memo](../third_party/memo/docs/Memo_PRD.md)\n\n[Self](PRD.md)\n\n[Catalog](/prds/tingproof/)\n\n[Unknown](ROADMAP.md)\n\n[Private data](../third_party/travel/data/itineraries.json)\n\n[Host path](/etc/passwd)\n'));
+  assert.match(html, /href="\/prds\/travel\/\?lang=zh"/);
   assert.match(html, /href="\/prds\/memo\/\?lang=zh"/);
   assert.match(html, /href="\/prds\/praxis\/\?lang=zh"/);
   assert.match(html, /href="\/prds\/tingproof\/"/);
@@ -66,7 +66,7 @@ test('relative links map only to allowed PRDs and other local paths become plain
 });
 
 test('relative PRD links resolve against a third-party source directory', async () => {
-  const { html } = await renderPrdMarkdown(document('# Related\n\n[Main](../../../docs/PRD.md)\n\n[Memo](../../memo/docs/Memo_PRD.md)\n\n[Not a PRD](../../../docs/ROADMAP.md)\n', 'third_party/reminder/docs/PRD.md', 'reminder'));
+  const { html } = await renderPrdMarkdown(document('# Related\n\n[Main](../../../docs/PRD.md)\n\n[Memo](../../memo/docs/Memo_PRD.md)\n\n[Not a PRD](../../../docs/ROADMAP.md)\n', 'third_party/travel/docs/PRD.md', 'travel'));
   assert.match(html, /href="\/prds\/praxis\/\?lang=zh"/);
   assert.match(html, /href="\/prds\/memo\/\?lang=zh"/);
   assert.doesNotMatch(html, /href="[^"\s]*ROADMAP\.md"/);

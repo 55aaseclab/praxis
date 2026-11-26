@@ -9,7 +9,7 @@ import { AuthStore, createAuthHandler, hashVerifier, SESSION_COOKIE } from '../s
 import { createAdminHandler, createAccountHandler } from '../src/business/admin.mjs';
 
 const password = 'Synthetic-user-delete-password-2026';
-const rule = (spaceId, resources = ['*']) => ({ appId: 'reminder', spaceId, actions: ['read'], resources });
+const rule = (spaceId, resources = ['*']) => ({ appId: 'slides', spaceId, actions: ['read'], resources });
 
 function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), 'praxis-delete-user-'));
@@ -97,11 +97,11 @@ test('user lifecycle API enforces native administration, exact confirmation, sel
 test('user deletion atomically removes account authorization and automatic space, retaining files and unrelated identities', t => {
   const f = fixture(t), store = f.store;
   const personal = store.ensurePersonalSpace('target');
-  store.configureWebAccessBoundary({ apps: { reminder: { spaces: ['synthetic-shared'] } } });
-  store.setSpaceAppEnrollment({ spaceId: personal.id, appId: 'reminder', enabled: true });
+  store.configureWebAccessBoundary({ apps: { slides: { spaces: ['synthetic-shared'] } } });
+  store.setSpaceAppEnrollment({ spaceId: personal.id, appId: 'slides', enabled: true });
   store.setSpaceAppEnrollment({ spaceId: personal.id, appId: 'intelligence', enabled: true });
   store.grantResource({ userId: 'target', ...rule(personal.id) });
-  store.setWebAccess({ userId: 'target', apps: ['reminder'], prds: true });
+  store.setWebAccess({ userId: 'target', apps: ['lattice-slides'], prds: true });
   store.setPlatformAdmin({ userId: 'target', enabled: true });
   const session = store.login({ username: 'synthetic-target', password });
   const consent = store.createConsent(session.sessionToken, [rule(personal.id)], 'synthetic-user-deletion');
@@ -112,7 +112,7 @@ test('user deletion atomically removes account authorization and automatic space
   const expired = store.createGrant({ userId: 'target', clientId: 'synthetic-agent', rules: [rule('synthetic-shared')] });
   store.db.prepare('UPDATE auth_grants SET expires_at=? WHERE id=?').run(Date.now() - 1, expired.id);
   const verifier = 'synthetic-user-deletion-verifier-'.repeat(2);
-  const request = { clientId: 'synthetic-agent', redirectUri: 'https://synthetic.example/callback', challenge: hashVerifier(verifier), resource: store.resource, requested: { reminder: ['read'] } };
+  const request = { clientId: 'synthetic-agent', redirectUri: 'https://synthetic.example/callback', challenge: hashVerifier(verifier), resource: store.resource, requested: { slides: ['read'] } };
   const code = store.createAuthorizationCode({ request, userId: 'target', rules: [rule(personal.id)], spaceId: personal.id });
   const delegatedSession = store.login({ username: 'synthetic-target', password, clientId: 'synthetic-agent' });
   const unrelatedGrant = store.createGrant({ userId: 'member', clientId: 'synthetic-agent', rules: [rule('synthetic-shared')] });
@@ -152,7 +152,7 @@ test('user deletion atomically removes account authorization and automatic space
   assert.throws(() => store.verifyCsrf(session.sessionToken, session.csrfToken), { status: 401 }, 'pending signed consent cannot pass its deleted session boundary');
   assert.throws(() => store.createGrant({ userId: 'target', clientId: 'synthetic-agent', rules: store.consentRules(session.sessionToken, { consent, rule_0: '1' }, 'synthetic-user-deletion') }), { status: 403 });
   assert.throws(() => store.login({ username: 'synthetic-target', password }), { status: 401 });
-  assert.equal(store.authorize(unrelatedTokens.access_token, { appId: 'reminder', spaceId: 'synthetic-shared', action: 'read' }).userId, 'member');
+  assert.equal(store.authorize(unrelatedTokens.access_token, { appId: 'slides', spaceId: 'synthetic-shared', action: 'read' }).userId, 'member');
   assert.deepEqual(store.db.prepare("SELECT * FROM auth_users WHERE id<>'target' ORDER BY id").all(), untouched.users);
   assert.deepEqual(store.db.prepare('SELECT * FROM auth_spaces ORDER BY id').all(), untouched.spaces);
   assert.deepEqual(store.db.prepare('SELECT * FROM auth_members ORDER BY space_id,user_id').all(), untouched.members);
@@ -163,7 +163,7 @@ test('user deletion atomically removes account authorization and automatic space
   assert.deepEqual(reopened.db.prepare('PRAGMA foreign_key_check').all(), []);
   assert.equal(reopened.db.prepare("SELECT COUNT(*) AS n FROM auth_users WHERE id='target'").get().n, 0);
   assert.throws(() => reopened.authenticate(tokens.access_token), { status: 401 });
-  assert.equal(reopened.authorize(unrelatedTokens.access_token, { appId: 'reminder', spaceId: 'synthetic-shared', action: 'read' }).userId, 'member');
+  assert.equal(reopened.authorize(unrelatedTokens.access_token, { appId: 'slides', spaceId: 'synthetic-shared', action: 'read' }).userId, 'member');
   reopened.createUser({ id: 'replacement-target', username: 'synthetic-target', password });
   assert.deepEqual(reopened.listGrants('replacement-target'), [], 'reusing a username revives no deleted authorization');
 });

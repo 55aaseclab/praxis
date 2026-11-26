@@ -10,7 +10,7 @@ Each maintained app publishes a reviewed `praxis-provider.mjs` at its pinned pub
 
 | Source | Card execution | Data inventory |
 | --- | --- | --- |
-| Reminder, Knowledge, Travel, Projects, Memo, TingProof, Lattice | Server; existing signed, resource-filtered app reads | App-owned descriptors resolved against private configuration and runtime metadata |
+| Travel, Projects, Memo, TingProof, Lattice | Server; existing signed, resource-filtered app reads | App-owned descriptors resolved against private configuration and runtime metadata |
 | Intelligence | Server; explicitly configured, fixed native read routes | App-owned descriptors; the current permission granularity is the native view |
 | Letters, Profiles | Current browser; existing protected native document reads | Server-resolved originals metadata, subject to administrator access |
 | Polaris | Runtime classification; no workbench cards | Read-only runtime observation metadata |

@@ -6,10 +6,6 @@
 	path = third_party/profiles
 	url = https://github.com/55aaseclab/profiles.git
 	branch = main
-[submodule "reminder"]
-	path = third_party/reminder
-	url = https://github.com/55aaseclab/reminder.git
-	branch = main
 [submodule "intelligence"]
 	path = third_party/intelligence
 	url = https://github.com/55aaseclab/intelligence.git
@@ -21,10 +17,6 @@
 [submodule "travel"]
 	path = third_party/travel
 	url = https://github.com/55aaseclab/travel.git
-	branch = main
-[submodule "knowledge"]
-	path = third_party/knowledge
-	url = https://github.com/55aaseclab/knowledge.git
 	branch = main
 [submodule "memo"]
 	path = third_party/memo

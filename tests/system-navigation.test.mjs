@@ -82,13 +82,13 @@ test('charset, compression and modified response validators have bounded safe be
 test('only document entry requests and actual successful HTML are transform candidates', () => {
   const req = { method: 'GET', headers: {} };
   assert.deepEqual(navigationContext(req, '/trip/first-day', 'travel'), { mode: 'app', appId: 'travel' });
-  assert.deepEqual(navigationContext(req, '/business/reminder/'), { mode: 'business', appId: 'reminder' });
+  assert.deepEqual(navigationContext(req, '/business/tingproof/'), { mode: 'business', appId: 'tingproof' });
   assert.deepEqual(navigationContext(req, '/admin/'), { mode: 'admin' });
   assert.deepEqual(navigationContext(req, '/prds/'), { mode: 'prds' });
   assert.deepEqual(navigationContext(req, '/prds/sample-app/'), { mode: 'prds' });
   for (const path of ['/api/items', '/assets/app.js', '/static/picture', '/workbench/api/items', '/image.png']) assert.equal(navigationContext(req, path, 'travel'), null, path);
   assert.equal(navigationContext(req, '/lattice/portal/decks/1', 'lattice-slides'), null, 'Lattice owns its portal exclusion');
-  for (const path of ['/business/', '/business/reminder', '/business/reminder/private', '/admin/private', '/share/travel/token/trip', '/prds', '/prds/source.md', '/prds/private/file/']) assert.equal(navigationContext(req, path), null, path);
+  for (const path of ['/business/', '/business/tingproof', '/business/tingproof/private', '/admin/private', '/share/travel/token/trip', '/prds', '/prds/source.md', '/prds/private/file/']) assert.equal(navigationContext(req, path), null, path);
   for (const request of [{ method: 'POST', headers: {} }, { method: 'HEAD', headers: {} }, { method: 'GET', headers: { range: 'bytes=0-2' } }, { method: 'GET', headers: { upgrade: 'websocket' } }, { method: 'GET', headers: { 'sec-fetch-dest': 'script' } }]) assert.equal(navigationContext(request, '/', 'travel'), null);
   assert.equal(isNavigationHtml({ statusCode: 200, headers: htmlHeaders }), true);
   for (const value of [{ statusCode: 304, headers: htmlHeaders }, { statusCode: 200, headers: { 'content-type': 'application/json' } }, { statusCode: 200, headers: { ...htmlHeaders, 'content-disposition': 'attachment' } }, { statusCode: 206, headers: htmlHeaders }]) assert.equal(isNavigationHtml(value), false);

@@ -28,10 +28,9 @@ The workspace UUID survives host and provider changes. `deviceId` identifies a m
 
 | App | Server data and separately handled material |
 | --- | --- |
-| Reminder | Schema-v2 JSON and entries. The server and CLI use one source. Exclude lock and temporary files. |
 | TingProof | SQLite backup includes committed WAL data. Original audio can be registered as a media directory; users must reconnect browser file handles. |
 | Lattice / Slides | Preserve decks, assets and operational `.lattice` state. Exclude dependencies and explicitly rebuildable outputs. The separately registered `apps/slides-business/` includes atomic JSON decks, revisions, jobs and content-addressed objects. |
-| Travel / Knowledge | Separate content directories, photos and structured data. Register Knowledge revisions and managed itineraries in their respective formats. Keep signing and provider credentials outside business content. |
+| Travel | Separate content directories, photos and structured data. Register managed itineraries in their format. Keep signing and provider credentials outside business content. |
 | Memo | `memo.db` holds guides, records, photos and history. Previously unimported browser records require device import or a complete JSON export. |
 
 Validate copies of JSON. Use the SQLite Online Backup API. Check directory stability before and after copying; if data changes, reject that snapshot. A Git bundle preserves local unpublished source commits. Include working changes and untracked files only from approved source paths. Record what's included and omitted.
@@ -54,7 +53,7 @@ node scripts/storage.mjs watch
 
 Initialization creates a random local repository password and an encrypted repository. It scans no business data. Register a nonempty `appSources` before taking a snapshot. The configuration has `schemaVersion: 1`, workspace/device/writer UUIDs, `dataRoot`, primary and preferred repository IDs, `intervalSeconds`, `repositories`, `appSources`, `sourceRepos` and `coverage.omitted`. The Chinese counterpart includes a complete placeholder JSON example.
 
-Local repositories have `id`, `type: "local"`, `path` and `passwordFile`. A source has `id`, `kind` (`json`, `sqlite` or `directory`), `source` and `target`. For schema-v2 Reminder JSON add `schema: "reminder-v2"`. One app may have multiple nonoverlapping targets. A source repository has an ID, checkout path and approved relative paths. List unexported browser data and unregistered audio as omissions.
+Local repositories have `id`, `type: "local"`, `path` and `passwordFile`. A source has `id`, `kind` (`json`, `sqlite` or `directory`), `source` and `target`. App-declared schemas add their `schema` identifier. One app may have multiple nonoverlapping targets. A source repository has an ID, checkout path and approved relative paths. List unexported browser data and unregistered audio as omissions.
 
 By default `watch` snapshots locally once an hour and then synchronizes targets independently. If content, schema, source version and coverage are unchanged, verify and reuse the snapshot and update `lastVerifiedAt`. Data or writer changes create a new historical version. `status` reads local state with per-target `unconfigured/pending/success/failed`, last successful snapshot, pending snapshot and error code. `sync` exits 2 for failed or unconfigured targets and 1 for an operation error. Logs omit raw subprocess errors, arguments, passwords and provider response bodies.
 
@@ -125,9 +124,7 @@ Default to `<dataRoot>/workspaces/<workspaceId>/apps/<appId>`. A private storage
 
 | App | Live data below its root |
 | --- | --- |
-| Reminder | `reminder.db`, with space-qualified records shared by authorized interfaces |
 | TingProof | `tingproof.db`; source audio is a separate input |
-| Knowledge | `knowledge.db`, `content/catalog`, published content for the app entry points |
 | Travel | `itineraries/travel.db`, original `content/catalog` and derived `content/published` |
 | Lattice | `native/decks`, `native/.lattice`, `business/lattice.db` and separate assets |
 | Memo | `memo.db` with guides, records, photos and history; old device-local content needs import |
@@ -136,7 +133,7 @@ Default to `<dataRoot>/workspaces/<workspaceId>/apps/<appId>`. A private storage
 | Polaris | Read-only observation file in the private workspace. The viewer image and source carry no records. |
 | Praxis | `business` for authorization/events and `observations` |
 
-Projects and Knowledge register separate SQLite sources. A missing previously registered database fails closed; the backup worker never manufactures substitute records. Knowledge also keeps immutable sources, revisions, idempotency and outbox events. Keep credentials and older book/photo sources separate. Start the app before the worker reading a newly configured database.
+Projects registers separate SQLite sources. A missing previously registered database fails closed; the backup worker never manufactures substitute records. Keep credentials and older book/photo sources separate. Start the app before the worker reading a newly configured database.
 
 After the Lattice merge, the registered source is `third_party/lattice`. Preserve historical source bundles and control configuration in private recovery storage. A stopped-writer cutover verified size, ownership, permissions and hashes for deck sources and operational state, then rebuilt the viewer cache. The existing business blobs, signing key and resource IDs stayed in place. Register the independent read-only Polaris viewer source and authorized observation file separately. [Viewer storage](POLARIS-VIEWER.md)
 
@@ -158,7 +155,7 @@ Recovery source discovery reads declared configuration metadata and the coordina
 
 ## App-owned structured databases
 
-Use one app-owned SQLite database per application for authoritative server-managed structured records. Reminder, Intelligence, Travel and Lattice business state live in their own databases; existing Knowledge, Projects, Memo, TingProof and platform databases retain ownership. Records keep stable space/resource IDs, revisions, ordering, receipts, events, timestamps, unknown historical fields and authorization. Reminder uses `reminder.db` with space-qualified records instead of a live `spaces/<id>/checklist.json` tree. Database namespaces do not grant access. JSON remains an explicit import/export or compatibility format, never an automatic fallback for a missing configured database.
+Use one app-owned SQLite database per application for authoritative server-managed structured records. Intelligence, Travel and Lattice business state live in their own databases; existing Projects, Memo, TingProof and platform databases retain ownership. Records keep stable space/resource IDs, revisions, ordering, receipts, events, timestamps, unknown historical fields and authorization. Database namespaces do not grant access. JSON remains an explicit import/export or compatibility format, never an automatic fallback for a missing configured database.
 
 Original documents, media, authored source files and exports retain their files and content hashes, with database references where the app needs them. Letters/Profiles remain original-file readers; Polaris remains a read-only projection of separately owned runtime observations and gains no executor.
 

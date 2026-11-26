@@ -32,7 +32,7 @@ Private business configuration:
 
 `originHost` selects the fixed legacy app Host. The business service uses the canonical issuer Host. The share manifest directory contains the grants, lock and atomic replacement files. Use 700 for the directory and 600 for the manifest. The gateway mounts it read-only and keeps identity databases, adapter keys and the Docker socket outside the web container. Where private readers are enabled, each has a separate read-only documents mount.
 
-The generated Compose override runs `praxis-public` on the host network at 14321. Raw app ports and the business and Reminder listeners bind to loopback. Forwarding is limited to the configured local services and supports HTTP, conditional images, range requests, SSE and WebSocket. Long-lived flows recheck access every five seconds and at permission expiry. Business writes enforce current authority, resource revision and idempotency in the service and owning app.
+The generated Compose override runs `praxis-public` on the host network at 14321. Raw app ports and the business listener bind to loopback. Forwarding is limited to the configured local services and supports HTTP, conditional images, range requests, SSE and WebSocket. Long-lived flows recheck access every five seconds and at permission expiry. Business writes enforce current authority, resource revision and idempotency in the service and owning app.
 
 Private images preserve ETag/Last-Modified and 304 and revalidate the browser session. Other private responses are uncached. The gateway strips spoofable identity headers and `Set-Cookie` from legacy apps. Travel shares validate the capability, single trip, expiry and revocation on every request and reject query parameters, mutations and upgrades.
 

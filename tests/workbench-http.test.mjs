@@ -36,7 +36,7 @@ test('fresh checkout serves the workbench without revealing an owner collection'
   assert.equal(registry.status, 200);
   const { apps } = await registry.json();
   assert.deepEqual(apps.map(app => app.id).sort(), [
-    'intelligence', 'knowledge', 'lattice-slides', 'memo', 'projects', 'reminder', 'tingproof', 'travel',
+    'intelligence', 'lattice-slides', 'memo', 'projects', 'tingproof', 'travel',
   ]);
   for (const app of apps) {
     assert.equal(app.unavailable, 'managed');
@@ -103,7 +103,7 @@ test('the shipped directory preserves managed grants, owner readers and the Proj
   assert.equal(ordinary.find(app => app.id === 'projects').launcher, false);
   assert.deepEqual(list({ ...grants, platformAdmin: true }).map(app => app.id).sort(), ['polaris', 'projects']);
   const owner = list({ apps: registered.map(app => app.id), platformAdmin: true, documentOwner: true });
-  assert.equal(owner.length, 11);
+  assert.equal(owner.length, 9);
   assert.equal(owner.find(app => app.id === 'lattice-slides').url, origin + '/apps/slides/');
 });
 

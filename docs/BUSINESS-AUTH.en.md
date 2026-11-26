@@ -24,7 +24,7 @@ Each request takes the intersection of current user permissions, the client's cu
 - On later requests, event deliveries and background operations, recheck withdrawal, account disablement and expiration.
 - General creation requires a matching create rule. Possession of a grant to an existing item does not imply permission to create unrelated items. Where a separately implemented bounded create operation exists, its contract limits the new resource explicitly.
 
-Early app actions include Reminder `read/create/update/complete/delete`, TingProof `read/submit/assign`, and separate space management actions `manage_members`, `manage_sharing` and `manage_delegation`. The latter require current owner/admin status and an appropriate client delegation. A `resources` field contains `['*']` or opaque resource IDs. Filter every list by the effective result. Discover the current tool set at runtime.
+Early app actions include Lattice `read/create/update/delete/render/export`, TingProof `read/submit/assign`, and separate space management actions `manage_members`, `manage_sharing` and `manage_delegation`. The latter require current owner/admin status and an appropriate client delegation. A `resources` field contains `['*']` or opaque resource IDs. Filter every list by the effective result. Discover the current tool set at runtime.
 
 ## 3. Trusted configuration interfaces
 
@@ -150,7 +150,7 @@ The first-party administrator endpoints at `/api/business/admin/*` require a nat
 
 Enabled platform administrators receive default entries. The managed gateway restricts Letters and Profiles to the configured document owner with an active administrator session. An attempt to save an ineffective entry policy for an administrator returns 409 `ADMIN_DEFAULT_ACCESS`. Removing the role restores ordinary explicit entry and enrolled-space rules. Administrators still use their own existing space/resource/action grants for business operations. External tokens are separate from browser sessions. Standalone session modes can also be `delegated` and `none`.
 
-Login defaults to the workbench root. A validated `return_to` preserves an app destination, while OAuth preserves its exact registered callback. Legacy `/business`, `/business/` and `/business.html` lead to the same workbench in gateway mode. Focused Reminder and TingProof pages and the space management API remain distinct. Standalone development uses its own business entry.
+Login defaults to the workbench root. A validated `return_to` preserves an app destination, while OAuth preserves its exact registered callback. Legacy `/business`, `/business/` and `/business.html` lead to the same workbench in gateway mode. Focused TingProof pages and the space management API remain distinct. Standalone development uses its own business entry.
 
 Relative to `/api/business/admin`:
 
@@ -191,7 +191,7 @@ For new designated authorizations, `space_id` accompanies the existing access-to
 
 The code flow requires `response_type=code`, registered `client_id`, exact `redirect_uri`, `code_challenge_method=S256`, challenge and exact `resource=${issuer}/mcp`. Exchange rechecks client, redirect, audience and verifier. The authorization response includes `iss` and the original `state`. Consent can grant only the overlap of current user permissions and requested scope.
 
-Examples include `reminder:read`, `reminder:write`, `tingproof:read`, `tingproof:write` and `spaces:members|sharing|delegation`. Check current discovery for the complete list. A broad write scope alone does not grant all mutations or allow an ordinary guest to assign tasks. Space management requires the current owner/admin relationship.
+Examples include `slides:read`, `slides:write`, `tingproof:read`, `tingproof:write` and `spaces:members|sharing|delegation`. Check current discovery for the complete list. A broad write scope alone does not grant all mutations or allow an ordinary guest to assign tasks. Space management requires the current owner/admin relationship.
 
 Public protocol discovery accepts credential-free cross-origin requests. Login, delegation and session interfaces enforce browser origins. Public client registration is rate limited. Supported integration paths include preregistration, constrained DCR, public clients, code/PKCE and rotating refresh credentials. Client ID Metadata Documents, OIDC identity APIs, provider-specific plugin cards and enterprise SSO require independent implementation and verification.
 
@@ -203,13 +203,13 @@ Audit found a client gap: the installed MCP SDK's OAuth token schema strips unkn
 
 The consent dropdown submits its existing GET request on change, with a narrowly hash-authorized script only on selector documents; permission submission remains an explicit POST with unchanged Origin, CSRF, signed consent and PKCE/callback binding. All other authentication documents retain their existing script restrictions. Owned-space account-deletion refusal retains the existing `#notice` persistent fixed error overlay and its complete space IDs, rather than introducing another popup.
 
-Verification uses isolated synthetic public guidance, browser consent and actual MCP SDK calls, including a signed native Reminder service. Record the source, browser and deployed results separately below; these checks do not establish independent business-agent or physical-phone acceptance.
+Verification uses isolated synthetic public guidance, browser consent and actual MCP SDK calls, including a signed native Memo service. Record the source, browser and deployed results separately below; these checks do not establish independent business-agent or physical-phone acceptance.
 
 | Audit stage / criterion | Technical evidence | Result |
 | --- | --- | --- |
 | Public guidance | `tests/public-mcp.test.mjs`: actual SDK reads both language editions of `praxis_use_guide` and its companion skill, including the field mapping and fallback; 2/2 pass. Anonymous responses remain fixed guidance with no account catalog. | Pass |
 | Consent designation and inline creation | `tests/business-space-designation.test.mjs` and the browser case in `tests/business-auth.test.mjs`: real Chromium at English 1440 / Chinese 390 px exercises direct native selection with keyboard/pointer, unchecked permissions, no-space inline creation, empty-consent retry, browser-followed cross-origin callback and PKCE completion. Focused browser cases 2/2 pass without skips. | Pass |
-| Token and actual tool parameters | `tests/mcp-space-chain.test.mjs`: public guide → explicit consent → code/refresh `space_id` → actual SDK `reminder_list({spaceId})` against a signed native Reminder fixture. The installed SDK 1.32.2 exchange strips the extension; initialized/refreshed authorized catalog recovers the same ID and a second actual tool call succeeds. Foreign-space refusal and recomputation after enrollment removal pass. | Pass |
+| Token and actual tool parameters | `tests/mcp-space-chain.test.mjs`: public guide → explicit consent → code/refresh `space_id` → actual SDK `memo_list_topics({spaceId})` against a signed native Memo fixture. The installed SDK 1.32.2 exchange strips the extension; initialized/refreshed authorized catalog recovers the same ID and a second actual tool call succeeds. Foreign-space refusal and recomputation after enrollment removal pass. | Pass |
 | MCP cleanup and shared errors (MCP01) | `tests/admin-layout.test.mjs`: Chromium English/Chinese × 1440/390 px removes the three obsolete surfaces. An actual synthetic 409 preserves account/spaces and lists two complete IDs in the exact same fixed `#notice` node as an ordinary read error: no new popup, zero content/scroll shift, persistence across views and explicit refresh clearance. Baseline already used this error mechanism; no second implementation was added. | Pass |
 | Source checks and reader (MCP02–MCP03) | Final `npm test`: 502 passed, 0 failed, 9 opt-in browser skips (511 total); affected browser cases above ran separately. Both updated PRDs opened through the real workbench reader with version 0.1.151 and no overflow. | Pass |
 | Independent business-agent / physical-phone acceptance | This change uses isolated maintenance fixtures only; the designated independent client owns business acceptance. | N/A — outside this technical packet |

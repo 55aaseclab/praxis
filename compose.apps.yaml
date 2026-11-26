@@ -86,44 +86,12 @@ services:
         read_only: true
         bind: { create_host_path: false }
 
-  reminder:
-    <<: *runtime
-    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/reminder:local
-    build: { context: ./third_party/reminder, dockerfile: Dockerfile.praxis }
-    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4322:4322"]
-    environment:
-      HOST: 0.0.0.0
-      PORT: "4322"
-      HEALTH_URL: http://127.0.0.1:4322/
-      REMINDER_DATA: /data/checklist.json
-      REMINDER_ALLOWED_ORIGINS: ${REMINDER_ALLOWED_ORIGINS:-}
-    volumes:
-      - type: bind
-        source: ${PRAXIS_REMINDER_DATA_DIR:?Run scripts/stack.mjs to resolve the registered source configuration}
-        target: /data
-        bind: { create_host_path: false }
-
   travel:
     <<: *runtime
     image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/travel:local
     build: { context: ./third_party/travel, dockerfile: Dockerfile.praxis }
     ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4323:4323"]
     environment: { HOST: "0.0.0.0", PORT: "4323", HEALTH_URL: "http://127.0.0.1:4323/" }
-
-  knowledge:
-    <<: *runtime
-    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/knowledge:local
-    build: { context: ./third_party/knowledge, dockerfile: Dockerfile.praxis }
-    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:4324:4324"]
-    environment: { HOST: "0.0.0.0", PORT: "4324", HEALTH_URL: "http://127.0.0.1:4324/" }
-
-  knowledge-public:
-    <<: *runtime
-    image: ${PRAXIS_COMPOSE_PROJECT:-praxis}/knowledge:local
-    build: { context: ./third_party/knowledge, dockerfile: Dockerfile.praxis }
-    command: [node, src/runtime/server.mjs, --host, "0.0.0.0", --port, "14324"]
-    ports: ["${PRAXIS_APP_BIND_ADDRESS:-${PRAXIS_BIND_ADDRESS:-127.0.0.1}}:14324:14324"]
-    environment: { HOST: "0.0.0.0", PORT: "14324", HEALTH_URL: "http://127.0.0.1:14324/" }
 
   tingproof:
     <<: *runtime

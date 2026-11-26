@@ -12,8 +12,8 @@ function fixture(t) {
   t.after(() => { events.close(); rmSync(directory, { recursive: true, force: true }); });
   return { clock, get events() { return events; }, reopen() { events.close(); events = new BusinessEvents(join(directory, 'events.db'), { clock: () => clock.now }); } };
 }
-function capture(events, { category = 'business', toolName = 'reminder_list', action = 'read', clientId = 'synthetic-client' } = {}) {
-  return events.beginTrace({ requestId: 'synthetic-mcp-request', ...(category === 'business' && { appId: 'reminder' }), operation: category === 'control' ? 'refresh_capabilities' : 'list', action, source: 'mcp', userId: 'synthetic-user', clientId,
+function capture(events, { category = 'business', toolName = 'memo_list_topics', action = 'read', clientId = 'synthetic-client' } = {}) {
+  return events.beginTrace({ requestId: 'synthetic-mcp-request', ...(category === 'business' && { appId: 'slides' }), operation: category === 'control' ? 'refresh_capabilities' : 'list', action, source: 'mcp', userId: 'synthetic-user', clientId,
     mcp: { endpoint: '/mcp', transport: 'streamable-http', method: 'tools/call', category, ...(toolName ? { toolName } : { toolRef: events.tracePseudonym('SYNTHETIC_UNKNOWN_PRIVATE_NAME') }) } });
 }
 
@@ -33,7 +33,7 @@ test('MCP window totals and tool percentiles cover the full window independently
   assert.equal(first.items.length, 1); assert.equal(first.summary.total, 32); assert.equal(first.summary.success, 26); assert.equal(first.summary.errors, 2);
   assert.equal(first.summary.denied, 1); assert.equal(first.summary.unknown, 1); assert.equal(first.summary.cancelled, 1); assert.equal(first.summary.inProgress, 1);
   assert.equal(first.summary.p50Ms, sorted[Math.ceil(sorted.length * .5) - 1]); assert.equal(first.summary.p95Ms, sorted[Math.ceil(sorted.length * .95) - 1]);
-  assert.equal(first.byTool.find(row => row.toolName === 'reminder_list').total, 30);
+  assert.equal(first.byTool.find(row => row.toolName === 'memo_list_topics').total, 30);
   assert.equal(first.byTool.find(row => row.toolName === 'praxis_refresh_capabilities').category, 'control');
   assert.equal(first.byTool.find(row => row.category === 'unknown').toolName, null);
   assert.equal(first.coverage.mcp.count, 33); assert.equal(f.events.tracePage({ source: 'mcp', window: 'week' }).summary.total, 33);
@@ -43,7 +43,7 @@ test('MCP window totals and tool percentiles cover the full window independently
 
 test('capture initialization is stable across reopen and absence of tool calls does not rewrite old inference', t => {
   const f = fixture(t), start = f.events.traceCoverage().mcp.recordingStartedAt;
-  const context = { requestId: 'old-inferred', appId: 'reminder', spaceId: 'synthetic-space', operation: 'list', action: 'read', source: 'mcp' };
+  const context = { requestId: 'old-inferred', appId: 'slides', spaceId: 'synthetic-space', operation: 'list', action: 'read', source: 'mcp' };
   f.events.endTrace(f.events.beginTrace({ ...context, clientId: 'old-external-client' }), { status: 'succeeded' });
   const privateId = f.events.beginTrace({ ...context, requestId: 'old-private-read', clientId: 'praxis-browser' }); f.events.endTrace(privateId, { status: 'succeeded' });
   f.clock.now += 86400000; f.reopen();
@@ -55,13 +55,13 @@ test('capture initialization is stable across reopen and absence of tool calls d
 });
 
 test('a caller cancellation never closes the shared lifecycle before a real late commit', t => {
-  const f = fixture(t), id = capture(f.events, { toolName: 'reminder_add', action: 'create' });
-  f.events.linkTrace(id, { bridgeLinked: true, requestId: 'actual-signed-app-request', appId: 'reminder', spaceId: 'synthetic-space' });
+  const f = fixture(t), id = capture(f.events, { toolName: 'memo_set_guide', action: 'update' });
+  f.events.linkTrace(id, { bridgeLinked: true, requestId: 'actual-signed-app-request', appId: 'slides', spaceId: 'synthetic-space' });
   f.events.recordTrace(id, { stage: 'transport', status: 'cancelled', code: 'CLIENT_CANCELLED' });
   f.events.recordTrace(id, { stage: 'commit', status: 'succeeded', committed: true, revision: 'real-revision' });
   f.events.endTrace(id, { status: 'cancelled', code: 'CLIENT_CANCELLED', durationMs: 15 });
   const row = f.events.tracePage({ source: 'mcp' }).items[0], life = f.events.tracePage({ traceId: id }).items[0];
-  assert.equal(row.outcome, 'cancelled'); assert.equal(row.lifecycleTraceId, id); assert.equal(row.appId, 'reminder');
+  assert.equal(row.outcome, 'cancelled'); assert.equal(row.lifecycleTraceId, id); assert.equal(row.appId, 'slides');
   assert.equal(life.committed, true); assert.equal(life.readback, 'not_recorded'); assert.equal(life.requestId, 'actual-signed-app-request');
   assert.equal(f.events.db.prepare('SELECT request_id FROM business_traces WHERE id=?').get(id).request_id, 'actual-signed-app-request');
 });

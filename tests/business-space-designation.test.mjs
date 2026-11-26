@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { AuthStore, createAuthHandler, hashVerifier } from '../src/business/auth.mjs';
 
 const password = 'Synthetic-space-designation-password-2026';
-const reminder = spaceId => ({ appId: 'reminder', spaceId, resources: ['synthetic-record'], actions: ['read'] });
+const slidesRule = spaceId => ({ appId: 'slides', spaceId, resources: ['synthetic-record'], actions: ['read'] });
 
 async function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), 'praxis-space-designation-'));
@@ -18,7 +18,7 @@ async function fixture(t) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const apps = { reminder: { spaces: ['personal-operator', 'family-other'] } };
+  const apps = { slides: { spaces: ['personal-operator', 'family-other'] } };
   function open() {
     store = new AuthStore({ file, issuer: origin });
     handler = createAuthHandler({ store, apps });
@@ -41,13 +41,13 @@ async function fixture(t) {
     return { body, cookie: response.headers.get('set-cookie').split(';')[0] };
   };
   const verifier = 'synthetic-designated-space-verifier-'.repeat(2);
-  const oauth = (extra = {}) => '/oauth/authorize?' + new URLSearchParams({ client_id: 'synthetic-agent', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: origin + '/mcp', scope: 'reminder:read', state: 'synthetic-designation', lang: 'en', ...extra });
+  const oauth = (extra = {}) => '/oauth/authorize?' + new URLSearchParams({ client_id: 'synthetic-agent', redirect_uri: 'https://client.example/callback', response_type: 'code', code_challenge_method: 'S256', code_challenge: hashVerifier(verifier), resource: origin + '/mcp', scope: 'slides:read', state: 'synthetic-designation', lang: 'en', ...extra });
   const exchange = code => json('/oauth/token', { grant_type: 'authorization_code', code, client_id: 'synthetic-agent', redirect_uri: 'https://client.example/callback', code_verifier: verifier, resource: origin + '/mcp' });
   const form = (path, actor, value, headers = {}) => request(path, { method: 'POST', headers: { Origin: origin, Cookie: actor.cookie, 'Content-Type': 'application/x-www-form-urlencoded', ...headers }, body: new URLSearchParams(value) });
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); rmSync(directory, { recursive: true, force: true }); });
   return { get store() { return store; }, server, origin, json, request, login, oauth, exchange, form,
     reopen() { store.close(); open(); },
-    enable(spaceId) { store.setSpaceAppEnrollment({ spaceId, appId: 'reminder', enabled: true }); },
+    enable(spaceId) { store.setSpaceAppEnrollment({ spaceId, appId: 'slides', enabled: true }); },
   };
 }
 
@@ -126,9 +126,9 @@ test('consent defaults to personal, explicitly chooses one space, and code/refre
   assert.equal(tokens.space_id, 'family-other');
   assert.deepEqual(Object.keys(tokens).sort(), ['access_token', 'expires_in', 'refresh_token', 'scope', 'space_id', 'token_type']);
   assert.equal(tokens.token_type, 'Bearer');
-  assert.equal(tokens.scope, 'reminder:read');
-  assert.equal(f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId: 'family-other', action: 'read' }).userId, 'operator');
-  assert.throws(() => f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId: 'personal-operator', action: 'read' }), { status: 403 });
+  assert.equal(tokens.scope, 'slides:read');
+  assert.equal(f.store.authorize(tokens.access_token, { appId: 'slides', spaceId: 'family-other', action: 'read' }).userId, 'operator');
+  assert.throws(() => f.store.authorize(tokens.access_token, { appId: 'slides', spaceId: 'personal-operator', action: 'read' }), { status: 403 });
   f.reopen();
   const refreshed = await f.json('/oauth/token', { grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: 'synthetic-agent', resource: f.origin + '/mcp' });
   assert.equal(refreshed.status, 200);
@@ -193,13 +193,13 @@ test('concurrent inline creation rechecks space existence after both request bod
 
 test('legacy JSON OAuth multi-space consent remains compatible without a guessed space field', async t => {
   const f = await fixture(t), actor = await f.login('operator');
-  const response = await f.json(f.oauth(), { csrf: actor.body.csrfToken, rules: [reminder('personal-operator'), reminder('family-other')] }, { headers: { Cookie: actor.cookie } });
+  const response = await f.json(f.oauth(), { csrf: actor.body.csrfToken, rules: [slidesRule('personal-operator'), slidesRule('family-other')] }, { headers: { Cookie: actor.cookie } });
   assert.equal(response.status, 303);
   const tokenResponse = await f.exchange(new URL(response.headers.get('location')).searchParams.get('code'));
   assert.equal(tokenResponse.status, 200);
   const tokens = await tokenResponse.json();
   assert.equal(Object.hasOwn(tokens, 'space_id'), false);
-  for (const spaceId of ['personal-operator', 'family-other']) assert.equal(f.store.authorize(tokens.access_token, { appId: 'reminder', spaceId, action: 'read', resourceId: 'synthetic-record' }).userId, 'operator');
+  for (const spaceId of ['personal-operator', 'family-other']) assert.equal(f.store.authorize(tokens.access_token, { appId: 'slides', spaceId, action: 'read', resourceId: 'synthetic-record' }).userId, 'operator');
 });
 
 test('admin arbitrary registered-user display projection never changes session or write authorization', async t => {

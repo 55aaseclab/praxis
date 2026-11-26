@@ -48,11 +48,11 @@ test('primary actions stay inside the owning native app and reject dangerous pat
 });
 test('evidence retains cross-app and HTTPS source links without granting or fetching the target', () => {
   const evidence = [
-    { label: 'Referenced source', href: '/apps/knowledge/k/synthetic/library/note/', revision: '2' },
+    { label: 'Referenced source', href: '/apps/travel/g/synthetic/route/note/', revision: '2' },
     { label: 'Original publication', href: 'https://source.example/document#section', excerpt: 'Stored source excerpt.' },
   ];
   assert.deepEqual(normalizeProviderCard('projects', card('projects', { evidence })).evidence, evidence);
-  for (const href of ['javascript:alert(1)', 'data:text/html,example', 'file:///synthetic/private', '//source.example/document', 'https://user:password@source.example/document', '/apps/knowledge/a/%2e%2e/', '/auth/session']) {
+  for (const href of ['javascript:alert(1)', 'data:text/html,example', 'file:///synthetic/private', '//source.example/document', 'https://user:password@source.example/document', '/apps/travel/a/%2e%2e/', '/auth/session']) {
     rejectsProvider(() => normalizeProviderCard('projects', card('projects', { evidence: [{ label: 'Invalid source', href }] })));
   }
 });
@@ -135,20 +135,20 @@ test('a provider cannot request undeclared data-source metadata or hide its fail
 });
 
 function projectionFixture(module, { readOperations = ['list'], permitted = ['record-1'] } = {}) {
-  let allowed = ['reminder'], calls = 0;
+  let allowed = ['memo'], calls = 0;
   const auth = {
     requireNativeSession: token => { assert.equal(token, 'synthetic-native'); return { user: { id: 'alice', username: 'alice' } }; },
     getWebAccess: () => ({ workbench: true, apps: [...allowed] }), userPermissions: () => permitted,
     authorize: (_token, request) => { if (!permitted.includes(request.resourceId)) throw Object.assign(new Error('denied'), { status: 403 }); },
   };
-  const descriptor = { version: 1, appId: 'reminder', cards: { supported: true }, readOperations, dataSources: [] };
-  const registry = { providers: async () => [{ app: { id: 'reminder' }, module, descriptor }] };
+  const descriptor = { version: 1, appId: 'memo', cards: { supported: true }, readOperations, dataSources: [] };
+  const registry = { providers: async () => [{ app: { id: 'memo' }, module, descriptor }] };
   const bridge = { invokeProjection: async () => { calls++; return { items: [] }; } };
-  return { api: new AppCards({ auth, bridge, registry, config: { apps: { reminder: { spaces: ['synthetic-space'] } } }, clock: () => instant }), bridge,
+  return { api: new AppCards({ auth, bridge, registry, config: { apps: { memo: { spaces: ['synthetic-space'] } } }, clock: () => instant }), bridge,
     calls: () => calls, withdraw: () => { allowed = []; } };
 }
 test('card aggregation rechecks resource permissions and cannot reveal an ungranted record', async () => {
-  const fixture = projectionFixture({ getCards: async () => ({ status: 'ready', items: [card('reminder'), card('reminder', { id: 'secret', resourceId: 'ungranted', title: 'Other user confidential title' })] }) });
+  const fixture = projectionFixture({ getCards: async () => ({ status: 'ready', items: [card('memo'), card('memo', { id: 'secret', resourceId: 'ungranted', title: 'Other user confidential title' })] }) });
   const value = await fixture.api.get('synthetic-native'); assert.equal(value.items.length, 1);
   assert.ok(!JSON.stringify(value).includes('Other user confidential title'));
 });
@@ -170,9 +170,9 @@ test('provider read callbacks cannot invoke a mutation even if a provider declar
 });
 test('withdrawal while a source read is in flight removes its titles, evidence and counts', async () => {
   const fixture = projectionFixture({ getCards: async context => {
-    await context.invoke({ spaceId: 'synthetic-space', operation: 'list', input: {} });
-    return { status: 'ready', items: [card('reminder', { title: 'Revoked source title' })] };
-  } });
+    await context.invoke({ spaceId: 'synthetic-space', operation: 'read_records', input: {} });
+    return { status: 'ready', items: [card('memo', { title: 'Revoked source title' })] };
+  } }, { readOperations: ['read_records'] });
   fixture.bridge.invokeProjection = async () => { fixture.withdraw(); return { items: [] }; };
   const output = await fixture.api.get('synthetic-native'); assert.deepEqual(output.items, []); assert.deepEqual(output.sources, []); assert.ok(!JSON.stringify(output).includes('Revoked source title'));
 });

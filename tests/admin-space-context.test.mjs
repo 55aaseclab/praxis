@@ -28,16 +28,16 @@ async function fixture(t) {
   auth.setPlatformAdmin({ userId: 'owner', enabled: true });
   const space = auth.createSelfServiceSpace({ type: 'family', ownerId: 'owner' });
   const other = auth.createSelfServiceSpace({ type: 'family', ownerId: 'owner' });
-  const apps = { reminder: { spaces: [space.id, other.id] }, tingproof: { spaces: [space.id, other.id] } };
+  const apps = { slides: { spaces: [space.id, other.id] }, tingproof: { spaces: [space.id, other.id] } };
   handlers = [createAuthHandler({ store: auth, apps, webGateway: { enabled: true } }), createAccountHandler({ auth }), createAdminHandler({ auth })];
   for (const target of [space, other]) {
     for (const userId of ['reader', 'editor']) auth.setMembership({ spaceId: target.id, userId, role: 'member' });
-    for (const appId of ['reminder', 'tingproof']) auth.setSpaceAppEnrollment({ spaceId: target.id, appId, enabled: true }, apps);
+    for (const appId of ['slides', 'tingproof']) auth.setSpaceAppEnrollment({ spaceId: target.id, appId, enabled: true }, apps);
   }
-  auth.grantResource({ userId: 'reader', ...rule(space.id, 'reminder', ['read'], ['synthetic-read-record']) });
-  auth.grantResource({ userId: 'editor', ...rule(space.id, 'reminder', ['read', 'update'], ['synthetic-edit-record']) });
+  auth.grantResource({ userId: 'reader', ...rule(space.id, 'slides', ['read'], ['synthetic-read-record']) });
+  auth.grantResource({ userId: 'editor', ...rule(space.id, 'slides', ['read', 'update'], ['synthetic-edit-record']) });
   auth.grantResource({ userId: 'reader', ...rule(space.id, 'tingproof', ['read'], ['synthetic-proof']) });
-  auth.grantResource({ userId: 'reader', ...rule(other.id, 'reminder', ['read'], ['synthetic-other-record']) });
+  auth.grantResource({ userId: 'reader', ...rule(other.id, 'slides', ['read'], ['synthetic-other-record']) });
   auth.createClient({ id: 'synthetic-context-agent', name: 'Synthetic context agent', redirectUris: ['https://synthetic.example/callback'] });
   const grant = (userId, rules, options = {}) => auth.createGrant({ userId, clientId: 'synthetic-context-agent', rules, ...options });
   const login = async userId => {
@@ -56,25 +56,25 @@ async function fixture(t) {
 
 test('Spaces display projections match actual member data while delegation capabilities use the acting session', async t => {
   const f = await fixture(t);
-  const readerRule = rule(f.space.id, 'reminder', ['read'], ['synthetic-read-record']);
+  const readerRule = rule(f.space.id, 'slides', ['read'], ['synthetic-read-record']);
   const readerGrant = f.grant('reader', [readerRule]);
-  const editorGrant = f.grant('editor', [rule(f.space.id, 'reminder', ['update'], ['synthetic-edit-record'])]);
+  const editorGrant = f.grant('editor', [rule(f.space.id, 'slides', ['update'], ['synthetic-edit-record'])]);
   // The app and space occur in different rules: this must never appear as a
-  // Reminder delegation for the current space.
-  const crossed = f.grant('reader', [rule(f.space.id, 'tingproof', ['read'], ['synthetic-proof']), rule(f.other.id, 'reminder', ['read'], ['synthetic-other-record'])]);
+  // Slides delegation for the current space.
+  const crossed = f.grant('reader', [rule(f.space.id, 'tingproof', ['read'], ['synthetic-proof']), rule(f.other.id, 'slides', ['read'], ['synthetic-other-record'])]);
   const owner = await f.login('owner'), reader = await f.login('reader'), editor = await f.login('editor');
   const projected = (await f.detail(owner, 'reader')).userContext, actual = await f.detail(reader);
   for (const field of ['apps', 'permissions', 'members']) assert.deepEqual(projected[field], actual[field], `${field} matches the selected user's actual session`);
-  const readerApp = projected.apps.find(app => app.id === 'reminder');
+  const readerApp = projected.apps.find(app => app.id === 'slides');
   assert.deepEqual(readerApp.availableActions, ['read']);
   assert.deepEqual(readerApp.availableResources, ['synthetic-read-record']);
   const editorContext = (await f.detail(owner, 'editor')).userContext;
   assert.deepEqual(editorContext.apps, (await f.detail(editor)).apps);
-  const editorApp = editorContext.apps.find(app => app.id === 'reminder');
+  const editorApp = editorContext.apps.find(app => app.id === 'slides');
   assert.deepEqual([...editorApp.availableActions].sort(), ['read', 'update']);
   assert.deepEqual(editorApp.availableResources, ['synthetic-edit-record']);
   assert.notDeepEqual(readerApp, editorApp, 'switching users yields distinct action/resource summaries');
-  const readerRows = projected.delegations.filter(grant => grant.scopes.some(scope => scope.appId === 'reminder'));
+  const readerRows = projected.delegations.filter(grant => grant.scopes.some(scope => scope.appId === 'slides'));
   assert.deepEqual(readerRows.map(row => row.id), [readerGrant.id], 'matching requires the same raw app/space rule');
   assert.equal(projected.delegations.some(row => row.id === editorGrant.id), false, 'member projection excludes another member grants');
   const crossRow = projected.delegations.find(row => row.id === crossed.id);
@@ -87,7 +87,7 @@ test('Spaces display projections match actual member data while delegation capab
   const serialized = JSON.stringify(projected.delegations);
   assert.doesNotMatch(serialized, /accessToken|refreshToken|sessionToken|csrfToken|password|synthetic-other-record/);
   const outsider = (await f.detail(owner, 'outsider')).userContext;
-  assert.deepEqual(outsider.apps.find(app => app.id === 'reminder').availableActions, []);
+  assert.deepEqual(outsider.apps.find(app => app.id === 'slides').availableActions, []);
   assert.deepEqual(outsider.permissions, []); assert.deepEqual(outsider.delegations, []);
   assert.equal((await f.request(reader, `/api/business/account/spaces/${f.space.id}?contextUserId=editor`)).status, 403, 'ordinary session cannot borrow display context');
   assert.equal((await f.request(owner, `/api/business/account/spaces/${f.space.id}?contextUserId=reader`, { headers: { Authorization: 'Bearer synthetic-invalid' } })).status, 401, 'display reads retain native-cookie requirement');
@@ -103,9 +103,9 @@ test('Spaces display projections match actual member data while delegation capab
 
 test('existing delegation deletion keeps CSRF, whole-grant immediate revocation, audit and history semantics', async t => {
   const f = await fixture(t), owner = await f.login('owner'), reader = await f.login('reader'), editor = await f.login('editor');
-  const rules = [rule(f.space.id, 'reminder', ['read'], ['synthetic-read-record']), rule(f.other.id, 'reminder', ['read'], ['synthetic-other-record'])];
+  const rules = [rule(f.space.id, 'slides', ['read'], ['synthetic-read-record']), rule(f.other.id, 'slides', ['read'], ['synthetic-other-record'])];
   const active = f.grant('reader', rules), token = f.auth.issueToken({ grantId: active.id }).accessToken;
-  f.auth.authorize(token, { appId: 'reminder', spaceId: f.space.id, action: 'read', resourceId: 'synthetic-read-record' });
+  f.auth.authorize(token, { appId: 'slides', spaceId: f.space.id, action: 'read', resourceId: 'synthetic-read-record' });
   const path = `/api/business/admin/grants/${active.id}`;
   for (const headers of [{ 'X-CSRF-Token': 'invalid' }, { Origin: 'https://foreign.example' }]) {
     assert.equal((await f.request(owner, path, { method: 'DELETE', headers })).status, 403);
@@ -115,7 +115,7 @@ test('existing delegation deletion keeps CSRF, whole-grant immediate revocation,
   assert.equal((await f.request(reader, `/api/business/account/grants/${active.id}`, { method: 'DELETE', headers: { 'X-CSRF-Token': 'invalid' } })).status, 403);
   const auditsBefore = f.auth.listAudit().filter(row => row.event === 'platform.grant.revoked').length;
   assert.equal((await f.request(owner, path, { method: 'DELETE' })).status, 200);
-  for (const spaceId of [f.space.id, f.other.id]) assert.throws(() => f.auth.authorize(token, { appId: 'reminder', spaceId, action: 'read' }), { status: 401 }, 'all grant spaces lose access immediately');
+  for (const spaceId of [f.space.id, f.other.id]) assert.throws(() => f.auth.authorize(token, { appId: 'slides', spaceId, action: 'read' }), { status: 401 }, 'all grant spaces lose access immediately');
   const audit = f.auth.listAudit().filter(row => row.event === 'platform.grant.revoked');
   assert.equal(audit.length, auditsBefore + 1); assert.equal(audit[0].outcome, 'allowed');
   assert.doesNotMatch(JSON.stringify(audit), new RegExp(`${active.id}|${token}|${password}`), 'audit remains pseudonymous');

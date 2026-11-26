@@ -16,10 +16,10 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
 const read = path => readFile(join(root, path), 'utf8');
 
-test('platform image receives all eleven installed provider modules through its reviewed build context', async () => {
+test('platform image receives all nine installed provider modules through its reviewed build context', async () => {
   const catalog = (await readApps(root, { publicUrlsFile: null })).filter(app => app.builtin && app.kind === 'app');
   const dockerfile = await read('Dockerfile'), ignore = await read('.dockerignore');
-  assert.equal(catalog.length, 11);
+  assert.equal(catalog.length, 9);
   assert.match(dockerfile, /^COPY --chown=node:node third_party\/ \.\/third_party\/$/m);
   assert.ok(ignore.includes('!config/installed-apps.json'));
   for (const app of catalog) for (const filename of ['praxis-app.json', 'praxis-provider.mjs', 'apps.example.json', 'package.json', 'package-lock.json', '**/*.md']) assert.ok(ignore.includes('!' + app.source + '/' + filename));
@@ -41,7 +41,7 @@ if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the co
     import { AppProviderRegistry } from './src/business/app-providers.mjs';
     import { loadPrd } from './src/prd-catalog.mjs';
     const root = process.cwd(), apps = await readApps(root, { publicUrlsFile: null });
-    assert.equal(apps.length, 11); assert.equal(new Set(apps.map(app => app.id)).size, 11);
+    assert.equal(apps.length, 9); assert.equal(new Set(apps.map(app => app.id)).size, 9);
     for (const app of apps) {
       assert.match(app.version, /^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/);
       const icon = await resolveAppIcon(root, app.icon, { apps });
@@ -52,8 +52,8 @@ if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the co
       }
     }
     const providers = await new AppProviderRegistry({ root }).providers();
-    assert.equal(providers.length, 11); assert.ok(providers.every(provider => !provider.error));
-    assert.equal(providers.filter(provider => provider.descriptor.cards.supported).length, 10);
+    assert.equal(providers.length, 9); assert.ok(providers.every(provider => !provider.error));
+    assert.equal(providers.filter(provider => provider.descriptor.cards.supported).length, 8);
     assert.equal(providers.find(provider => provider.app.id === 'polaris').descriptor.cards.supported, false);
     console.log(JSON.stringify({ apps: apps.length, providers: providers.length, cardProviders: 13, icons: apps.length, prdEditions: apps.length * 2 }));
   `;
@@ -61,11 +61,11 @@ if (process.env.PRAXIS_TEST_IMAGE) test('the built release image contains the co
   const command = ['docker', 'run', '--rm', '--pull=never', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--entrypoint', 'node', image, '--input-type=module', '-e', script].map(quote).join(' ');
   const { stdout } = await execute('sg', ['docker', '-c', command], { maxBuffer: 1024 * 1024 });
   const result = JSON.parse(stdout.trim());
-  assert.deepEqual(result, { apps: 11, providers: 11, cardProviders: 10, icons: 11, prdEditions: 22 });
+  assert.deepEqual(result, { apps: 9, providers: 9, cardProviders: 8, icons: 9, prdEditions: 18 });
 });
 test('native images use their app-owned Dockerfiles and preserve video engine availability', async () => {
   const nativeApps = DEFAULT_APP_REGISTRY.apps.filter(app => app.integration.deployment?.native);
-  assert.equal(nativeApps.length, 9);
+  assert.equal(nativeApps.length, 7);
   for (const app of nativeApps) {
     const dockerfile = await readFile(join(DEFAULT_APP_REGISTRY.root, app.source, app.integration.deployment.native.dockerfile), 'utf8');
     assert.ok(dockerfile.includes('praxis-provider.mjs'), app.id);
@@ -100,26 +100,23 @@ test('image video pruning removes only engine installations and preserves all de
 test('fresh provider defaults expose configured paths while excluding keys and avoiding fabricated physical mounts', async () => {
   const registry = new AppProviderRegistry(), providers = await registry.providers();
   const runtime = {
-    reminder: { REMINDER_BUSINESS_SPACES_FILE: '/synthetic/config/reminder-spaces.json', REMINDER_BUSINESS_KEY_FILE: '/synthetic/private/key' },
-    knowledge: { KNOWLEDGE_DATA_DIR: '/synthetic/knowledge', KNOWLEDGE_INBOX_ROOT: '/synthetic/knowledge/inbox' },
     travel: { TRAVEL_DATA_DIR: '/synthetic/travel' }, projects: { PROJECTS_DATA_DIR: '/synthetic/projects' }, memo: { MEMO_DATA_DIR: '/synthetic/memo' },
     tingproof: { TINGPROOF_DATA_DIR: '/synthetic/tingproof' }, slides: { SLIDES_BUSINESS_SPACES_FILE: '/synthetic/config/slides-spaces.json' },
     intelligence: { INTELLIGENCE_DATA_DIR: '/synthetic/intelligence' },
     polaris: { POLARIS_OBSERVATIONS_FILE: '/synthetic/polaris/observations.json' },
     letters: { PRAXIS_LETTERS_DIR: '/synthetic/letters/documents' }, profiles: { PRAXIS_PROFILES_DIR: '/synthetic/profiles/documents' },
   };
-  const spaceMaps = { reminder: { spaces: { synthetic: '/synthetic/reminder/checklist.json' } }, slides: { spaces: { synthetic: '/synthetic/slides/slides.json' } } };
+  const spaceMaps = { slides: { spaces: { synthetic: '/synthetic/slides/slides.json' } } };
   const appProviders = builtinProviderDefaults({ providers, runtime, spaceMaps, workingDirectories: Object.fromEntries(Object.keys(runtime).map(app => [app, '/app'])) });
   assert.equal(appProviders.intelligence.url, 'http://127.0.0.1:4330');
-  assert.deepEqual(appProviders.reminder.runtime.pathMaps.REMINDER_BUSINESS_SPACES_FILE, spaceMaps.reminder.spaces);
   const serialized = JSON.stringify(appProviders); assert.ok(!serialized.includes('BUSINESS_KEY_FILE')); assert.ok(!serialized.includes('/synthetic/private/key'));
   assert.ok(!serialized.includes('hostPath')); assert.ok(!serialized.includes('volumeName')); assert.ok(!serialized.includes('containerPath'));
   const config = { appProviders, apps: {} }, resolver = createDataSourceResolver({ config, root: registry.root });
   const inventory = await registry.inventory({ bindings: { apps: [] }, resolveDataSource: resolver });
-  assert.equal(inventory.apps.length, 11);
+  assert.equal(inventory.apps.length, 9);
   for (const [appId, sourceId, expected] of [
     ['intelligence', 'observations', '/synthetic/intelligence/intelligence.db'],
-    ['reminder', 'managed-records:0', '/synthetic/reminder/checklist.json'], ['lattice-slides', 'managed-decks:0', '/synthetic/slides/slides.json'],
+    ['lattice-slides', 'managed-decks:0', '/synthetic/slides/slides.json'],
   ]) {
     const locations = inventory.apps.find(app => app.id === appId).locations;
     const source = locations.find(location => location.id === sourceId || location.id?.startsWith(sourceId.split(':')[0] + ':'));
