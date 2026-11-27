@@ -1,6 +1,6 @@
 # Praxis product requirements
 
-Version: 0.1.160 · [简体中文](PRD.md)
+Version: 0.1.161 · [简体中文](PRD.md)
 
 Praxis is a self-hosted platform for apps designed around work done by agents and results used by people. Users express what they want and authorize an agent to do the routine work. The app validates the actions, saves the result and presents it in a form people can read, watch or listen to. Each app owns its business objects, the operations that can change them and the interface that makes them understandable.
 
@@ -107,7 +107,7 @@ Design an anonymous, indexable product homepage for people discovering Praxis th
 
 Provide complete English and Simplified Chinese HTML editions with ordinary navigation links. Production acceptance requires readable content without JavaScript, explicit canonical/language URLs, truthful search/share metadata, accessible desktop/phone layouts and no private records. Implemented on the existing canonical workbench origin: anonymous visitors opening the origin root or `/zh-cn/` receive the public homepage while signed-in sessions keep the workbench at `/`; the pages carry canonical/hreflang/OG metadata, JSON-LD and a sitemap with a robots policy that permits only these public pages. The former workbench About Praxis link and its `/about/` pages are removed; the homepage replaces that content. The component directory renders from the reviewed app registry, not a separate app table. [Design](design/public-home.en.md)
 
-Keep the public page’s sticky navigation, title-only hero with two actions, full-width autoplaying example below it, Authorize → Ask → Review order and result-card design preview after the app directory. Preserve reduced-motion/no-JavaScript fallback and public SEO metadata while improving visual hierarchy. Homepage HTML must revalidate on navigation; CSS/JavaScript URLs include their content hash so deployments cannot combine new markup with an old cached asset.
+Keep the public page’s sticky navigation, title-only hero with two actions, full-width autoplaying example below it and Authorize → Ask → Review order. Preserve reduced-motion/no-JavaScript fallback and public SEO metadata while improving visual hierarchy. Homepage HTML must revalidate on navigation; CSS/JavaScript URLs include their content hash so deployments cannot combine new markup with an old cached asset.
 
 The public homepage describes cards as attention management: choose what to focus on, defer or hide, without treating reading as acceptance. Remove the two demo caption lines, keep only necessary motion controls, stack the app-directory title and description, and present the ownership heading on the left and two concise data/access and trace entries stacked on the right, collapsing to one column on phones. Include Documentation and Contribute in the sticky header in both languages. Replace the repeated footer tagline with a copyright notice linking 55AA Security Lab to https://www.55aaseclab.com/.
 
@@ -337,7 +337,8 @@ The workbench provides app and project navigation, Settings and product document
 
 ## Workbench views · v0.1.109
 
-The existing bottom navigation bar contains a single icon button that toggles **Apps / For you**. It has no visible text labels; its icon, tooltip and accessible name describe the destination view. It works with keyboard and touch, and stays available as the main area scrolls. The For you card view is the workbench home: it renders first, including its loading and empty states, without switching from another view; the empty state links to Apps, the switch keeps working both ways, and restoring a saved card return still lands on that card. Both views start at the top of the main area with consistent padding, including sparse and empty states. Apps shows app and project launchers. Due dates, reminder previews, task counts and attention cards appear only in For you. Changing views keeps the selector focused and preserves the selected attention card. When the account loses the required access, clear its attention content and return to Apps. Check both languages on desktop and at phone width.
+The workbench shows the app and project launcher directly. Each installed app keeps its native view; business records remain in the owning app.
+
 
 ## Built-in apps
 
@@ -404,8 +405,6 @@ Knowledge's dashboard counts papers, books, document packs and notes. Its sideba
 
 Every real project entry comes from Projects. Display all authorized project links together and preserve existing Knowledge reference links. The UI/UX guide requires predictable states, source navigation, access checks and recovery. The platform owns the Home control for managed pages. A first release includes the authorized workbench tile, an explicit initial blank state, a candidate health check, a same-tab round trip and a rollback expectation.
 
-The workbench now provides a separate For you program. Surface overdue, flagged and near-term readable reminders, and unfinished project work explicitly assigned to the signed-in identity. Identify why a card appeared. Swiping, keyboard arrows and buttons move between cards; the action opens the originating item. Published documentation and personal local app discovery have separate access and release boundaries.
-
 ## Release history
 
 | Version | Date | Change |
@@ -458,6 +457,7 @@ The workbench now provides a separate For you program. Surface overdue, flagged 
 | v0.1.158 | 2026-11-25 | Retire the Calendar and Matrix Reader apps: remove their submodules, registration and tests, archive their documents under docs/, and delete their public repositories. |
 | v0.1.159 | 2026-11-26 | Retire the Reminder and Knowledge apps: remove their submodules, registration, managed services and tests, archive their documents under docs/, and delete their public repositories. |
 | v0.1.160 | 2026-11-26 | Retire the Travel and Memo apps: remove their submodules, registration, managed services and tests, archive their documents under docs/, and delete their public repositories. |
+| v0.1.161 | 2026-11-27 | Drop the workbench card program: remove attention cards, provider card projections, browser card modules and card preferences; keep the admin data inventory. |
 
 ### Letters and Profiles
 

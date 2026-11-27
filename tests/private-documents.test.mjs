@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { createPrivateDocumentHandler } from '../src/private-documents.mjs';
 import { setAppFacts } from '../public/app-registry.js';
-import { validateCard } from '../public/app-providers.js';
 import * as lettersProvider from '../third_party/letters/praxis-provider.mjs';
 import * as profilesProvider from '../third_party/profiles/praxis-provider.mjs';
 setAppFacts(['letters', 'profiles'].map(id => ({ id, name: id, entry: { nativePath: '/apps/' + id + '/', policy: 'document-owner' } })));
@@ -175,7 +174,7 @@ test('native catalogs feed real Letters and Profiles cards that satisfy the stri
     let reads = 0;
     const context = { identity: { userId: 'synthetic-owner' }, read: async path => { reads++; assert.equal(path, 'api/documents'); const response = await get(); if (!response.ok) throw new Error('Denied'); return response.json(); } };
     const result = await provider.getCards(context); assert.equal(result.status, 'ready'); assert.equal(result.items.length, 2); assert.equal(reads, 1);
-    const cards = result.items.map(card => validateCard(card, 'https://workbench.example.test'));
+    const cards = result.items;
     const text = cards.find(card => card.title === 'Correspondence.md'), binary = cards.find(card => card.title === 'Metadata only.pdf');
     assert.match(text.revision, /^[a-f0-9]{64}$/); assert.match(text.primaryAction.href, new RegExp('^/apps/' + provider.describe().appId + '/#document=[a-f0-9]{64}$'));
     assert.equal(text.evidence[0].href, text.primaryAction.href); assert.equal(binary.preview, undefined);

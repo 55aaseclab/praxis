@@ -1,6 +1,6 @@
 # Praxis 产品需求
 
-版本：0.1.160 · [English](PRD.en.md)
+版本：0.1.161 · [English](PRD.en.md)
 
 Praxis 是一个可自托管的平台，为 agent 执行工作和人使用结果设计应用。用户表达想要的结果，授权 agent 完成日常操作。应用校验操作、保存结果，并以适合人阅读、观看或收听的方式呈现。每款应用负责自己的业务对象、可对这些对象执行的操作，以及让人理解结果的界面。
 
@@ -107,7 +107,7 @@ Maintenance 提示词仅包含已批准的最小合成技术复现、代码范�
 
 英文与简体中文各有完整 HTML 和普通导航链接。生产验收要求关闭 JavaScript 仍可阅读正文、明确 canonical/语言 URL、真实搜索/分享元数据、桌面和手机可访问布局及无私有记录。已在既有工作台 canonical origin 上实现：未登录访问 origin 根路径或 `/zh-cn/` 时返回公开产品主页，已登录会话在 `/` 继续使用工作台；页面携带 canonical/hreflang/OG 元数据、JSON-LD 及 sitemap，robots 仅放行这些公开页面。原工作台「关于 Praxis」入口及其 `/about/` 页面已移除，由公开主页承接内容。组件目录从审核过的应用注册表渲染，不另维护应用表。[设计](design/public-home.md)
 
-公开主页保留吸顶导航、仅含主标题与两个按钮的首屏、下方通栏自动播放示例、授权→提问→查看结果顺序，以及应用目录后的结果卡片设计预览。优化视觉层级时保留减少动态效果/无 JavaScript 降级与公开 SEO 元数据。首页 HTML 导航时须重新校验，CSS/JavaScript URL 包含内容摘要，避免部署后新 HTML 混用旧缓存资源。
+公开主页保留吸顶导航、仅含主标题与两个按钮的首屏、下方通栏自动播放示例以及授权→提问→查看结果顺序。优化视觉层级时保留减少动态效果/无 JavaScript 降级与公开 SEO 元数据。首页 HTML 导航时须重新校验，CSS/JavaScript URL 包含内容摘要，避免部署后新 HTML 混用旧缓存资源。
 
 公开主页将卡片表述为注意力管理：选择当前关注、稍后处理或收起，阅读不代表接受工作。删除演示图下方两行说明，仅保留必要播放控制；应用区标题和说明上下排列；归属区采用左侧标题、右侧上下两项数据/授权及操作线索短文，手机单列呈现。双语吸顶导航均包含文档和参与贡献入口。页脚删除重复宣传语，改为链接至 https://www.55aaseclab.com/ 的 55AA Security Lab 版权署名。
 
@@ -252,8 +252,6 @@ Settings → 数据中的位置内容及工作区别名使用一致的预览/复
 
 **日常执行零次必需点击**旨在保护员工的注意力。意图、材料和授权就绪后，agent 应完成例行工作和可自动化的检查。人可以暂时离开界面，让工作继续推进，按自己的节奏回来查看结果，把注意力留给需要判断的验证、异常和重要取舍。
 
-员工应能选择何时查看例行结果。只有符合团队约定的情况才值得立即打断，例如交付将到期且流程受阻。把结果、相关原始依据和待判断的问题一起交给有权处理的人。人也可以主动打开结果、查证或修正记录。团队通过业务记录同步进展，个人提醒的阅读和响应记录保留在个人视图。现有的原文定位和按权限展示的关注卡片提供了基础。跨应用送达和由员工自主安排查看时间仍是设计目标。
-
 对团队而言，目标是在质量和时效相同的前提下，由同一支团队完成更多获验收的交付。衡量每次合格交付需要的人工分钟数，分别记录例行处理和需要专业判断的验证用时。有相应客户需求时，腾出的产能才能用于更多付费业务。
 
 ## 给反思和进化留出空间
@@ -339,8 +337,7 @@ Polaris 已固化的工作流上下文作为补充来源，不能用运行历史
 
 ## 工作台视图 · v0.1.109
 
-在现有底部导航栏内只放一个小图标，点击切换**应用 / 待关注**。按钮不显示文字标签，图标、悬停提示和无障碍名称说明将切换到的视图。支持键盘和触摸，主区域滚动时仍可操作。「待关注」卡片视图就是工作台主页：优先渲染，包含加载与空态，不从其他视图切换过来；空态提供进入「应用」的入口，切换仍然双向可用，恢复已保存的卡片返回位置仍然落到原卡片。两个视图始终从主区域顶部按统一间距排列，内容很少或为空时也保持顶部对齐。「应用」只展示应用与项目入口，到期提示、提醒预览、事项数量与关注卡片都在「待关注」中展示。切换时焦点留在切换按钮上，返回「待关注」时保留选中的卡片。账号失去相关授权后清除关注内容并回到「应用」。中英文、桌面及手机宽度均需验收。
-
+工作台直接展示应用与项目启动器。每个已安装应用保留其原生视图；业务记录仍归所属应用。
 ## 内置应用
 
 Praxis 将维护中的应用作为独立版本的内置组件发布。目录包括 Lattice 幻灯片、旅行、听校、备忘、情报、Polaris、项目、书信和个人资料；已退役应用的存档文档保存在 [docs/finance](finance/RETIRED.md)、[docs/calendar](calendar/RETIRED.md)、[docs/matrix-reader](matrix-reader/RETIRED.md)、[docs/reminder](reminder/RETIRED.md) 和 [docs/knowledge](knowledge/RETIRED.md)，不再属于发行版。内置应用本身是可用的产品。它们的读、看、听体验展示产品方向，应用自有的数据、操作和界面也为开发新应用提供参考实现。各应用说明自己支持的操作及所需配置。访问取决于安装配置与用户授权。私有数据、账号和工作文件放在公开仓库之外。
@@ -524,6 +521,7 @@ Praxis 将维护中的应用作为独立版本的内置组件发布。目录包�
 | v0.1.158 | 2026-11-25 | 作者与实现代理 | 退役 Calendar 与 Matrix Reader 应用：移除子模块、登记与测试，文档存档于 docs/，并删除其公开仓库。 |
 | v0.1.159 | 2026-11-26 | 作者与实现代理 | 退役 Reminder 与知识库应用：移除子模块、登记、受管服务与测试，文档存档于 docs/，并删除其公开仓库。 |
 | v0.1.160 | 2026-11-26 | 作者与实现代理 | 退役 Travel 与 Memo 应用：移除子模块、登记、受管服务与测试，文档存档于 docs/，并删除其公开仓库。 |
+| v0.1.161 | 2026-11-27 | 作者与实现代理 | 下线工作台卡片程序：移除关注卡片、应用卡片投影、浏览器卡片模块与卡片偏好；保留管理端数据清单。 |
 
 ## 零、需求体检与澄清
 
@@ -1776,7 +1774,7 @@ Matrix Reader 在 Praxis 工作台「应用」区按应用权限显示。点击�
 
 English is the primary product and documentation language. Change English first, follow with Simplified Chinese in the same contribution, and preserve users’ original content. Managed apps must expose the platform Home control on desktop and mobile. Keep the app directory and add a separate attention view that surfaces authorized, dated or flagged work with a reason and a link back to its source. Paseo Web belongs to its own client and can open in an optional left pane using the user's own pairing. Maintained apps and unpublished local apps share the bilingual, accessibility and data-ownership contract. Only public project documentation is discoverable by search engines.
 
-英文是产品与文档的主语言。同一贡献先更新英文，再同步简体中文，用户内容保留原文。桌面和手机上的受管应用都提供工作台小房子。保留应用目录，另设待关注卡片视图，按权限呈现有日期或旗标的事项、出现原因及来源入口。Paseo Web 由独立客户端负责，可在左侧按需打开，由用户自行配对。官方维护的应用与不上线的本地应用共用双语、可访问性和数据归属规范。搜索引擎只发现公开项目资料。
+英文是产品与文档的主语言。同一贡献先更新英文，再同步简体中文，用户内容保留原文。桌面和手机上的受管应用都提供工作台小房子。保留应用目录。Paseo Web 由独立客户端负责，可在左侧按需打开，由用户自行配对。官方维护的应用与不上线的本地应用共用双语、可访问性和数据归属规范。搜索引擎只发现公开项目资料。
 
 ### 信件与个人材料
 

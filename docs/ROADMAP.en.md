@@ -1,6 +1,6 @@
 # Praxis roadmap
 
-Version: 0.1.160
+Version: 0.1.161
 
 [简体中文](ROADMAP.md)
 
@@ -348,6 +348,7 @@ The English notes below identify each recorded patch. Build-specific evidence, p
 | v0.1.158 | 2026-11-25 | Retire the Calendar and Matrix Reader apps: remove their submodules, registration and tests, archive their documents under docs/, and delete their public repositories. |
 | v0.1.159 | 2026-11-26 | Retire the Reminder and Knowledge apps: remove their submodules, registration, managed services and tests, archive their documents under docs/, and delete their public repositories. |
 | v0.1.160 | 2026-11-26 | Retire the Travel and Memo apps: remove their submodules, registration, managed services and tests, archive their documents under docs/, and delete their public repositories. |
+| v0.1.161 | 2026-11-27 | Drop the workbench card program: remove attention cards, provider card projections, browser card modules and card preferences; keep the admin data inventory. |
 
 ### Public applications with private collections
 

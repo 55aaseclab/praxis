@@ -10,7 +10,6 @@ import { createPraxisServer } from '../src/server.mjs';
 import { loadAppIntegrations } from '../src/app-integrations.mjs';
 import { writeInstalledAppsFixture } from './helpers/app-manifest-fixture.mjs';
 import { appFact, setAppFacts } from '../public/app-registry.js';
-import { nativeHref } from '../public/app-providers.js';
 
 test('an additional app owns its native slug and authenticated gateway/Home routes without changing a platform table', async t => {
   const root = await mkdtemp(join(tmpdir(), 'praxis-extra-native-')); t.after(() => rm(root, { recursive: true, force: true }));
@@ -19,7 +18,7 @@ test('an additional app owns its native slug and authenticated gateway/Home rout
   const registry = await loadAppIntegrations(root), host = 'native-app.synthetic.test', canonical = 'https://' + host;
   const published = registry.publicFacts();
   assert.equal(published[0].kind, 'app'); assert.equal(published[0].entry.nativePath, '/apps/field-journal/'); assert.equal(published[0].icon, '/app-icons/field-notes.svg');
-  setAppFacts(published); assert.equal(nativeHref('/apps/field-journal/#record=one', 'field-notes', canonical), '/apps/field-journal/#record=one'); assert.equal(appFact('field-notes').icon, published[0].icon);
+  setAppFacts(published); assert.equal(appFact('field-notes').entry.nativePath, '/apps/field-journal/'); assert.equal(appFact('field-notes').icon, published[0].icon);
   const auth = new AuthStore({ file: join(root, 'auth.sqlite'), issuer: canonical, registry });
   for (const id of ['owner', 'denied']) auth.createUser({ id, username: id, password: 'Synthetic source-owned app password' });
   auth.setWebAccess({ userId: 'owner', apps: ['field-notes'], workbench: true, prds: false });

@@ -2,7 +2,10 @@
 
 ## English
 
-The app owns its projection and data-source description. Praxis owns discovery, the card presentation, private display preferences and authorized aggregation. This version-1 contract supplies read-only workbench cards and the Settings data inventory. App operations, stored records and storage recovery keep their existing owners and authorization. [App standard](APP-STANDARD.md) · [Card design](design/workbench-cards.en.md) · [Authorization](BUSINESS-AUTH.en.md)
+> The workbench card program is retired (v0.1.161). This contract remains in force for the Settings data inventory only: data-source declarations, inventory projection and authorized reads. Card projections, browser card modules and personal card preferences are no longer served.
+
+
+The app owns its projection and data-source description. Praxis owns discovery, the card presentation, private display preferences and authorized aggregation. This version-1 contract supplies the Settings data inventory. App operations, stored records and storage recovery keep their existing owners and authorization. [App standard](APP-STANDARD.md) · · [Authorization](BUSINESS-AUTH.en.md)
 
 ### Installed sources and execution
 
@@ -15,7 +18,7 @@ Each maintained app publishes a reviewed `praxis-provider.mjs` at its pinned pub
 | Letters, Profiles | Current browser; existing protected native document reads | Server-resolved originals metadata, subject to administrator access |
 | Polaris | Runtime classification; no workbench cards | Read-only runtime observation metadata |
 
-There are thirteen card sources and fourteen inventory entries. A source can return a real empty state. An app's presence does not establish that it has records, an external account is connected or a device has exported its local data. Runtime lifecycle and workflow execution are outside this provider interface.
+There are seven inventory sources. A source can return a real empty state. An app's presence does not establish that it has records, an external account is connected or a device has exported its local data. Runtime lifecycle and workflow execution are outside this provider interface.
 
 ### Exports
 
@@ -111,7 +114,10 @@ Use synthetic records for provider, authorization and preference checks. Check a
 
 ## 简体中文
 
-应用维护自己的投影和数据源描述，Praxis 负责发现、卡片展示、个人展示偏好与按权限聚合。版本 1 合同只提供工作台只读卡片和 Settings 数据清单，已有应用操作、业务记录及存储恢复继续遵循原归属与授权。[应用标准](APP-STANDARD.md) · [卡片设计](design/workbench-cards.md) · [业务授权](BUSINESS-AUTH.md)
+> 工作台卡片程序已下线（v0.1.161）。本合同仅继续适用于 Settings 数据清单：数据源声明、清单投影与授权读取。卡片投影、浏览器卡片模块与个人卡片偏好不再提供。
+
+
+应用维护自己的投影和数据源描述，Praxis 负责发现、卡片展示、个人展示偏好与按权限聚合。版本 1 合同只提供工作台只读卡片和 Settings 数据清单，已有应用操作、业务记录及存储恢复继续遵循原归属与授权。[应用标准](APP-STANDARD.md) · · [业务授权](BUSINESS-AUTH.md)
 
 ### 已安装来源与执行位置
 

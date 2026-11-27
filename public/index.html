@@ -14,14 +14,11 @@
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/install.js"></script>
   <script type="module" src="/app.js"></script>
-  <script type="module" src="/attention.js"></script>
-  <link rel="stylesheet" href="/attention.css">
 </head>
 <body data-praxis-i18n class="desktop-body" data-website-auth="managed">
   <div class="launcher-shell">
     <main class="desktop" aria-label="Praxis workbench" data-zh-label="Praxis 桌面">
       <div class="desktop-board">
-        <div id="attention-program" hidden></div>
         <section id="apps-section" aria-labelledby="apps-heading" hidden><h2 id="apps-heading" data-zh="应用">Apps</h2><div id="apps" class="icon-grid" aria-live="polite"></div></section>
         <section id="projects-section" aria-labelledby="projects-heading" hidden><h2 id="projects-heading" data-zh="项目">Projects</h2><div id="projects" class="icon-grid"></div><p id="project-status" class="desktop-empty" role="status" hidden></p></section>
         <p id="desktop-empty" class="desktop-empty" role="status" hidden data-zh="当前账号暂无应用入口，请联系管理员按需授权。">Your account has no apps yet. Contact your administrator to request access.</p>
@@ -37,10 +34,6 @@
     </aside>
     <div class="launcher-toolbar system-dock" role="group" aria-label="Praxis navigation" data-zh-label="Praxis 系统导航">
       <a class="brand" href="/" aria-label="Praxis home" data-zh-label="Praxis 首页"><img src="/praxis.svg" width="24" height="24" alt="">Praxis</a>
-      <button id="workbench-view-switch" class="workbench-view-switch" type="button" aria-label="Show For you" title="Show For you" aria-controls="apps-section projects-section attention-program" hidden>
-        <svg data-view-icon="apps" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-        <svg data-view-icon="attention" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" hidden><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 2 2 5-5M8 15h8M8 18h5"/></svg>
-      </button>
       <div class="launcher-actions">
         <nav aria-label="Workbench links" data-zh-label="工作台入口"><a class="header-link" href="/admin/" data-private-nav data-admin-nav hidden data-zh="设置">Settings</a><a class="header-link" href="/prds/" data-private-nav data-prd-nav hidden data-zh="PRD集合">Product documents</a></nav>
         <div id="account" class="account" aria-label="Praxis account" data-zh-label="Praxis 账户"></div>

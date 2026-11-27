@@ -81,7 +81,6 @@ test('runtime enrollment controls adapter execution, catalog, native HTTP and si
   assert.deepEqual(http.authorize(query).resources, ['synthetic-record']);
   assert.equal(await jobAuthorized(), true);
   assert.equal(f.dispatches, 1);
-  assert.deepEqual((await f.bridge.workbenchItems(f.login.sessionToken, 'projects', 'list_projects')).spaces.map(value => value.spaceId), [space.id]);
 
   // The installed deployment catalog is an independent ceiling. A persisted
   // enrollment cannot reach an adapter removed from that catalog.

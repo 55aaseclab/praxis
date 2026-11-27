@@ -110,21 +110,6 @@ export function createPraxisServer({ root = WORKSPACE_ROOT, publicDir = resolve(
         if (imageNotModified(request, headers)) { response.writeHead(304, { ...headers, 'X-Content-Type-Options': 'nosniff' }); return response.end(); }
         return send(request, response, 200, icon.content, 'image/svg+xml', headers);
       }
-      if (path === '/api/workbench/providers' || /^\/app-providers\/[a-z][a-z0-9-]*\.mjs$/.test(path)) {
-        if(!['GET','HEAD'].includes(request.method))return send(request,response,405,'Method not allowed.','text/plain',{Allow:'GET, HEAD'});
-        const available=(await appProviders.providers()).filter(value=>!value.error&&value.descriptor.cards.supported&&value.descriptor.cards.execution==='browser'&&(gateway?canOpenApp(request.webAccess,value.app.id,registry):!value.app.adminOnly));
-        if(path==='/api/workbench/providers'){
-          const providers=await Promise.all(available.map(async value=>{
-            const bytes=await readFile(resolve(root,value.app.source,'praxis-provider.mjs'));
-            const version=createHash('sha256').update(bytes).digest('hex').slice(0,20);
-            return{appId:value.app.id,moduleUrl:`/app-providers/${value.app.id}.mjs?v=${version}`,dataExecution:'server'};
-          }));
-          return send(request,response,200,JSON.stringify({schemaVersion:1,providers,apps:registry.publicFacts().filter(app=>!gateway||canOpenApp(request.webAccess,app.id,registry))}),'application/json; charset=utf-8',{Vary:'Cookie'});
-        }
-        const appId=path.slice('/app-providers/'.length,-4),provider=available.find(value=>value.app.id===appId);
-        if(!provider)return send(request,response,404,'Not found.','text/plain');
-        return send(request,response,200,await readFile(resolve(root,provider.app.source,'praxis-provider.mjs')),'application/javascript; charset=utf-8',{Vary:'Cookie'});
-      }
       if (path === '/api/apps') {
         const apps = await readApps(root, { publicUrlsFile: gateway ? null : publicUrlsFile });
         const visibleApps = gateway ? gatewayApps(apps, request.webAccess, gateway.origin,registry) : [...await Promise.all(apps.filter(app => !app.adminOnly).map(localEntry)), ...developmentApps];

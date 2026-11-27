@@ -201,42 +201,6 @@ export class BusinessBridge {
       if (!Array.isArray(result.events)) throw businessError(502, 'INVALID_APP_RESPONSE'); this.events.ingest(appId, spaceId, result);
     }
   }
-  workbenchContext(token, appId) {
-    const session = this.auth.requireNativeSession(token);
-    return Object.freeze({ actor: { userId: session.user.id, username: session.user.username }, items: operation => this.workbenchItems(token, appId, operation), read: request => {
-      if (this.registry.operations[appId]?.[request.operation] !== 'read' || this.registry.operationDefinitions[appId][request.operation].mutation) throw businessError(403, 'FORBIDDEN');
-      return this.invoke(token, { ...request, appId });
-    } });
-  }
-  async workbenchAgenda(token, tagged = false) {
-    const values = await Promise.all(this.registry.apps.flatMap(app => app.integration.business?.workbench?.agenda ? [Promise.resolve(app.integration.business.workbench.agenda(this.workbenchContext(token, app.integration.business.adapterId))).then(value => ({ ...value, appId: app.integration.business.adapterId }))] : []));
-    return { items: values.flatMap(value => value.items.map(item => tagged ? { ...item, appId: value.appId } : item)), partial: values.some(value => value.partial) };
-  }
-  async workbenchAttention(token) {
-    const agenda = await this.workbenchAgenda(token, true), values = await Promise.all(this.registry.apps.flatMap(app => app.integration.business?.workbench?.attention ? [Promise.resolve(app.integration.business.workbench.attention(this.workbenchContext(token, app.integration.business.adapterId))).then(value => ({ ...value, items: value.items.map(item => ({ ...item, appId: app.integration.business.adapterId })) }))] : []));
-    const access = this.auth.getWebAccess(token), items = [...agenda.items, ...values.flatMap(value => value.items)].filter(item => {
-      if (!access.apps.includes(this.registry.webId(item.appId))) return false;
-      try { const resources = this.auth.authorize(token, { appId: item.appId, spaceId: item.spaceId, action: 'read' }, { auditDenied: false }).resources; return resources.includes('*') || resources.includes(item.resourceId); }
-      catch (error) { if (error.status !== 403) throw error; return false; }
-    });
-    return { items, partial: agenda.partial || values.some(value => value.partial) };
-  }
-  async workbenchItems(token, appId, operation) {
-    const empty = { spaces: [], partial: false }, webId = this.registry.webId(appId);
-    if (!this.auth.getWebAccess(token).apps.includes(webId)) return empty;
-    const { user } = this.auth.requireNativeSession(token), readableSpaces = this.auth.listSpaces(token).map(space => space.id).filter(spaceId => this.auth.appSpaceEnabled(appId, spaceId, this.apps) && this.auth.userPermissions(user.id, spaceId, appId, 'read').length > 0);
-    const results = await Promise.allSettled(readableSpaces.map(spaceId => this.invoke(token, { appId, spaceId, operation })));
-    if (!this.auth.getWebAccess(token).apps.includes(webId)) return empty;
-    const spaces = []; let partial = false;
-    for (const [index, result] of results.entries()) {
-      const spaceId = readableSpaces[index];
-      if (result.status === 'rejected') { if (result.reason?.status === 401) throw result.reason; if (result.reason?.status !== 403) partial = true; continue; }
-      if (result.value.spaceId !== spaceId || !Array.isArray(result.value.items)) { partial = true; continue; }
-      let resources; try { resources = this.auth.authorize(token, { appId, spaceId, action: 'read' }, { auditDenied: false }).resources; } catch (error) { if (error.status === 403) continue; throw error; }
-      spaces.push({ spaceId, items: result.value.items.filter(item => resources.includes('*') || resources.includes(item.resourceId)) });
-    }
-    return { spaces, partial };
-  }
   catalog(token) {
     return this.auth.listSpaces(token).map(space => ({ ...space, apps: Object.keys(this.apps).flatMap(appId => {
       if (!this.auth.appSpaceEnabled(appId, space.id, this.apps)) return [];

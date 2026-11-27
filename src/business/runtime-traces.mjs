@@ -1,6 +1,12 @@
 import { AppProviderRegistry } from './app-providers.mjs';
+const canReadAppSurface = (access, appId, config = {}, integrations = DEFAULT_APP_REGISTRY) => {
+  if (!access?.workbench) return false;
+  const web = integrations.getWeb(appId);
+  if (!web) return false;
+  if (web.policy === 'document-owner') return access.platformAdmin === true && typeof access.userId === 'string' && config.appProviders?.[appId]?.ownerId === access.userId;
+  return web.policy === 'platform-admin' ? access.platformAdmin === true : access.apps.includes(appId);
+};
 import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
-import { canReadAppCards } from './app-cards.mjs';
 
 const safeId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(value);
 const version = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,127}$/.test(value);
@@ -23,7 +29,7 @@ export function createRuntimeTraceReader({ auth, config, registry = new AppProvi
     const app=config.runtimeTraceAppId?candidates.find(app=>app.id===config.runtimeTraceAppId):candidates.length===1?candidates[0]:null;
     if(!app)return runtimeTraceReport(candidates.length?'unavailable':'not_configured',clock());
     const definition=app.integration.web.runtimeTrace,endpoint=definition.path;
-    const authorize=()=>{auth.requirePlatformAdminSession(token);if(auth.getWebAccess&&!canReadAppCards(auth.getWebAccess(token),app.id,config,integrations))throw failure(403,'FORBIDDEN');};
+    const authorize=()=>{auth.requirePlatformAdminSession(token);if(auth.getWebAccess&&!canReadAppSurface(auth.getWebAccess(token),app.id,config,integrations))throw failure(403,'FORBIDDEN');};
     authorize();
     if (before !== undefined && (!Number.isSafeInteger(before) || before < 1) || !Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw failure(400, 'INVALID_TRACE_QUERY');
     const configured = config.appProviders?.[app.id]?.url;

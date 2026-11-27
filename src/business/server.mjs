@@ -20,8 +20,13 @@ import { DEFAULT_APP_REGISTRY } from '../default-app-registry.mjs';
 import { readAppIntegrationFile } from '../app-integrations.mjs';
 import { createAppJobAuthorizationHandler } from './app-job-authorization.mjs';
 import { AppProviderRegistry } from './app-providers.mjs';
-import { AppCards, canReadAppCards } from './app-cards.mjs';
-import { CardPreferences } from './card-preferences.mjs';
+const canReadAppSurface = (access, appId, config = {}, integrations = DEFAULT_APP_REGISTRY) => {
+  if (!access?.workbench) return false;
+  const web = integrations.getWeb(appId);
+  if (!web) return false;
+  if (web.policy === 'document-owner') return access.platformAdmin === true && typeof access.userId === 'string' && config.appProviders?.[appId]?.ownerId === access.userId;
+  return web.policy === 'platform-admin' ? access.platformAdmin === true : access.apps.includes(appId);
+};
 import { createDataSourceResolver, readProviderRuntime, mergeProviderRuntime } from './provider-data.mjs';
 import { readDataInventory } from './data-inventory.mjs';
 import { createRuntimeTraceReader } from './runtime-traces.mjs';
@@ -45,8 +50,6 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
   const observations = new ObservationStore({ file: config.observationsFile, registry });
   const bridge = new BusinessBridge({ auth, events, apps: config.apps, fetchImpl, gate, registry, observeAdapter: value => recordObservation(observations, { event_name: 'adapter_request', route_id: 'business_invoke', method: 'POST', source: value.system ? 'system' : 'http', ...classifyCapability(value.appId, value.operation, registry), ...classifyOutcome(value.status, value.code), duration_ms: value.durationMs }) });
   const providers = new AppProviderRegistry({ root: config.providerRoot || registry.root });
-  const appCards = new AppCards({ auth, bridge, config, registry: providers, integrations: registry, fetchImpl });
-  const cardPreferences = new CardPreferences({ db: auth.db });
   const appInventory = async file => {
     let bindings; try { bindings = await readDataInventory(file); } catch { bindings = { apps: [] }; }
     const runtime = await readProviderRuntime(config.appProviderRuntimeFile);
@@ -75,7 +78,6 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
     collectionWork = (async () => {
       try {
         events.notePolicyVersion(auth.policyVersion); collectionErrors.delete('policy');
-        if (collectionErrors.has('card-preferences-backup')) { try { events.requestPeriodicSync(); collectionErrors.delete('card-preferences-backup'); } catch {} }
         for (const [appId, app] of Object.entries(config.apps)) for (const spaceId of app.spaces || []) {
           if (quiescing) return;
           const key = `${appId}:${spaceId}`;
@@ -147,7 +149,7 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
       if(url.pathname==='/api/apps'&&['GET','HEAD'].includes(request.method)){
         requireAccountSession(request,{auth});const access=auth.getWebAccess(credentialFromRequest(request));
         const facts = registry.publicFacts();
-        const apps = registry.apps.filter(app => canReadAppCards(access, app.id, config, registry)).map(app => ({ ...facts.find(fact => fact.id === app.id), url: new URL('/apps/' + registry.getWeb(app.id).slug + app.path, config.issuer).href }));
+        const apps = registry.apps.filter(app => canReadAppSurface(access, app.id, config, registry)).map(app => ({ ...facts.find(fact => fact.id === app.id), url: new URL('/apps/' + registry.getWeb(app.id).slug + app.path, config.issuer).href }));
         return json(response,200,{apps},{Vary:'Cookie'});
       }
       if (await gate.run(() => handleAuth(request, response))) return;
@@ -166,7 +168,7 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
       if(appPage||appAsset){
         if(!['GET','HEAD'].includes(request.method))return json(response,405,{code:'METHOD_NOT_ALLOWED'},{Allow:'GET, HEAD'});
         const binding=appPage||appAsset;
-        const authorizeAsset = () => { requireAccountSession(request, { auth }); if (!canReadAppCards(auth.getWebAccess(credentialFromRequest(request)), binding.appId, config, registry)) throw businessError(403, 'FORBIDDEN'); };
+        const authorizeAsset = () => { requireAccountSession(request, { auth }); if (!canReadAppSurface(auth.getWebAccess(credentialFromRequest(request)), binding.appId, config, registry)) throw businessError(403, 'FORBIDDEN'); };
         authorizeAsset();
         const source=await readAppIntegrationFile(registry,binding.appId,binding.file,2*1024*1024);
         const content=Buffer.isBuffer(source.content)?source.content:Buffer.from(source.content);
@@ -176,49 +178,6 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
       }
       const asset = Object.hasOwn(APP_ASSETS, url.pathname) && APP_ASSETS[url.pathname];
       if (asset && ['GET', 'HEAD'].includes(request.method)) { const content = await readFile(new URL(`../../public/${asset[0]}`, import.meta.url)); response.writeHead(200, { 'Content-Type': `${asset[1]}; charset=utf-8`, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' }); return response.end(request.method === 'HEAD' ? undefined : content); }
-      if (url.pathname === '/api/business/workbench/preferences') {
-        const session = requireAccountSession(request, { auth });
-        const token = credentialFromRequest(request);
-        if (url.search) throw businessError(400, 'INVALID_REQUEST');
-        if (request.method === 'GET') return json(response, 200, cardPreferences.get(session.user.id), { Vary: 'Cookie' });
-        if (request.method !== 'POST') return json(response, 405, { code: 'METHOD_NOT_ALLOWED' }, { Allow: 'GET, POST' });
-        auth.requireRequestCsrf(request);
-        const input = await readJson(request, 16 * 1024);
-        const appId = typeof input?.cardId === 'string' ? input.cardId.split(':')[0] : '';
-        const catalog = await providers.catalog();
-        const cardSource = (await providers.providers()).find(provider => provider.app.id === appId);
-        const value = await gate.run(() => auth.withPolicyLease(() => {
-          const current = requireAccountSession(request, { auth });
-          auth.requireRequestCsrf(request);
-          const access = auth.getWebAccess(token);
-          if (!catalog.some(app => app.id === appId) || input.state !== 'visible' && (!cardSource?.descriptor?.cards.supported || !canReadAppCards(access,appId,config,registry))) throw businessError(403, 'FORBIDDEN');
-          try { const data = cardPreferences.set(current.user.id, input); return { status: 200, data }; }
-          catch (error) { if (error.status) return { status: error.status, data: { code: error.code, ...(error.current ? { current: error.current } : {}) } }; throw error; }
-        }));
-        if (value.status === 200) {
-          try { events.requestPeriodicSync(); collectionErrors.delete('card-preferences-backup'); }
-          catch { collectionErrors.add('card-preferences-backup'); }
-        }
-        return json(response, value.status, value.data, { Vary: 'Cookie' });
-      }
-      const directoryApp=registry.apps.find(app=>app.integration.web.workbenchDirectory?.path===url.pathname);
-      if(directoryApp||['/api/business/workbench/agenda','/api/business/workbench/attention'].includes(url.pathname)){
-        if(request.method!=='GET')return json(response,405,{code:'METHOD_NOT_ALLOWED'},{Allow:'GET'});
-        if(url.search)throw businessError(400,'INVALID_REQUEST');
-        requireAccountSession(request,{auth});const token=credentialFromRequest(request);
-        let data;
-        if(directoryApp){
-          const descriptor=directoryApp.integration.web.workbenchDirectory,adapter=registry.businessId(directoryApp.id),web=registry.getWeb(directoryApp.id);
-          const value=await bridge.workbenchItems(token,adapter,descriptor.operation),entries=[];
-          for(const space of value.spaces){
-            const projected=descriptor.project(space.items,{spaceId:space.spaceId,nativePath:'/apps/'+web.slug+'/'});
-            if(!Array.isArray(projected)||projected.length>200)throw businessError(502,'INVALID_APP_RESPONSE');
-            for(const item of projected){if(item.appId!==directoryApp.id||typeof item.href!=='string'||/[\\\x00-\x20]/.test(item.href))throw businessError(502,'INVALID_APP_RESPONSE');const target=new URL(item.href,config.issuer);if(target.origin!==new URL(config.issuer).origin||!target.pathname.startsWith('/apps/'+web.slug+'/')||/%(?:2e|2f|5c)/i.test(target.pathname))throw businessError(502,'INVALID_APP_RESPONSE');entries.push(item);}
-          }
-          data={schemaVersion:1,appId:directoryApp.id,...value,entries};
-        }else data=url.pathname.endsWith('/attention')?await appCards.get(token):await bridge.workbenchAgenda(token);
-        return json(response,200,data,{Vary:'Cookie'});
-      }
       if (url.pathname === '/api/business/catalog' && request.method === 'GET') return json(response, 200, { spaces: bridge.catalog(credentialFromRequest(request)) });
       const invokeAlias=registry.apps.flatMap(app=>(app.integration.business?.invokeAliases||[]).map(alias=>({adapterId:app.integration.business.adapterId,...alias}))).find(alias=>alias.path===url.pathname);
       if ((url.pathname==='/api/business/invoke'||invokeAlias) && request.method === 'POST') {
@@ -291,7 +250,7 @@ export function createBusinessServer({ config, auth: authOption, registry = auth
             const access = auth.getWebAccess(token);
             for (const event of events.changes(cursor)) {
               cursor = event.cursor;
-              if (!canReadAppCards(access, registry.webId(event.appId), config, registry) || !auth.spaceInterest(userId, event.spaceId)) continue;
+              if (!canReadAppSurface(access, registry.webId(event.appId), config, registry) || !auth.spaceInterest(userId, event.spaceId)) continue;
               deliver('change', { appId: event.appId, spaceId: event.spaceId });
             }
             response.write(': keepalive\n\n');

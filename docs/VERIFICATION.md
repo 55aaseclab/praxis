@@ -440,3 +440,7 @@ Calendar 按设备、身份使用 IndexedDB，首次授权使用时保留并导�
 ### 部署与运行回读（补充记录）
 
 受管蓝绿安装完成例行镜像切换：运行 **0.1.160**（healthy），前一 0.1.159 槽保持健康回滚。受管描述与 Compose 文件移除 travel/memo 服务，对应容器停止并移除；`business.json` 的 `apps.travel`/`apps.memo` 登记与失效 provider 元数据一并移除（操作前备份保留）。首页合成示例卡从 Memo 改锚 Projects（4fb8317）。匿名公开主页回读：零 travel/memo 应用引用，应用源码链接恰为七个应用；`/apps/travel/` 与 `/apps/memo/` 返回 404，`/apps/tingproof/` 仍为受保护 401。既有安装的 Travel/Memo 工作数据原样保留。独立部署的 memo-content 容器组不属本次退役范围，保持原状。验收记录提交不改变运行代码或应用固定版本。
+
+## 0.1.161——工作台卡片程序下线源码检查
+
+按维护授权下线工作台卡片程序：移除关注卡片视图（attention.js/.css）、「待关注」工作台视图与视图切换、应用卡片投影（app-cards、浏览器卡片模块服务、`/api/workbench/providers`）、卡片偏好（稍后看/收起 API 与存储钩子）、bridge 的 agenda/attention/workbenchItems 钩子及公开主页卡片区。保留 Settings 数据清单：provider 登记表改为仅服务数据源声明与清单投影，`canReadAppCards` 收敛为基于网页入口与授权的 `canReadAppSurface`（server 与 runtime-traces 各自内联），letters/profiles 文档所有者边界不变。ai-native 场景不变。全套平台合成检查 **461** 项：提交树内 **447** 通过、14 项可选跳过、**0** 失败；工作区 3 项失败仅由既有未提交 maintenance 模型变更引起，未随本发行提交。版本按一次 PATCH 对齐 **0.1.161**。本节不宣称独立业务客户端验收。
